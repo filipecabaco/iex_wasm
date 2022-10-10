@@ -34,6 +34,12 @@ mkdir -p /os/mnt
 mount -t auto ${LOOPDEVICE} /os/mnt/
 cp -a /os/${DISTR}.dir/. /os/mnt/
 
+echo_blue "[Create ${DISTR} auto startup]"
+mkdir /os/mnt/etc/systemd/system/getty@tty1.service.d
+echo "[Service]" > /os/mnt/etc/systemd/system/getty@tty1.service.d/autologin.conf
+echo "ExecStart=" >> /os/mnt/etc/systemd/system/getty@tty1.service.d/autologin.conf
+echo "ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin root %I $TERM" >> /os/mnt/etc/systemd/system/getty@tty1.service.d/autologin.conf
+
 echo_blue "[Setup extlinux]"
 extlinux --install /os/mnt/boot/
 cp /os/${DISTR}/syslinux.cfg /os/mnt/boot/syslinux.cfg
