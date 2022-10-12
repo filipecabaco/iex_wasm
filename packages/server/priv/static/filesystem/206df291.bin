@@ -1,0 +1,108 @@
+\ Preprocessor FOOS demo - Copyright 2013, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Create two classes Point(x,y) and Circle(x,y,r) with a polymorphic function
+\ print, accessors for (x,y,r), copy constructor, assignment and destructor
+\ and every possible default constructors
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+:class Point                           ( xn n a--)
+   extends Object
+     field:  x                         \ x coordinate
+     field:  y                         \ y coordinate
+     virtual: print                    \ print routine
+     virtual: setx                     \ set x coordinate
+     virtual: sety                     \ set y coordinate
+     virtual: getx                     \ get x coordinate
+     virtual: gety                     \ get y coordinate
+   end-extends
+                                       \ bind the methods immediately
+   :virtual setx this -> x ! ;method
+   :virtual sety this -> y ! ;method
+   :virtual getx this -> x @ ;method
+   :virtual gety this -> y @ ;method
+                                       \ because we'll use them immediately
+   :virtual print                      \ e.g. in this print routine
+     ." Point(" this => getx 0 .r ." ," this => gety 0 .r ." )" cr
+   ;method                             \ and this initialization
+
+   :new                                \ object or argument count
+     dup type@ this type@ =            \ if it is an object, a point
+     if                                \ get the coordinates and set them
+       dup => getx this => setx
+           => gety this => sety
+     else                              \ otherwise initialize it
+       0 dup this => setx this => sety \ save an unused count for Circle
+       dup case                        \ and check the argument count
+         1 of drop this => setx endof  \ one argument : x only
+         2 of drop this => setx        \ two arguments: x and y
+              this => sety endof
+       endcase
+     then
+   ;method
+
+   private{ x y }                      \ make x and y private
+;class
+                                       \ you cannot determine the parent type
+:class Circle                          ( xn n a --)
+   extends Point                       \ save the argument count!!
+     field:  r                         \ radius
+     virtual: getr                     \ get radius
+     virtual: setr                     \ set radius
+   end-extends                         \ retrieve count
+                                       \ bind the methods immediately
+   :virtual setr this -> r ! ;method
+   :virtual getr this -> r @ ;method
+                                       \ because we'll use them immediately
+   :virtual print                      \ e.g. in this print routine
+     ." Circle(" this => getx 0 .r ." ,"
+                 this => gety 0 .r ." ,"
+                 this => getr 0 .r ." )" cr
+   ;method                             \ and this initialization
+                                       \ object or argument count
+   :new
+     dup type@ this type@ =            \ if it is an object, a circle
+     if                                \ get the coordinates and set them
+       dup => getx this => setx
+       dup => gety this => sety
+           => getr this => setr
+     else                              \ otherwise initialize it
+       0 this => setr
+       case                            \ and check the argument count
+         3 of this => setr             \ three arguments: x, y and r
+              this => sety             \ note the rest is already set
+              this => setx endof       \ by "Point" and r was left on
+       endcase                         \ the stack!
+     then
+   ;method
+
+   private{ r }
+;class
+
+0 instance Point Point1
+Point1 => print
+45 23 2 instance Point Point2
+Point2 => print
+Point2 instance Point Point3
+Point3 => print
+78 1 instance Point Point4
+Point4 => print
+10 45 23 3 instance Circle Circle1
+Circle1 => print
+Point2 instance Circle Circle2
+Circle2 => print
+Circle1 instance Circle Circle3
+Circle3 => print
+
+Point1 delete
+Point2 delete
+Point3 delete
+Point4 delete
+
+Circle1 delete
+Circle2 delete
+Circle3 delete
+

@@ -1,0 +1,8 @@
+\ 4tH library - YIELD - Copyright 2014, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] yield [IF]
+: yield r> r> swap >r >r ;             \ remember that ; compiles EXIT!
+aka rdrop grab                         \ so add a [FORCE] when using YIELD as
+[THEN]                                 \ the last word in a definition

@@ -1,0 +1,47 @@
+\ Preprocessor FOOS Singleton pattern demo - Copyright 2016, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ include lib/anstools.4th
+include lib/memcell.4th
+include lib/dstringt.4th
+include 4pp/lib/foos.4pp
+
+(error) value Lock                     \ this locks the singleton
+
+:class Singleton
+   extends Object
+     field: myValue
+     field: Key
+     method: getKey
+     method: getValue
+     method: setValue
+     method: getInstance
+   end-extends
+                                       \ a carload of getters and setters
+   :method getValue this -> myValue @    ;method
+   :method setValue this -> myValue !    ;method
+   :method getKey   this -> Key ds.count ;method
+   :method setKey   this -> Key ds.place ;method
+                                       \ constructors and destructors
+   :delete this -> Key ds.free ;method \ for dynamically allocated singles
+   :new this -> Key ds.init 12345 this -> setValue ;method
+
+   :method getInstance
+     Lock error? if drop new Singleton dup to Lock then
+   ;method
+                                       \ just take Lock along - it's ok
+   private{ Key myValue Lock Singleton }
+;class                                 \ "new Singleton" doesn't work now
+
+Nothing -> getInstance value MySingle  \ the primary instance
+                                       \ getInstance always returns the same
+MySingle -> getInstance -> getValue . cr
+s" ID0747" MySingle -> getInstance -> setKey
+Nothing -> getInstance MySingle = if ." Failed" else ." Success" then cr
+                                       \ try to force a new one
+MySingle -> getKey type cr             \ address it the normal way
+
+MySingle delete                        \ when allocated on the heap
+
+

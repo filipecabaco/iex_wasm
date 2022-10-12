@@ -1,0 +1,126 @@
+\ 4tH library - SSCANF - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] sscanf    [IF]
+[UNDEFINED] c/string  [IF] include lib/cstring.4th  [THEN]
+[UNDEFINED] digit?    [IF] include lib/digit.4th    [THEN]
+[UNDEFINED] base&exec [IF] include lib/baseexec.4th [THEN]
+
+\ Like sscanf(), but with a few differences
+\ - Whitespace in both buffer and format string is largely ignored;
+\ - %c with a width REQUIRES a string, %c without REQUIRES a variable;
+\ - %s will stop on ANY defined delimiter, not just whitespace;
+\ - Returns the unscanned part of the format string;
+\ - Variable #SCANF returns the number of assignments made;
+\ - Stack diagram of variables is inverted: d c b a s" %a %b %c %d";
+\ - On failure, unused variables WILL remain on the stack.
+
+\ Typical use:
+\   a b c$ d$ e f g
+\   s" %c%c %d%%%s, %4c%c%c" s" ab -12345%This is the end, 543210" sscanf
+
+variable (delim)                       \ delimiter of string
+variable (width)                       \ width of string
+variable #scanf                        \ number of assignments
+                                       \ check the width
+: (width?) - (width) @ < ;             ( a1 a2 -- f)
+                                       \ like >NUMBER, but with width check
+: (unumber)                            ( a1 n1 -- f n3 a2 n2)
+  0 >r stow begin                      \ setup accumulator, save address
+    dup                                \ any characters left to convert?
+  while                                \ calculate current count
+    >r over stow (width?) r> swap
+  while                                \ if within width, convert digit
+    over c@ digit? tuck if r> base @ * + >r >r chop r> else drop then 0=
+  until                                \ have any chars been consumed?
+  swap rot over < swap rot r> -rot     \ convert to >NUMBER diagram
+;
+
+: (width!)                             ( a1 n1 -- a2 n2)
+  ['] (unumber) 10 base&exec rot dup unless max-n + then (width) ! rot drop
+;
+
+: (putback) 1+ swap char- swap ;       ( a n -- a-1 n+1)
+: (delimiter!) dup if c/string >r (putback) r> else dup then (delim) ! ;
+: (delimiter?) over [char] ! - 0< over bl = and >r = r> or ;
+: (assigned) 1 #scanf +! 0= ;          ( f -- -f)
+: (assign) rot ! (assigned) ;          ( x f n -- f)
+: (place) rot place true (assigned) ;  ( a1 a2 n2 -- f)
+                                       \ get sign flag
+: (sign)                               ( a1 n1 -- f a2 n2)
+  c/string dup [char] - = dup >r       \ is it a minus sign?
+  if drop else [char] + <> if (putback) then then r> -rot
+;                                      \ drop plus sign
+                                       \ skip white space
+: (skipwhite)                          ( a1 n1 -- a2 n2)
+  begin dup while c/string bl > dup >r if (putback) then r> until
+;
+                                       \ parse buffer string
+: (getstr)                             ( a1 n1 -- a2 n2 f)
+  over >r begin                        \ save starting address
+    dup                                \ any string left?
+  while                                \ if so, still within width?
+    over r@ (width?)                   \ did we hit the delimiter?
+  while                                \ if so, put back the character
+    c/string (delim) @ (delimiter?) dup if >r (putback) r> then
+  until over r@ - r> swap              \ calculate string dimensions
+  2swap 2>r (place) 2r> rot            \ place string and get flag
+;
+                                       \ parse a character or number
+: (getitem)                            ( a1 n1 c -- a2 n2 f)
+  case                                 \ select type specifier
+    [char] d of                        \ 'd' requires a sign
+      (sign) ['] (unumber) 10 base&exec 2>r rot if negate then (assign) endof
+    [char] u of ['] (unumber) 10 base&exec 2>r (assign) endof
+    [char] x of ['] (unumber) 16 base&exec 2>r (assign) endof
+    [char] o of ['] (unumber)  8 base&exec 2>r (assign) endof
+    [char] % of c/string [char] % <> -rot 2>r endof
+    [char] c of                        \ if default width specified
+      (width) @ max-n = if             \ just parse a single character
+        true -rot c/string -rot 2>r (assign)
+      else                             \ take the entire length specified
+        2dup (width) @ /string 0 max 2>r (width) @ min (place)
+      then endof                       \ and put it in a string
+  endcase 2r> rot
+;
+                                       \ handle type specifiers
+: (gettype)                            ( a1 n1 a2 n2 -- f)
+  max-n (width) ! 2>r (width!) c/string >r (delimiter!) r> -rot
+  2r> 2swap 2>r (skipwhite) rot dup [char] s =
+  if drop (getstr) else over if (getitem) else 0<> then then
+  2r> rot >r 2swap r>                  \ restore stack and pull up flag
+;
+                                       \ select character on format string
+: (select)                             ( a1 n1 c a2 n2 -- a3 n3 a4 n4 f)
+  rot dup >r                           \ save current character
+  [char] % = if rdrop (gettype) ;then  \ act on type specifier
+     r@ bl = if (skipwhite) 2swap (skipwhite) 2swap r> >zero ;then
+  c/string r> <>                       \ does this character match
+;
+
+: sscanf                               ( xn .. x0 a1 n1 a2 n2 -- a3 n3)
+  0 #scanf ! 2>r begin dup while c/string 2r> (select) -rot 2>r until 2rdrop
+;
+
+[DEFINED] 4TH# [IF]
+  hide (delim)
+  hide (width)
+  hide (putback)
+  hide (unumber)
+  hide (width!)
+  hide (width?)
+  hide (delimiter!)
+  hide (delimiter?)
+  hide (assigned)
+  hide (assign)
+  hide (place)
+  hide (sign)
+  hide (skipwhite)
+  hide (getstr)
+  hide (getitem)
+  hide (gettype)
+  hide (select)
+[THEN]
+[THEN]
+

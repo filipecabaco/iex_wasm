@@ -1,0 +1,62 @@
+\ 4tH library - Parse URL - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] parse-url [IF]
+[UNDEFINED] split     [IF] include lib/scanskip.4th [THEN]
+
+: (?chop) dup if chop then ;           ( a n f -- a 0 | a+1 n -1)
+: (-/) over c@ [char] / = if (?chop) then ;
+: (split?) split >r over 0= r> swap ;  ( a1 n1 c -- a2 n2 a3 n3 f)
+: (8<) split 2swap (?chop) ;           ( a1 n1 c -- a2 n2 a3 n3)
+
+: (2split)                             ( a1 n1 c1 c2 -- a2 n2 a3 n3 a4 n4)
+  >r (split?) if                       \ second string a null string?
+    r> split 2swap 2>r 2swap 2r>       \ split this string again and trim it
+  else                                 \ if not a null string
+    2swap (?chop) r> split 2swap       \ then the second string must be split
+  then
+;
+
+: parse-url                            ( a1 n1 -- a0 n0 .. a7 n7)
+  [char] : (8<) (-/) (-/)              \ split off the SCHEME
+
+  [char] @ (split?) if                 \ if no uid/pwd found
+    0 dup 2swap                        \ add an extra empty string
+  else                                 \ if uid/pwd found
+    [char] : (8<) 2>r 2swap 2r> 2swap (?chop)
+  then                                 \ split it
+
+  over c@ [char] [ = if                \ is this an IPv6 address?
+    [char] ] split 1+ 2swap (?chop)    \ if so, parse it
+    [char] / split (?chop) 2swap       \ now split any port
+  else
+    [char] : [char] / (2split)         \ if not IPv6 address
+  then                                 \ split PORT and DOMAIN
+
+  [char] ? [char] # (2split) (?chop)   \ finally, split PATH, QUERY, FRAGMENT
+;
+
+[DEFINED] listurl [IF]                 \ lister, mostly for debugging
+: list-url
+  2>r 2>r 2>r 2>r 2>r 2>r 2>r
+  ." schema   : " type cr 2r>
+  ." userid   : " type cr 2r>
+  ." password : " type cr 2r>
+  ." domain   : " type cr 2r>
+  ." port     : " type cr 2r>
+  ." path     : " type cr 2r>
+  ." query    : " type cr 2r>
+  ." fragment : " type cr
+;
+[THEN]
+
+[DEFINED] 4TH# [IF]
+  hide (?chop)
+  hide (-/)
+  hide (split?)
+  hide (8<)
+  hide (2split)
+[THEN]
+[THEN]
+

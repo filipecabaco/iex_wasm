@@ -1,0 +1,20 @@
+;; Generated automatically.  Do not edit
+(define-module
+ gauche.uvector.s64
+ (use gauche.uvector)
+ (export make-s64vector s64vector s64vector? s64vector-length s64vector-ref
+  s64vector-set! s64vector->list list->s64vector s64?)
+ (export s64vector-unfold s64vector-unfold-right s64vector-copy
+  s64vector-reverse-copy s64vector-append s64vector-concatenate
+  s64vector-append-subvectors s64vector-empty? s64vector= s64vector-take
+  s64vector-take-right s64vector-drop s64vector-drop-right s64vector-segment
+  s64vector-fold s64vector-fold-right s64vector-map s64vector-map!
+  s64vector-for-each s64vector-count s64vector-cumulate s64vector-take-while
+  s64vector-take-while-right s64vector-drop-while s64vector-drop-while-right
+  s64vector-index s64vector-index-right s64vector-skip s64vector-skip-right
+  s64vector-any s64vector-every s64vector-partition s64vector-filter
+  s64vector-remove s64vector-swap! s64vector-fill! s64vector-reverse!
+  s64vector-copy! s64vector-reverse-copy! s64vector-unfold!
+  s64vector-unfold-right! reverse-list->s64vector reverse-s64vector->list
+  s64vector->vector vector->s64vector make-s64vector-generator write-s64vector
+  s64vector-comparator))

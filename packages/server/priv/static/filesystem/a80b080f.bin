@@ -1,0 +1,23 @@
+\ Written by Ed.
+\ Believed to be in the Public Domain
+
+[UNDEFINED] FSIGN  [IF]
+[UNDEFINED] FDUP   [IF] [ABORT] [THEN]
+[DEFINED]   ZenFP  [IF]
+[UNDEFINED] FROUND [IF] include lib/zenround.4th [THEN]
+[THEN]
+
+\ Floating-point pictured numeric output operators
+: <F# ( F: r1 -- r2 )  FROUND <# ;
+: F# ( F: r1 -- r2 ) 10 S>F F/ FDUP FLOOR FSWAP FOVER F-
+  10 S>F F* FROUND F>S  [CHAR] 0 + HOLD ;
+: F#S ( F: r1 -- r2 )  BEGIN F# FDUP F0= UNTIL ;
+: F#> ( F: r -- ) ( c-addr u )  FDROP 0 #> ;
+: FSIGN ( flag -- )  IF [CHAR] - HOLD THEN ;
+
+\ Like #S. but inserts commas after each 3 digits
+: F#,S ( F: r1 -- r2 )
+  0  BEGIN  >R  F#  FDUP F0= 0= WHILE
+    R> 1+  DUP 3 = IF  [CHAR] , HOLD  DROP 0 THEN
+  REPEAT  R> DROP ;
+[THEN]

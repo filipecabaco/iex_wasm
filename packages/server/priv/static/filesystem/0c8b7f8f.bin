@@ -1,0 +1,11 @@
+\ Preprocessor double cell macros - Copyright 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro _-s>d @dup @sign >>> -1 @while @over _#_ -S>D ;
+:macro _u>d _-s>d @else @over _#_ U>D ;
+:macro _s>d @dup @cell @if @over _u>d @drop @drop ;
+:macro _d% _s>d @else @over ` S" ` |#| >>> " |#| S>DOUBLE ;
+:macro d% >#> _d% @drop @drop ;
+:macro 2variable 2 ARRAY ;
+:macro 2constant 2variable >#> _#_ LATEST 2! DOES> 2@ ` ;` ;

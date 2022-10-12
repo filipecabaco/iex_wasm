@@ -1,0 +1,25 @@
+\ 4tH library - Convert to a 10K scaled number - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] s>10K    [IF]
+[UNDEFINED] c/string [IF] include lib/cstring.4th  [THEN]
+[UNDEFINED] 10K      [IF] include lib/constant.4th [THEN]
+                                       ( a n -- a n c f)
+: (digit?) c/string [char] 0 - dup 0< over 9 > or ;
+
+: s>10K                                ( a n1 -- n2)
+  (digit?) over [char] - [char] 0 - = >r if >zero then >r
+  begin dup dup 0> while drop (digit?) except r> 10 * + >r repeat r> swap
+                                       \ convert integer part
+  [char] . [char] 0 - = if             \ decimal point found?
+    4 0 ?do 10 * over if >r (digit?) if >zero then r> + then loop
+  else                                 \ convert fraction
+    10K *                              \ just scale the number entered
+  then r> if negate then >r 2drop r>   \ fix sign and drop string
+;
+
+[DEFINED] 4TH# [IF] hide (digit?) [THEN]
+[THEN]
+
+\ s" 1234.6789" s>10K . depth .

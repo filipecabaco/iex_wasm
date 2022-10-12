@@ -1,0 +1,37 @@
+\ 4tH library - Fractional arithmatic - Copyright 1982, Leo Brodie
+\ 4tH version - 2006,2021 J.L. Bezemer
+
+[UNDEFINED] 10K [IF] [needs lib/constant.4th] [THEN]
+[UNDEFINED] '?' [IF] [needs lib/chars.4th]    [THEN]
+
+[UNDEFINED] v. [IF]
+16384 constant +1
+
++1 *constant i>v                       \ fast integer conversions
++1 /constant v>i
+
+aka + v+                               \ aliases for clarity
+aka - v-
+
+: v* * +1 / ;                          \ multiply and divide
+: v/ >r +1 * r> / ;
+: v>s 10K * v>i ;                      \ fractional conversions
+: s>v i>v 10K / ;
+: v. v>s dup abs <# # # # # '.' hold #s sign #> type space ;
+: /v dup v>i i>v tuck v- swap ;        ( v1 -- v2 v3)
+[THEN]                                 \ split integer and fraction
+
+\ Combinations
+\ ============
+\ v v  v*  v
+\ v c  v*  c
+\ c v  v*  c
+\ v v  v/  v
+\ c c  v/  v
+\ c v  v/  c
+\ v v  v+  v
+\ v v  v-  v
+
+\ v = fractional value
+\ c = cell value
+

@@ -1,0 +1,18 @@
+\ 4tH library - ASCII to XML codes - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] ASCII>XML [IF]
+: ASCII>XML
+    \ traitements signes reserves HTML
+    case
+      [char] < of s" &lt;"   ;endof    \ Signe inferieur a
+      [char] > of s" &gt;"   ;endof    \ Signe supreieur a
+      [char] & of s" &amp;"  ;endof    \ Ampersand
+      [char] " of s" &quot;" ;endof    \ Signe double appostrophe
+      [char] ' of s" &apos;" ;endof    \ Signe apostrophe
+      <# [char] ; hold #s [char] # hold [char] & hold #> exit
+    endcase
+;
+[THEN]
+

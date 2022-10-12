@@ -1,0 +1,29 @@
+\ 4tH Abstract type - Copyright 2012, 2019 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include 4pp/lib/foos.4pp
+
+:class X()
+   extends Object
+     virtual: method1
+     virtual: method2
+   end-extends
+
+   :virtual method1 ." Method 1 in X" cr ;method
+;class
+
+:class Y()
+   extends X()
+   end-extends
+
+   :virtual method2 ." Method 2 in Y" cr ;method
+;class
+
+: Main
+  static Y() y
+  y => method1
+  y => method2
+;
+
+Main

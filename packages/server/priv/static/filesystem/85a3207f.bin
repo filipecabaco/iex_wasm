@@ -1,0 +1,99 @@
+\ Tests for Wil Baden's OPG Formula Translation in 4tH
+
+[UNDEFINED] ANS [IF]
+  include lib/zenfloat.4th
+  include lib/zenans.4th
+  include lib/fpin.4th
+  include lib/fpout.4th
+  include lib/zenconst.4th
+  include lib/zenfalog.4th
+  include lib/zenfsqrt.4th
+  include lib/zentrunc.4th
+  include lib/zenfsinh.4th
+  include lib/zenfasin.4th
+  include lib/zenfmin.4th
+[ELSE]
+  include lib/ansfloat.4th
+  include lib/fpin.4th
+  include lib/fpout.4th
+  include lib/falog.4th
+  include lib/ftrunc.4th
+  include lib/sinhcosh.4th
+  include lib/asinacos.4th
+  fclear    9 set-precision
+[THEN] [FLOAT]
+
+\ ============testing====================================================
+
+  FLOAT array a   FLOAT array b   FLOAT array c
+  FLOAT array x   FLOAT array w
+
+
+  : TEST0   CR  LET b+c;  FE.
+            CR  LET b-c;  FE.
+            CR  LET 10000000*(b-c)/(b+c);  FE.
+                ;
+
+   LET b = 3;
+   LET c = 4;
+
+   cr ." test0  "  TEST0 cr
+
+\ =====================================================================
+  : TEST1   LET a = b*c-3.17e-5/TANH(w)+ABS(x);  CR  LET a; F. ;
+
+   LET w = 1.e-3;  LET x = -2.5;
+
+   cr ." test1  " test1 cr
+
+\ ======================================================================
+    cr ." test2 "  cr
+
+   FLOAT array HALFPI
+   LET HALFPI = 2*ATAN(1);
+   LET HALFPI + |FDUP|; F.  cr
+
+   FLOAT array disc                       ( Used for discriminant )
+
+   : FQUADRATICROOT                          ( F: a b c -- r1 r2 )
+       c F!  b F!  a F!                    \ Pickup coefficients.
+       LET disc = SQRT(b*b-4*a*c);            \ Set discriminant.
+       LET (-b+disc)/(2*a), (-b-disc)/(2*a);
+                                            \ Put values on f-stack.
+       ;
+
+
+      ( Solve x*x-3*x+2 )  LET FQUADRATICROOT (1,-3, 2) ; F. F. cr
+      ( Find goldenratio ) LET MAX(FQUADRATICROOT (1,-1,-1)) ; F. cr
+
+      ( You can also write )
+      1 s>f  -1 s>f  -1 s>f  FQUADRATICROOT FMAX F. cr
+
+ \ ======================================================================
+   cr ." test3 " cr
+    : FACTORIAL                       ( n -- )( F: -- r )
+       LET w = 1;  LET x = 1;
+       0 ?DO  LET w = w * x;  LET x = x + 1;  LOOP
+       LET w; ;
+
+   6 FACTORIAL  F. cr
+
+   ( Another way )
+   : FACTORIAL2                       ( n -- )( F: -- r )
+      LET w = 1;  0 ?DO  LET w = w * | I 1+ S>F |;  LOOP
+      LET w; ;
+   6 FACTORIAL2 F.  cr
+
+   ( Or you can do this )
+   LET FACTORIAL2(|6|); F.  cr
+
+  \ ===============================================================
+    cr ." test4 " cr
+
+    let x=0.25;
+   : test4  ." Answer= " let w = 1/sqrt(2-x^2); ;
+
+    test4
+    let w; f. cr
+
+ \ =============done================================================

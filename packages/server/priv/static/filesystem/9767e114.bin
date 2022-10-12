@@ -1,0 +1,171 @@
+\ Preprocessor FOOS twin pattern demo - Copyright 2017, 2021 J.L. Bezemer
+
+\ The MIT License (MIT)
+
+\ Copyright (c) 2014 Ilkka Seppala
+
+\ Permission is hereby granted, free of charge, to any person obtaining a copy
+\ of this software and associated documentation files (the "Software"), to
+\ deal in the Software without restriction, including without limitation the
+\ rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+\ sell copies of the Software, and to permit persons to whom the Software is
+\ furnished to do so, subject to the following conditions:
+
+\ The above copyright notice and this permission notice shall be included in
+\ all copies or substantial portions of the Software.
+
+\ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+\ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+\ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+\ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+\ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+\ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+\ DEALINGS IN THE SOFTWARE.
+
+\ https://github.com/hoswey/java-design-patterns/tree/142274f3f7becd3c7efc91fedf832329adc6029d/twin/src/main/java/com/iluwatar/twin
+
+include lib/memcell.4th
+include lib/ansfacil.4th
+include 4pp/lib/foos.4pp
+
+:class GameItem                        \ GameItem is a common class which
+   extends Object                      \ provides some common methods for
+     virtual: draw                     \ game object
+     virtual: doDraw
+     virtual: click
+   end-extends
+
+   :virtual doDraw ;method        \ template method, do some common logic
+   :virtual click ;method         \ before draw
+   :virtual draw ." draw" cr this => doDraw ;method
+;class
+
+:class Thread                          \ fake a "thread" class
+   extends Object
+     virtual: suspendMe
+     virtual: resumeMe
+     virtual: stopMe
+     virtual: run
+   end-extends
+;class
+
+\ This class represents a Ball which extends GameItem and implements the
+\ logic for ball item, like move and draw. It hold a reference of BallThread
+\ to delegate the suspend and resume task.
+
+:class BallItem
+   extends GameItem
+     field:   twin
+     field:   isSuspended
+     virtual: doMove
+     virtual: setBallthread
+   end-extends
+
+   :new false this -> isSuspended ! ;method
+
+   :virtual setBallthread this -> twin ! ;method
+   :virtual doDraw ." doDraw" cr ;method
+   :virtual doMove ." doMove" cr ;method
+
+   :virtual click
+      this -> isSuspended dup @ 0= dup rot ! this -> twin @ dup rot
+      if => suspendMe else => resumeMe then => run
+   ;method                             \ silently restart thread
+
+   private{ isSuspended twin }
+;class
+
+\ This class is a UI thread for drawing the BallItem, and provide the method
+\ for suspend and resume. It hold the reference of BallItem to delegate the
+\ draw task.
+
+:class BallThread
+   extends Thread
+     field:   twin
+     field:   isSuspended
+     field:   isRunning
+     virtual: setBallitem
+   end-extends
+
+   :new true this -> isRunning ! ;method
+
+   :virtual setBallitem this -> twin ! ;method
+
+   :virtual suspendMe
+      true this -> isSuspended !
+      ." Begin to suspend BallThread" cr
+   ;method
+
+   :virtual resumeMe
+      false this -> isSuspended !
+      ." Begin to resume BallThread" cr
+   ;method
+
+   :virtual stopMe
+      this => suspendMe
+      false this -> isRunning !
+      ." Stopping BallThread" cr this => run
+   ;method                             \ silently restart thread
+
+   :virtual run
+      0 begin                          \ set up loop counter
+        this -> isRunning @            \ to fake cooperative multitasking
+      while
+        this -> isSuspended @ 0=
+      while
+        this -> twin @ => draw
+        this -> twin @ => doMove       \ perform 3 loops before
+        1000 ms dup 2 <                \ relinquishing control to Appl
+      while
+        1+
+      repeat drop
+   ;method
+
+   private{ twin isSuspended isRunning }
+;class
+
+\ Twin pattern is a design pattern which provides a standard solution to
+\ simulate multiple inheritance in FOOS.
+
+\ In this example, the essence of the Twin pattern is the BallItem class and
+\ BallThread class represent the twin objects to coordinate with each other
+\ (via the twin reference) like a single class inheriting from GameItem.
+
+:class Appl
+   extends Object
+     field:  myBallitem
+     field:  myBallthread
+     method: main
+     method: waiting
+   end-extends
+
+   :delete
+      this -> myBallitem @ delete
+      this -> myBallthread @ delete
+   ;method
+
+   :method waiting 2500 ms ;method
+
+   :method main
+      new BallItem   this -> myBallitem !
+      new BallThread this -> myBallthread !
+
+      this -> myBallthread @ this -> myBallitem @ => setBallthread
+      this -> myBallitem   @ this -> myBallthread @ => setBallitem
+
+      this -> myBallthread @ => run
+      this -> waiting
+
+      this -> myBallitem @ => click
+      this -> waiting
+
+      this -> myBallitem @ => click
+      this -> waiting
+
+      this -> myBallthread @ => stopMe
+   ;method
+;class
+
+instance Appl Game
+Game -> main
+Game delete

@@ -1,0 +1,140 @@
+\ Preprocessor flyweight pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Flyweight_pattern
+
+include lib/memcell.4th
+include lib/dstringt.4th
+\ include lib/anstools.4th
+
+include 4pp/lib/foos.4pp
+include 4pp/foos/list.4pp
+include 4pp/foos/hashmap.4pp
+
+\ Expected output:
+
+\   Serving Espresso to table 121
+\   Serving Cappuccino to table 121
+\   Serving Frappe to table 552
+\   Serving Espresso to table 96
+\   Serving Cappuccino to table 3
+\   Serving Espresso to table 3
+\   Serving Frappe to table 3
+\   Serving Cappuccino to table 97
+\   Serving Frappe to table 897
+\   Serving Espresso to table 1
+\   Serving Frappe to table 1
+\   Serving Cappuccino to table 2
+
+\   total CoffeeFlavour objects made: 3
+
+\ Instances of CoffeeFlavour will be the Flyweights
+:class CoffeeFlavour
+   extends Object
+     field:  name
+     method: getName
+   end-extends
+
+   :new this -> name dup ds.init ds.place ;method
+   :method getName this -> name  ds.count ;method
+   :delete this -> name ds.free ;method
+;class
+
+\ Menu acts as a factory and cache for CoffeeFlavour flyweight objects
+:class Menu
+   extends Object
+     field:  flavours
+     method: lookup
+     method: totalCoffeeFlavoursMade
+   end-extends
+                                       \ make a hashmap
+   :new new ObjectMap this -> flavours ! ;method
+   :method totalCoffeeFlavoursMade this -> flavours @ -> hsize ;method
+
+   :method lookup
+      2dup this -> flavours @ -> hget error?
+      if                               \ not found, create object
+        drop 2dup new CoffeeFlavour dup 2swap this -> flavours @ -> hput
+      else                             \ and save the string
+        nip nip                        \ found, get rid of string
+      then                             \ return object
+   ;method
+                                       \ destructor
+   :delete this -> flavours @ delete ;method
+
+   private{ flavours }
+;class
+
+\ Order is the context of the CoffeeFlavour flyweight.
+:class Order
+   extends Object
+     field:  tableNumber
+     field:  flavour
+     method: serve
+   end-extends
+
+   :new this -> tableNumber ! this -> flavour ! ;method
+
+   :method serve
+     ." Serving " this -> flavour @ -> getName type
+     ."  to table " this -> tableNumber ? cr
+   ;method
+;class
+
+:class CoffeeShop
+   extends Object
+     field:  orders
+     field:  mymenu
+     method: takeOrder
+     method: service
+     method: report
+   end-extends
+
+   :new
+     new ObjectList this -> orders !
+     new Menu       this -> mymenu !
+   ;method
+
+   :method takeOrder                   ( a n1 n2 --)
+     -rot this -> mymenu @ -> lookup
+     swap new Order this -> orders @ -> lpush
+   ;method
+
+   :method service
+     this -> orders @ -> lsize 1-      \ example lists these in reverse
+     begin dup 0< 0= while dup this -> orders @ -> lget -> serve 1- repeat
+     drop                              \ get rid of the counter
+   ;method
+
+   :method report
+     cr ." total CoffeeFlavour objects made: "
+     this -> mymenu @ -> totalCoffeeFlavoursMade . cr
+   ;method
+
+   :delete                             \ destructor
+     this -> orders @ delete           \ free the orderlist
+     this -> mymenu @ delete           \ free the menu
+   ;method
+
+   private{ orders mymenu }
+;class
+
+new CoffeeShop value shop
+
+s" Cappuccino"   2 shop -> takeOrder
+s" Frappe"       1 shop -> takeOrder
+s" Espresso"     1 shop -> takeOrder
+s" Frappe"     897 shop -> takeOrder
+s" Cappuccino"  97 shop -> takeOrder
+s" Frappe"       3 shop -> takeOrder
+s" Espresso"     3 shop -> takeOrder
+s" Cappuccino"   3 shop -> takeOrder
+s" Espresso"    96 shop -> takeOrder
+s" Frappe"     552 shop -> takeOrder
+s" Cappuccino" 121 shop -> takeOrder
+s" Espresso"   121 shop -> takeOrder
+
+shop -> service
+shop -> report
+shop delete

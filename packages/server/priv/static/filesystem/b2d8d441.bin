@@ -1,0 +1,24 @@
+\ SHUFFLE - Copyright 2007, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Rnaodm Osbrevation
+\ I'm srue a few of you hvae alerady seen tihs, but, I stlil tinhk it's
+\ facsintaing: Aoccdrnig to rscheearch at Cmabrigde Uinervtisy,
+\ it deosn't mttaer in waht oredr the ltteers in a wrod are, the olny
+\ iprmoetnt tihng is taht the frist and lsat ltteer be at the rghit pclae.
+\ The rset can be a total mses and you can sitll raed it wouthit porbelm.
+\ Tihs is bcuseae the huamn mnid deos not raed ervey lteter by istlef,
+\ but the wrod as a wlohe. In'st taht intrestnig?
+
+include lib/shuffle.4th
+include lib/istype.4th
+
+aka refill read-file
+
+: ?shuffle dup 1 > if cshuffle ;then 2drop ;
+: garble 2dup 1- chars + c@ is-alpha 0= - 1- chop ?shuffle type space ;
+: Usage abort" Usage: shuffle infile.txt outfile.txt" ;
+: Process begin bl parse-word dup while 2dup garble repeat 2drop cr ;
+
+include lib/convert.4th

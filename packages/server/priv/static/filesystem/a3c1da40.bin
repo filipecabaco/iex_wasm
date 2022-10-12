@@ -1,0 +1,43 @@
+\ Preprocessor Multiton design pattern demo - Copyright 2021, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th
+include lib/dstringt.4th
+include lib/anstools.4th
+
+include 4pp/lib/foos.4pp
+include 4pp/foos/hashmap.4pp
+
+instance ObjectMap LockByKey           \ we need a hashmap for this one
+
+:class Multiton                        \ this is the multiton class
+   extends Object
+     field: Id                         \ here is where the ID is stored
+     method: ShowId                    \ show the ID
+     method: GetInstance               \ create a multiton instance
+   end-extends
+                                       \ initialize the dynamic string
+   :new this -> Id dup ds.init ds.place  ;method
+   :delete this -> Id ds.free ;method  \ free the dynamic string
+                                       \ show the ID
+   :method ShowId ." My ID is " this -> Id ds.count type cr ;method
+                                       \ if an unique id, make an instance
+   :method GetInstance                 ( a n -- object)
+     2dup LockByKey -> hget error?     \ already in the map?
+     if drop 2dup new Multiton dup 2swap LockByKey -> hput else nip nip then
+   ;method                             \ if not, add the instance to the map
+
+   private{ Id Multiton }              \ "new Multiton" doesn't work now
+;class
+                                       \ create the multitons
+s" one" Nothing -> GetInstance value m1
+s" two" Nothing -> GetInstance value m2
+s" one" Nothing -> GetInstance value m3
+                                       \ there are only two objects!
+m1 -> ShowId
+m2 -> ShowId
+m3 -> ShowId
+
+LockByKey delete                       \ the easiest way to delete them all
+

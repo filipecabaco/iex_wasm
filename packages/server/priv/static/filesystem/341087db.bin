@@ -1,0 +1,81 @@
+\ Preprocessor composite pattern demo - Copyright 2017, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Composite_pattern
+
+include lib/memcell.4th
+include lib/memchar.4th
+
+include 4pp/lib/foos.4pp
+include 4pp/foos/list.4pp
+
+\ "Component"
+:class Graphic
+   extends Object
+     virtual: print
+   end-extends
+;class
+
+\ "Composite"
+:class CompositeGraphic
+   extends Graphic
+     field:  childGraphics
+     method: add
+   end-extends
+
+   :new new List this -> childGraphics ! ;method
+
+   :virtual print
+      this -> childGraphics @ -> lsize 1-
+      begin
+        dup 0< 0=
+      while
+        dup this -> childGraphics @ -> lget => print 1-
+      repeat drop
+   ;method
+
+   :method add this -> childGraphics @ -> lpush ;method
+   :delete this -> childGraphics @ delete ;method
+
+   private{ childGraphics }
+;class
+
+\ "Leaf"
+:class Ellipse
+   extends Graphic
+   end-extends
+
+   :virtual print ." Ellipse at address " this . cr ;method
+;class
+
+\ Client
+instance Ellipse ellipse1
+instance Ellipse ellipse2
+instance Ellipse ellipse3
+instance Ellipse ellipse4
+
+instance CompositeGraphic graphic1
+instance CompositeGraphic graphic2
+instance CompositeGraphic graphic3
+
+ellipse1 graphic1 -> add
+ellipse2 graphic1 -> add
+ellipse3 graphic1 -> add
+
+ellipse4 graphic2 -> add
+
+graphic1 graphic3 -> add
+graphic2 graphic3 -> add
+
+\ Prints the complete graphic (four times the string "Ellipse")
+graphic3 => print
+
+ellipse1 delete
+ellipse2 delete
+ellipse3 delete
+ellipse4 delete
+
+graphic1 delete
+graphic2 delete
+graphic3 delete

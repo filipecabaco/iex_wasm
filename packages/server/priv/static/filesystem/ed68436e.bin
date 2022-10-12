@@ -1,0 +1,68 @@
+\ 4tH library - ANS FILE - Copyright 2006,2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] r/o [IF]
+         input constant r/o            \ read-only fam
+        output constant w/o            \ write-only fam
+input output + constant r/w            \ read-write fam
+
+[IGNORE] bin                           ( --)
+
+: (read) accept ;                      ( a n1 -- n2)
+: (readln) refill ;                    ( -- f)
+: (write) type ;                       ( a n --)
+: (writeln) type cr ;                  ( a n --)
+: (close) close ;                      ( h --)
+: (tell) tell ;                        ( h -- n)
+: (flush) sync ;                       ( --)
+: (create) 2dup output open close ;    ( a n -- a n)
+: (io) swap cin >r cout >r use catch r> use r> use ;
+                                       ( h xt -- i*x ior)
+: file-size                            ( h -- n f)
+  dup tell >r (error) over seek        \ save position and seek eof
+  if -1 else dup tell then r> rot      \ now tell the position and adjust
+  seek over or 0<                      \ return file to its old position
+;
+
+: read-line                            ( addr n1 h -- n2 f1 f2)
+  >in @ >r source 2>r                  \ save current buffer
+  >r 1+ source! r>                     \ adjust and set new buffer
+  ['] (readln) (io)                    \ do I/O
+  0 parse nip -rot                     \ get characters read
+  2r> source! r> >in !                 \ restore buffer
+;
+
+\ Note that FILE-SIZE, REPOSITION-FILE and FILE-POSITION usually take
+\ an unsigned double number. If this library is used for porting
+\ purposes, do not forget to apply S>D and D>S when needed!
+
+: open-file open error? ;              ( a n fam -- h f)
+: close-file ['] (close) catch ;       ( h -- ior)
+: file-position ['] (tell) catch ;     ( h -- n ior)
+: read-file ['] (read) (io) ;          ( a n1 h -- n2 ior)
+: write-file ['] (write) (io) ;        ( a n h -- ior)
+: flush-file ['] (flush) (io) ;        ( h -- ior)
+: write-line ['] (writeln) (io) ;      ( a n h -- ior)
+: file-status input open error? dup unless over close then ;
+
+: create-file                          ( a n fam -- h ior)
+  dup >r input output + =              \ if opened in read/write mode
+  if ['] (create) catch dup if nip nip r> swap ;then drop then
+  r> open-file                         \ quickly create a file before opening
+;
+
+aka seek reposition-file               ( n h -- f)
+
+[DEFINED] 4TH# [IF]
+  hide (read)
+  hide (readln)
+  hide (write)
+  hide (writeln)
+  hide (close)
+  hide (tell)
+  hide (flush)
+  hide (create)
+  hide (io)
+[THEN]
+[THEN]

@@ -1,0 +1,178 @@
+\ Preprocessor FOOS adapter pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ add dynamic memory
+include 4pp/lib/foos.4pp               \ add object orientation
+
+:class IFormat
+   extends Object
+     virtual: recharge
+     field: connectorOk
+   end-extends
+;class
+
+:class IFormatIPhone
+   extends IFormat
+     virtual: useLightning
+   end-extends
+;class
+
+:class IFormatAndroid
+   extends IFormat
+     virtual: useMicroUsb
+   end-extends
+;class
+
+\ Adaptee
+:class IPhone
+   extends IFormatIPhone
+   end-extends
+
+   :new FALSE this -> connectorOk ! ;method
+
+   :virtual useLightning
+      TRUE this -> connectorOk !
+      ." Lightning connected -$" cr
+   ;method
+
+   :virtual recharge
+      this -> connectorOk @ if
+        ." Recharge Started" cr
+        ." Recharge 20%" cr
+        ." Recharge 50%" cr
+        ." Recharge 70%" cr
+        ." Recharge Finished" cr
+      else
+        ." Connect Lightning first" cr
+      then
+   ;method
+;class
+
+\ Adapter
+:class IPhoneAdapter
+   extends IFormatAndroid
+     field: mobile
+   end-extends
+
+   :new this -> mobile ! ;method
+   :virtual recharge this -> mobile @ => recharge ;method
+
+   :virtual useMicroUsb
+      ." MicroUsb connected -> "
+      this -> mobile @ => useLightning
+   ;method
+;class
+
+:class Android
+   extends IFormatAndroid
+   end-extends
+
+   :new FALSE this -> connectorOk ! ;method
+
+   :virtual useMicroUsb
+      TRUE this -> connectorOk !
+      ." MicroUsb connected ->" cr
+   ;method
+
+   :virtual recharge
+      this -> connectorOk @ if
+        ." Recharge Started" cr
+        ." Recharge 20%" cr
+        ." Recharge 50%" cr
+        ." Recharge 70%" cr
+        ." Recharge Finished" cr
+      else
+        ." Connect MicroUsb first" cr
+      then
+   ;method
+;class
+
+:class IRecharger
+   extends Object
+     field: phone
+   end-extends
+
+   :delete this -> phone @ delete ;method
+;class
+
+\ client
+:class MicroUsbRecharger
+   extends IRecharger
+     field: phoneAdapter
+   end-extends
+
+   :new
+     ." ---Recharging iPhone with Generic Recharger---" cr
+     new IPhone this -> phone !
+     this -> phone @ new IPhoneAdapter this -> phoneAdapter !
+     this -> phoneAdapter @ => useMicroUsb
+     this -> phoneAdapter @ => recharge
+     ." ---iPhone Ready for use---" cr cr
+   ;method
+
+;class
+
+new MicroUsbRecharger value MyMicroUsbRecharger
+MyMicroUsbRecharger delete
+
+:class IPhoneRecharger
+   extends IRecharger
+   end-extends
+
+   :new
+     ." ---Recharging iPhone with iPhone Recharger---" cr
+     new IPhone this -> phone !
+     this -> phone @ => useLightning
+     this -> phone @ => recharge
+     ." ---iPhone Ready for use---" cr cr
+   ;method
+;class
+
+new IPhoneRecharger value MyiPhoneRecharger
+MyiPhoneRecharger delete
+
+:class AndroidRecharger
+   extends IRecharger
+   end-extends
+
+   :new
+     ." ---Recharging Android Phone with Generic Recharger---" cr
+     new Android this -> phone !
+     this -> phone @ => useMicroUsb
+     this -> phone @ => recharge
+     ." ---Phone Ready for use---" cr cr
+   ;method
+;class
+
+new AndroidRecharger value MyAndroidRecharger
+MyAndroidRecharger delete
+
+\ Result:
+
+\ ---Recharging iPhone with Generic Recharger---
+\ MicroUsb connected -> Lightning connected -$
+\ Recharge Started
+\ Recharge 20%
+\ Recharge 50%
+\ Recharge 70%
+\ Recharge Finished
+\ ---iPhone Ready for use---
+
+\ ---Recharging iPhone with iPhone Recharger---
+\ Lightning connected -$
+\ Recharge Started
+\ Recharge 20%
+\ Recharge 50%
+\ Recharge 70%
+\ Recharge Finished
+\ ---iPhone Ready for use---
+
+\ ---Recharging Android Phone with Generic Recharger---
+\ MicroUsb connected ->
+\ Recharge Started
+\ Recharge 20%
+\ Recharge 50%
+\ Recharge 70%
+\ Recharge Finished
+\ ---Phone Ready for use---

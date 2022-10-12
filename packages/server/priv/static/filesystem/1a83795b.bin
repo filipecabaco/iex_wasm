@@ -1,0 +1,50 @@
+\ Preprocessor FOOS iterator pattern demo - Copyright 2017, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Iterator_pattern
+
+include lib/memcell.4th
+include lib/dstringt.4th
+include 4pp/lib/foos.4pp
+
+:class (next)                          \ helper class for the iterator
+   extends Object
+     field: val                        \ value returned
+     field: ok                         \ status returned
+   end-extends
+
+   :new this -> val ! this -> ok ! ;method
+;class
+
+:class Iterator
+   extends Object
+     field:  str
+     field:  len
+     field:  cur
+     method: next
+   end-extends
+
+   :new
+     dup this -> len !                 \ save the length
+     this -> str dup ds.init ds.place  \ allocate space and save address
+     0 this -> cur !                   \ reset cursor
+   ;method
+
+   :delete this -> str ds.free ;method
+
+   :method next
+     this -> cur @ this -> len @ < dup
+     if
+       this -> cur this -> str ds.count drop over @ chars + c@ 1 rot +!
+     else 0
+     then new (next)
+   ;method
+
+   private{ str len cur (next) }
+;class
+
+s" Iterator" instance Iterator iter
+begin iter -> next dup -> ok @ while dup -> val @ emit delete repeat drop cr
+iter delete
+

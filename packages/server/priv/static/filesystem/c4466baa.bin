@@ -1,0 +1,83 @@
+\ Preprocessor object pool pattern demo - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ for ALLOCATE
+include lib/stack.4th                  \ for STACK
+include lib/constant.4th               \ for NULL
+include lib/throw.4th                  \ for E.USER
+include 4pp/lib/foos.4pp
+
+\ Offer a significant performance boost; it is most effective in
+\ situations where the cost of initializing a class instance is high, the
+\ rate of instantiation of a class is high, and the number of
+\ instantiations in use at any one time is low.
+
+\ Collaborate with other objects for a limited amount of time, then
+\ they are no longer needed for that collaboration.
+
+:class Reusable
+  extends Object
+    field:  resource                   \ holds an xt
+    method: run                        \ executes the xt
+  end-extends
+                                       \ assign
+  :new [: ." Hello world!" cr ;] this -> resource ! ;method
+  :method run this -> resource @ execute ;method
+                                       \ should execute the xt
+  private{ resource }                  \ we got methods to access it
+;class
+
+\ Manage Reusable objects for use by Client objects.
+
+:class ReusablePool
+  extends Object
+    method: acquire                    \ essentially a pop
+    method: release                    \ essentially a push
+    method: available                  \ essentially a depth
+    field:  reusables                  \ array for the stack
+  end-extends
+                                       \ this returns an xt to the stack
+  :method release   this -> reusables @ >a     ;method
+  :method available this -> reusables @ adepth ;method
+                                       \ this reports the depth of the stack
+  :method acquire                      \ check depth, if available - pop xt
+    this -> reusables @ dup adepth if a> else drop NULL then
+  ;method
+
+  :delete                              \ destructor releases all xt objects
+    begin this -> reusables @ dup adepth while a> delete repeat
+    free E.USER throw" Cannot free reusables"
+  ;method                              \ .. and releases the entire stack
+
+  :new                                 \ allocate a stack of requested size
+    dup 1+ cells allocate E.USER throw" Cannot allocate reusables"
+    dup this -> reusables ! stack      \ now turn it into a stack
+    0 begin over over > while new Reusable this -> release 1+ repeat drop drop
+  ;method                              \ and fill it with xt objects
+
+  private{ reusables }                 \ we got methods to access these
+;class
+
+10 instance ReusablePool reusable_pool \ create a resource pool
+
+." Available: "
+reusable_pool -> available . cr        \ let's see how many we still have
+reusable_pool -> acquire value myreusable
+
+." Available: "
+reusable_pool -> available . cr        \ we should have acquired one..
+myreusable -> run                      \ now let's run this one
+myreusable reusable_pool -> release cr \ .. and release it again
+
+." Available: "
+reusable_pool -> available . cr        \ has it been returned properly?
+reusable_pool -> acquire to myreusable \ now acquire it again
+
+." Available: "
+reusable_pool -> available . cr        \ see hoe that worked out
+myreusable -> run                      \ let's see it's not corrupted
+myreusable reusable_pool -> release cr \ release it again
+
+reusable_pool delete                   \ now destroy the resource pool
+

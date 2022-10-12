@@ -1,0 +1,97 @@
+\ Preprocessor FOOS prototype pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ add dynamic memory
+include lib/dstringt.4th               \ add dynamic strings
+include 4pp/lib/foos.4pp               \ add object orientation
+                                       \ allocate and store a string
+\ include lib/anstools.4th
+
+:class Prototype
+   extends Object
+     field: a
+     field: b
+     virtual: displayCONS
+     virtual: displayCLON
+     virtual: clone
+   end-extends
+
+   :new
+     this -> a ds.init
+     this -> b ds.init
+   ;method
+
+   :delete
+     this -> a ds.free
+     this -> b ds.free
+   ;method
+
+   :virtual displayCONS
+     ." CONS: " this -> a ds.count type cr
+     ." CONS: " this -> b ds.count type cr
+   ;method
+
+   :virtual displayCLON
+     ." CLON: " this -> a ds.count type cr
+     ." CLON: " this -> b ds.count type cr
+   ;method
+
+   :default clone                       ( a1 -- a2)
+     this allocated dup allocate abort" Cannot create object"
+     tuck this swap rot smove
+   ;method
+;class
+
+:class ConcretePrototype1              ( -- x)
+   extends Prototype
+   end-extends
+
+   :new
+     s" A1" this -> a ds.place         \ assign and initialize it
+     s" B1" this -> b ds.place
+
+     this => displayCONS
+   ;method
+                                       \ override the clone method
+   :virtual clone this <- clone } {
+      this => displayCLON this         \ create the clone, continue with its
+   ;method                             \ pointer, return the new object
+;class
+
+:class ConcretePrototype2              ( -- x)
+   extends Prototype
+   end-extends
+
+   :new
+     s" A2" this -> a ds.place         \ assign and initialize it
+     s" B2" this -> b ds.place
+
+     this => displayCONS
+   ;method
+                                       \ override the clone method
+   :virtual clone this <- clone } {    \ and add the second string
+      s" -C" this -> a ds+place
+      s" -C" this -> b ds+place
+
+      this => displayCLON this         \ return the new object
+   ;method
+;class
+
+new ConcretePrototype1 value cP1
+new ConcretePrototype2 value cP2
+\ cP1 => clone value cP1C
+cP2 => clone value cP2C
+
+cP1  delete
+cP2C delete
+cP2  free                              \ dstrings already freed by clone
+
+\ RESULT:
+
+\ CONS: A1
+\ CONS: B1
+\ CONS: A2
+\ CONS: B2
+\ CLON: A2-C
+\ CLON: B2-C

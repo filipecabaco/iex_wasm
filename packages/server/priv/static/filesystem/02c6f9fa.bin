@@ -1,0 +1,64 @@
+\ Published on c.l.f, Wednesday 4 November 2015 21:33:15
+\ Believed to be in the public domain
+
+include lib/memcell.4th                \ for ALLOCATE
+include lib/isqrt.4th                  \ for ISQRT
+include 4pp/lib/foos.4pp               \ for Object orientation
+
+: sq ( n -- n^2 ) dup * ;
+: hyp ( x1 y1 x2 y2 -- hyp )
+  rot - sq rot rot - sq + isqrt ;
+
+:class point
+   extends Object
+     field: x
+     field: y
+   end-extends
+
+   :method put                         ( x y -- )
+      this -> y ! this -> x !
+   ;method
+
+   :method get                         ( -- x y )
+      this ->  x @ this -> y @
+   ;method
+
+   :new this -> put ;method            \ constructor
+;class
+
+:class rectangle
+   extends Object
+     field: ulc
+     field: lrc
+   end-extends
+
+   :method diagonal                    ( -- diag )
+      this -> ulc @ -> get
+      this -> lrc @ -> get hyp
+   ;method
+
+   :method rput                        ( a1 a2 -- )
+      this -> lrc !
+      this -> ulc !
+   ;method
+                                       \ destructor
+   :delete this -> ulc @ delete  this -> lrc @ delete ;method
+   :new this -> rput ;method           \ constructor
+;class
+
+\ named rectangle in dictionary
+20 20 new point 50 50 new point static rectangle r
+r -> diagonal . cr
+
+\ nameless rectangle in heap
+10 10 new point 13 14 new point instance rectangle hr
+hr -> diagonal . cr
+
+\ must manually garbage collect
+hr delete
+
+\ if you want message-less access to instance variables
+r -> ulc @ -> x ? cr
+r -> ulc @ -> y ? cr
+r -> lrc @ -> x ? cr
+r -> lrc @ -> y ? cr

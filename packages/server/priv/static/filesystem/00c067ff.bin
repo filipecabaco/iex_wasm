@@ -1,0 +1,37 @@
+\ 4tH library - ISIN validation - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] isin? [IF]
+[UNDEFINED] luhn? [IF] include lib/luhn.4th [THEN]
+
+12 constant (/isino)                   \ length of an ISIN
+(/isino) 2 * 1+ string (isino)         \ worst case size buffer
+                                       \ convert a single digit
+: (isin-digit)                         ( a1 -- a2 n2)
+  c@ bl or [char] 0 - dup 9 > if [char] a [char] 9 1+ - - then s>d <# #s #>
+;
+
+: isin?                                ( a n -- f)
+  dup (/isino) = if                    \ check for correct length
+    over (isin-digit) (isino) place chop over (isin-digit) (isino) +place chop
+    (isino) count 4 = nip              \ should have been two characters
+    if bounds ?do i (isin-digit) (isino) +place loop (isino) count luhn? ;then
+  then 2drop false                     \ previous tests failed
+;
+
+[DEFINED] 4TH# [IF]
+  hide (/isino)
+  hide (isino)
+  hide (isin-digit) 
+[THEN]
+[THEN]
+
+\ s" US0378331005"  isin? . cr           ( valid)
+\ s" US0373831005"  isin? . cr           ( invalid)
+\ s" U50378331005"  isin? . cr           ( invalid)
+\ s" US03378331005" isin? . cr           ( invalid) 
+\ s" AU0000XVGZA3"  isin? . cr           ( valid)
+\ s" AU0000VXGZA3"  isin? . cr           ( valid) 	
+\ s" FR0000988040"  isin? . cr           ( valid)
+ 

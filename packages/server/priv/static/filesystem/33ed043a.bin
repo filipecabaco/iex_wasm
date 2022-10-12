@@ -1,0 +1,39 @@
+\ Preprocessor FOOS null object pattern demo
+\ Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Null_Object_pattern
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+:class Animal
+   extends Object
+     virtual: MakeSound
+   end-extends
+;class
+
+:class NullAnimal
+   extends Animal
+   end-extends
+
+   :virtual MakeSound ;method          \ null method, no behavior
+;class
+
+static NullAnimal Animal.Null          \ make one, static instance
+
+:class Dog
+   extends Animal
+   end-extends
+
+   :virtual MakeSound ." Woof" cr ;method
+;class
+
+new Dog value mydog
+mydog => MakeSound
+mydog delete
+
+Animal.Null value unknown              \ use the Animal.Null instance
+unknown => MakeSound                   \ outputs nothing but does not
+                                       \ throw a runtime exception

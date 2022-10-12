@@ -1,0 +1,129 @@
+\ Preprocessor FOOS servant pattern demo - Copyright 2021, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp               \ we need this because objects
+
+\ Taken from https://en.wikipedia.org/wiki/Servant_(design_pattern)
+
+\ Interface specifying what serviced classes needs to implement, to be
+\ serviced by servant.
+:class Movable
+   extends Object
+     virtual: setPosition              ( pos --)
+     virtual: getPosition              ( -- pos )
+   end-extends
+;class
+
+\ Just a very simple container class for position.
+:class Position
+   extends Object
+     field: xPosition
+     field: yPosition
+   end-extends
+                                       ( x y --)
+   :new this -> yPosition ! this -> xPosition ! ;method
+;class
+
+\ Servant class, offering its functionality to classes implementing
+\ Movable Interface
+:class MoveServant
+   extends Object
+     method: moveTo
+     method: moveBy
+   end-extends
+
+   \ Method, which will move Movable implementing class to position where
+   :method moveTo => setPosition ;method
+                                       ( pos mov --)
+   \ Do some other stuff to ensure it moves smoothly and nicely, this is
+   \ the place to offer the functionality
+
+   \ Method, which will move Movable implementing class by dx and dy
+   :method moveBy                      ( x y mov --)
+      dup => getPosition -> yPosition @ rot + >r
+      dup => getPosition -> xPosition @ rot + r> new Position
+      swap => setPosition
+   ;method
+;class
+
+\ One of geometric classes
+:class Triangle
+   extends Movable
+     field: p
+   end-extends
+   \ Position of the geometric object on some canvas
+   :new this -> p ! ;method
+   :delete this -> p @ delete ;method
+
+   \ Method, which gets position of geometric object
+   :virtual getPosition this -> p @ ;method
+
+   \ Method, which sets position of geometric object
+   :virtual setPosition this -> p dup @ delete ! ;method
+   \ Method, which sets position of geometric object
+
+   private{ p }
+;class
+
+\ One of geometric classes
+:class Ellipse
+   extends Movable
+     field: p
+   end-extends
+   \ Position of the geometric object on some canvas
+   :new this -> p ! ;method
+   :delete this -> p @ delete ;method
+
+   \ Method, which gets position of geometric object
+   :virtual getPosition this -> p @ ;method
+
+   \ Method, which sets position of geometric object
+   :virtual setPosition this -> p dup @ delete ! ;method
+   \ Method, which sets position of geometric object
+
+   private{ p }
+;class
+
+\ One of geometric classes
+:class Rectangle
+   extends Movable
+     field: p
+   end-extends
+   \ Position of the geometric object on some canvas
+   :new this -> p ! ;method
+   :delete this -> p @ delete ;method
+
+   \ Method, which gets position of geometric object
+   :virtual getPosition this -> p @ ;method
+
+   \ Method, which sets position of geometric object
+   :virtual setPosition this -> p dup @ delete ! ;method
+   \ Method, which sets position of geometric object
+
+   private{ p }
+;class
+                                       \ now test the whole shebang
+static MoveServant myServant           \ make a static servant
+                                       \ create an ellipse
+23 45 new Position new Ellipse value myFigure
+26 51 new Position myFigure myServant -> moveTo
+                                       \ set to a new position
+5 6 myFigure myServant -> moveBy       \ move a little bit
+." x = " myFigure => getPosition -> xPosition ? cr
+." y = " myFigure => getPosition -> yPosition ? cr
+myFigure delete cr                     \ drop the instance
+                                       \ create a triangle
+101 3 new Position new Triangle to myFigure
+-99 30 myFigure myServant -> moveBy    \ move a little bit
+." x = " myFigure => getPosition -> xPosition ? cr
+." y = " myFigure => getPosition -> yPosition ? cr
+myFigure delete cr                     \ drop the instance
+                                       \ create a rectangle
+0 dup new Position new Rectangle to myFigure
+75 75 new Position myFigure myServant -> moveTo
+." x = " myFigure => getPosition -> xPosition ? cr
+." y = " myFigure => getPosition -> yPosition ? cr
+myFigure delete cr                     \ drop the instance
+

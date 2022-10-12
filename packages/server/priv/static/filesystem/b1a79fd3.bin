@@ -1,0 +1,13 @@
+\ Preprocessor interpreter demo - Copyright 2012 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include 4pp/lib/interprt.4pp
+
+:macro myconst >>> 23 ;
+:macro @push >#> ;
+:macro @plus @add ;
+:macro @print @eval ;
+:macro sum[ ` ." Sum: "` [ @print . cr ;
+
+sum[ myconst @push 45 @plus @push 20 @plus ]

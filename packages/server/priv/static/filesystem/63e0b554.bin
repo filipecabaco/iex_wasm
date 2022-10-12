@@ -1,0 +1,94 @@
+\ 4tH program - Text to Blockfile II - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/row.4th                    \ for ROW
+include lib/getopts.4th                \ for GET-ARGUMENT
+include lib/ascii7.4th                 \ for S>ASCII7
+
+48 constant /head                      \ max. length header
+64 constant c/l                        \ characters per line
+16 constant l/scr                      \ lines per editing screen
+12 value    l/blk                      \ maximum fill per screen
+ 0 value    blk                        \ block number
+
+variable written                       \ characters written on line
+variable lines                         \ lines written in block
+
+true  value prev                       \ previous line was empty
+false value curr                       \ current line was empty
+
+/head string header 0 dup latest place \ header line, initialized
+
+proto: nl                              \ newline is later defined
+                                       \ keep track of line fill, write it
+: +written dup written +! ; : .put +written type ;
+: .head s" ( Block " .put <# # # # #> .put s"  - " .put .put s" )" .put nl ;
+: ?header header count dup if blk .head else 2drop then ;
+: EOB ?do c/l spaces loop 1 +to blk ;  \ finish the end of a block
+: ?EOB l/blk < unless 0 lines ! l/scr l/blk EOB ?header then ;
+: +spaces written @ over + c/l <  if +written spaces ;then drop ;
+: +char >r 2dup chars + c@ r> = if 1+ then ;
+: +string rot >r chars + over - r> +char ;
+: comment 0 parse drop >zero ;         \ skip the comment
+: directive bl dup parse +string ;     \ parse parameter of directive
+: quote [char] " dup parse +string ;   \ quoted string
+: bar [char] | dup parse +string ;     \ barred string
+: parenthesis [char] ) dup parse +string ;
+: breakup nl dup c/l /mod lines @ + l/scr mod lines ! written ! type ;
+                                       \ update vars and dump token
+:proto nl 0 written c/l over @ - spaces ! lines 1 over +! @ ?EOB ;
+                                       \ fill line, may be new block?
+create keyword
+  ," char"        ' directive ,
+  ," [char]"      ' directive ,
+  ," [defined]"   ' directive ,
+  ," [undefined]" ' directive ,
+  ," ("           ' parenthesis ,
+  ," .("          ' parenthesis ,
+  ," c|"          ' bar ,
+  ," s|"          ' bar ,
+  ," .|"          ' bar ,
+  ," ,|"          ' bar ,
+  ,| c"|          ' quote ,
+  ,| s"|          ' quote ,
+  ,| ."|          ' quote ,
+  ,| ,"|          ' quote ,
+  ,| abort"|      ' quote ,
+  ," \"           ' comment ,
+  ," #!"          ' comment ,
+  ," @goto"       ' comment ,
+  NULL ,
+does> 2 string-key row if cell+ @c nip execute ;then drop bl +char ;
+                                       \ extend special tokens
+: >token                               ( -- sp a2 n2)
+  >in @ dup >r bl omit >in @ swap - bl parse keyword
+  r> over or 0= to curr                \ parse spaces, check on keyword
+;                                      \ is this an empty line?
+
+: tokenize                             ( --)
+  >token curr if 2drop drop ;then rot +spaces
+  written @ over + c/l < if .put else breakup then
+;                                      \ if line not empty, write spaces
+                                       \ token too long? dump it as is
+aka refill Read-file                   \ ** required by CONVERT **
+
+: Process                              \ tokenize line until end or is empty
+  tib count s>ascii7 2drop begin >in @ tokenize >in @ = curr or until
+  curr prev and unless nl then curr to prev
+;                                      \ if last one was NOT empty, newline
+                                       \ initialize, write header
+: PreProcess 0 dup written ! lines ! ?header ;
+: PostProcess l/scr lines @ EOB ;      \ finish the last block
+: Usage abort" Usage: txt2blk2 [-h header] [-f fill] textfile blockfile" ;
+
+: get-header get-argument /head 1- min header place ;
+: get-fill get-argument number 4 max c/l 1- min to l/blk ;
+                                       \ ** required by CONVERT **
+create options                         \ command line options
+  char h , ' get-header ,              \ insert a header
+  char f , ' get-fill ,                \ max. fill per screen
+  NULL ,
+
+include lib/convert.4th
+

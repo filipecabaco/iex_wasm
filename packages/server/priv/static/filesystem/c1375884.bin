@@ -1,0 +1,249 @@
+\ 4tH library - Genetic stack optimizer - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Typical use:
+\   genstack -g 1000 abc cbba
+
+\ This experimental program is like STACKOPT, but uses a genetic algorithm
+\ instead of a "brute force" approach. That does make it less reliable and
+\ the valid solutions it provides may NOT be optimal. Also, complex stack
+\ diagrams may need a HUGE number of generations to produce a result.
+
+\ Since much depends on beneficial random mutations, your mileage may vary
+\ with EACH RUN. Some runs may render no results, while others with the
+\ VERY SAME - or even lower - settings may be successful.
+
+\ STACKOPT will probably find a better optimized solution much faster.
+
+\ When a valid result is found the mutation rate will drop from 80% to 20%.
+\ in practice, good solutions will spread throughout the population quite
+\ fast, so when the program ends successfully - a proper solution will be
+\ listed.
+
+\ include lib/anstools.4th               \ for .S
+include lib/stack.4th                  \ for STACK
+include lib/getopts.4th                \ for GET-OPTIONS
+include lib/choose.4th                 \ for CHOOSE
+include lib/cstring.4th                \ for C/STRING
+include lib/range.4th                  \ for WITHIN
+
+    0 value survivor#                  \ number of survivors
+    0 value max-score                  \ maximum score
+  256 value max-generations            \ default number of generations
+false value verbose                    \ verbose mode
+    3 constant #point                  \ +point per correct item
+   16 constant /stack                  \ stack size
+
+struct                                 \ structure for mini-VM
+  field: score                         \ score achieved
+  /stack +field (stack)                \ data stack of VM
+  /stack +field (rstack)               \ returm stack of VM
+  /stack +field genome                 \ genome of VM
+end-struct /candidate
+
+256 constant #candidate                \ number of candicates
+#candidate /candidate * array candidate does> swap /candidate * + ;
+                                       \ array of candidates
+#candidate 4 / constant #survivor      \ max. number of survivors
+#survivor array survivor               \ array of survivors
+
+: push   -> (stack) >a  ;              \ push data stack
+: pop    -> (stack) a>  ;              \ pop  data stack
+: fetch  -> (stack) a@  ;              \ fetch data stack
+: rpush  -> (rstack) >a ;              \ push return stack
+: rpop   -> (rstack) a> ;              \ pop return stack
+: rfetch -> (rstack) a@ ;              \ fetch return stack
+                                       \ check stack limits
+: stack?                               ( cand lev sp -- f)
+  adepth swap /stack 1- within dup >r  \ check stack limits
+  unless -1 over -> score +! then r>   \ not within limits: subtract a point
+;                                      \ set invalid score if error
+                                       ( cand lev -- f)
+: d? over -> (stack)  stack? ;         \ check data stack
+: r? over -> (rstack) stack? ;         \ check return stack
+                                       \ stack instructions
+: _dup 2 d? if dup fetch swap push ;then drop ;
+: _drop 1 d? if pop drop ;then drop ;  ( cand --)
+: _over 2 d? if dup >r pop r@ fetch swap r@ push r> push ;then drop ;
+: _swap 2 d? if dup >r pop r@ pop swap r@ push r> push ;then drop ;
+: _r@ 1 r? if dup rfetch swap push ;then drop ;
+: _r> 1 r? if dup rpop swap push ;then drop ;
+: _>r 1 d? if dup pop swap rpush ;then drop ;
+
+: _rot                                 ( cand --)
+  3 d? if dup >r pop r@ pop r@ pop -rot r@ push r@ push r> push ;then drop
+;
+
+create words                           \ stack instructions table
+  ' _dup  , ," dup"
+  ' _over , ," over"
+  ' _swap , ," swap"
+  ' _drop , ," drop"
+  ' _rot  , ," rot"
+  ' _>r   , ," >r"
+  ' _r>   , ," r>"
+  ' _r@   , ," r@"
+  here words - 2 / constant #word      \ table size
+
+:redo words swap 2* cells + ;          \ set runtime behavior
+                                       \ debugging ( cand --)
+: s. dup -> (stack) adepth dup 0> if tuck
+    begin dup while over pop >r 1- repeat drop over
+    begin dup while over r> dup rot push emit 1- repeat drop
+  then ." (TOS) " drop drop cr
+;
+                                       \ run the VM
+: run                                  ( n --)
+  candidate dup -> genome begin        ( a1 a2)
+    dup @ error?                       ( a1 a2 *a2 f)
+  except
+    >r over r> execute                 ( a1 a2)
+    over -> score @ dup 0<             ( a1 a2 sc f)
+  except
+    drop cell+                         ( a1 a2+1)
+  repeat drop drop drop                ( --)
+;
+                                       \ length of genome
+: /genome                              ( n1 -- n2)
+  candidate -> genome 0                ( a n)
+  begin over @ (error) = except >r cell+ r> 1+ repeat nip
+;                                      ( n)
+                                       \ add a random instruction
+: +mutate                              ( n --)
+  dup /genome dup /stack 1- < if       \ if enough space
+    cells swap candidate -> genome +   \ add a random instruction
+    #word choose words @c over ! cell+ (error) swap !
+  ;then drop drop
+;
+                                       \ delete an instruction
+: -mutate                              ( n --)
+  dup /genome dup 0> if                \ if any instructions
+    1- cells swap candidate -> genome + (error) swap !
+  ;then drop drop                      \ terminate one instruction
+;
+                                       \ mutate a random instruction
+: xmutate                              ( n --)
+  dup /genome dup 0> if                \ if any instructions
+    choose cells swap candidate -> genome +
+    #word choose words @c swap !       \ mutate a random one
+  ;then drop drop
+;
+                                       \ truncate a genome
+: #mutate                              ( n --)
+  dup /genome dup 0> if                \ if any instructions
+    choose cells swap candidate -> genome +
+    (error) swap !                     \ mutate a random one
+  ;then drop drop
+;
+                                       \ list a genome
+: .genome                              ( candidate --)
+  -> genome dup begin                  \ get genome address
+    @ error?                           \ terminated?
+  except                               \ if so, exit
+    #word 0 ?do                        \ sequentially search the table
+      i words @c over =                \ did we get the right one?
+      if i words cell+ @c count type space leave then
+    loop drop cell+ dup                \ if so, print its name and exit
+  repeat drop drop cr                  \ terminate listing with CR
+;
+                                       \ reset all VM's
+: reset                                ( --)
+  #candidate 0 ?do                     \ for all candidates
+    i candidate 0                      \ get its address
+    over -> score !                    \ set score to zero
+    dup  -> (stack)  stack             \ initialize its data stack
+    dup  -> (rstack) stack             \ initialize its return stack
+    option-index args bounds ?do i c@ over push loop drop
+  loop                                 \ push the values on the stack
+;
+                                       \ initialize its genomes
+: init                                 ( --)
+  #candidate 0 ?do                     \ for all the candidates
+    (error) #word choose words @c i candidate -> genome dup >r ! r> cell+ !
+  loop                                 \ give them a single instruction
+;                                      \ is it a perfect score - list it!
+
+: perfect?                             ( n a --)
+  verbose if over max-score = if dup .genome then then -> score !
+;                                      \ update the score
+                                       \ .. and set its score
+: score!                               ( n --)
+  candidate dup >r -> score @ r@ -> (rstack) adepth -
+  r@ -> (rstack) stack                 \ empty return stack
+                                       \ initialize score with values left on
+  begin r@ -> (stack) adepth while r@ pop r@ rpush repeat
+                                       \ the return stack (big no-no)
+  option-index 1+ args begin           \ now get the target string
+    r@ -> (rstack) adepth over         ( a1 n1 rdepth n1)
+  while                                \ while some string is left
+    stow                               ( a1 n1 n1 rdepth)
+  while                                \ while still items on the stack
+    drop c/string r@ rpop = if rot #point + -rot then
+  repeat nip negate rot + r> perfect? drop
+;                                      \ add difference to score
+                                       \ make a new generation
+: generation                           ( gen --)
+  verbose if                           \ if verbose mode
+    cr ." == Generation " . ." ==" cr  \ show the generation
+  else                                 \ if silent mode (default)
+    1000 mod unless ." ." sync then    \ show a marker every 1000 generations
+  then reset                           \ now reset all VMs
+
+  #candidate 0 ?do i run i score! loop \ and do another generation
+;
+                                       \ get the highest score
+: get-highest                          ( -- n)
+  (error) #candidate 0 ?do             \ set up high score for all candidates
+    i candidate -> score @ over over < if swap then drop
+  loop                                 \ collect the highest score
+;
+                                       \ select the highscore candicates
+: get-survivors                        ( -- score)
+  get-highest 0 dup to survivor# begin \ set up counters
+    survivor# #survivor <              \ max. survirors collected?
+  while                                \ if so, any candidates to consider?
+    dup #candidate <                   \ compare score to highest score
+  while                                \ if high enough, save pointer to genome
+    over over candidate -> score @ =   \ increment the number of survivors
+    if dup candidate -> genome survivor survivor# th ! 1 +to survivor# then 1+
+  repeat drop                          \ drop the counter
+;
+                                       \ get a new generation
+: respawn                              ( --)
+  get-survivors                        ( score)
+  #candidate 0 ?do                     \ consider all candidates
+    i candidate -> score @ over < if   \ lower than highest score?
+      survivor survivor# choose th @ i candidate -> genome /stack smove
+    then                               \ then inherit better genome
+                                       \ don't have a perfect score?
+    i 20 over candidate -> score @ max-score < if 15 - then choose
+    case
+      0 of -mutate endof               \ you lose a gene
+      1 of +mutate endof               \ you get an extra gene
+      2 of xmutate endof               \ some gene is changed
+      3 of xmutate endof               \ some gene is changed
+      drop                             \ you don't mutate
+    endcase
+  loop drop                            \ drop the score
+;
+                                       \ decide how many generations you want
+: get-generations                      ( --)
+  get-argument number error? abort" Invalid generations"
+  to max-generations
+;
+
+: get-verbose true to verbose ;        \ verbose mode activated
+                                       \ options list
+create options char g , ' get-generations , char v , ' get-verbose , NULL ,
+                                       \ main entry
+: genstack                             ( --)
+  options get-options option-index     \ evaluate options
+  2 + argn > abort" Usage: genstack [-v -g generations] diagram-begin diagram-end"
+  option-index 1+ args #point * to max-score drop
+  init max-generations 1 ?do i generation respawn loop
+  true to verbose max-generations generation
+;
+
+genstack
+

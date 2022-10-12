@@ -1,0 +1,24 @@
+\ 4tH library - YES/NO? - Copyright 2010, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] yes/no? [IF]
+[UNDEFINED] E.LIBERR [IF] include lib/throw.4th [THEN]
+
+: yes/no?                              ( a n -- f)
+  false dup >r                         \ save flag and setup dummy address
+  begin                                \ display mesage and get Y/N answer
+
+    begin                              \ get input from stdin
+      drop 2dup type ."  (y/n)? " refill 0= E.LIBERR throw" EOF on stdin"
+      bl parse-word                    \ parse the line, abort on CRTL-D
+    until                              \ until a character has been read
+
+    c@ bl or dup [char] y =            \ was 'y' answered, if so set flag
+    if r> 0= dup >r else dup [char] n = then
+  until drop 2drop r>                  \ check if 'y' or 'n' was entered
+;                                      \ otherwise repeat the procedure
+[THEN]
+
+\ s" Do you want to play again" yes/no? . cr depth .
+

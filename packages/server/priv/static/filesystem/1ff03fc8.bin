@@ -1,0 +1,168 @@
+\ Preprocessor FOOS dependency injection pattern demo
+\ Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Taken from: https://en.wikipedia.org/wiki/Dependency_injection
+
+include lib/memcell.4th                \ we need dynamic allocation
+include lib/dstringt.4th               \ we need dynamic strings
+include lib/fp1.4th                    \ we need floating point
+include lib/zenfmin.4th                \ and a few floating point words
+\ include lib/anstools.4th
+
+include 4pp/lib/foos.4pp               \ we need object orientation
+include 4pp/lib/float.4pp              \ we need floating point PP support
+                                       \ interface for gamepad functionality
+:class IGamepadFunction
+  extends Object
+    virtual: GetGamepadName            ( -- a n )
+    virtual: GetVibrationPower         ( -- f )
+    virtual: SetVibrationPower         ( f -- )
+  end-extends
+;class
+                                       \ first gamepad, for the XBox
+:class XBoxGamepad
+  extends IGamepadFunction
+    field: GamepadName                 \ name of the gamepad
+    ffield: VibrationPower             \ vibration settings
+  end-extends
+                                       \ initialize properties
+  :new
+    s" XBox Controller" this -> GamepadName dup ds.init ds.place
+    f% 1 this -> VibrationPower f!
+  ;method
+                                       \ how to kill this thingy: free name
+  :delete this -> GamepadName ds.free ;method
+                                       \ implement virtual methods
+  :virtual GetGamepadName this -> GamepadName ds.count ;method
+  :virtual GetVibrationPower this -> VibrationPower f@ ;method
+
+  :virtual SetVibrationPower
+    f% 0 fmax f% 1 fmin this -> VibrationPower f!
+  ;method
+;class
+
+                                       \ second gamepad, for the PS
+:class PlaystationJoystick
+  extends IGamepadFunction
+    field: ControllerName              \ name of the controller
+    ffield: VibratingPower             \ vibration settings
+  end-extends
+                                       \ initialize properties
+  :new
+    s" Playstation controller" this -> ControllerName dup ds.init ds.place
+    f% 100 this -> VibratingPower f!
+  ;method
+                                       \ how to kill this thingy: free name
+  :delete this -> ControllerName ds.free ;method
+                                       \ implement virtual methods
+  :virtual GetGamepadName this -> ControllerName ds.count ;method
+  :virtual GetVibrationPower this -> VibratingPower f@ ;method
+
+  :virtual SetVibrationPower
+     f% 100 f* f% 0 fmax f% 100 fmin this -> VibratingPower f!
+  ;method
+;class
+                                       \ third and final gamepad, for Steam
+:class SteamController
+  extends IGamepadFunction
+    field: JoystickName                \ name of the joystick
+    ffield: Vibrating                  \ vibration settings
+  end-extends
+                                       \ initialize properties
+  :new
+    s" Steam controller" this -> JoystickName dup ds.init ds.place
+    f% 1 this -> Vibrating f!
+  ;method
+                                       \ how to kill this thingy: free name
+  :delete this -> JoystickName ds.free ;method
+                                       \ implement virtual methods
+  :virtual GetGamepadName this -> JoystickName ds.count ;method
+  :virtual GetVibrationPower this -> Vibrating f@ ;method
+
+  :virtual SetVibrationPower           ( f --)
+    f% 0 fmax f% 1 fmin this -> Vibrating f!
+  ;method
+;class
+                                       \ gamepad injection interface
+:class IGamepadInjector
+  extends Object                       ( obj -- )
+    virtual: InjectFunctionality       \ virtual injection method
+  end-extends
+;class
+                                       \ Console gamepad
+:class CGamepad                        ( x|- f -- )
+  extends IGamepadInjector
+    field: GamepadFunctionality        \ pointer to object
+    method: SetGamepadFunction         ( obj -- )
+    method: ShowCase                   ( -- )
+  end-extends
+                                       \ constructors and destructors
+  :new if this -> GamepadFunctionality ! then ;method
+  :delete this -> GamepadFunctionality @ delete ;method
+                                       \ methods
+  :method SetGamepadFunction this -> GamepadFunctionality ! ;method
+  :virtual InjectFunctionality this -> GamepadFunctionality ! ;method
+                                       \ note the injectio method
+  :method ShowCase
+    ." We're using the " this -> GamepadFunctionality @ => GetGamepadName
+    type ."  right now, the vibrating power is set to "
+    this -> GamepadFunctionality @ => GetVibrationPower f. ." units." cr
+  ;method
+;class
+                                       \ enumeration of consoles
+0 enum   None
+  enum   Playstation
+  enum   Steam
+constant Xbox
+                                       \ Game engine class
+:class CGameEngine
+  extends Object
+    field: Platform                    \ stored console code
+    field: Gamepad                     \ contains gamepad object
+    method: SetPlatform                \ sets the platform
+  end-extends
+
+  :method SetPlatform                  ( n -- )
+     dup dup this -> Platform !        \ store console code
+
+     case                              \ now consider the platform
+       Xbox of                         \ we use the constructor
+         new XBoxGamepad true new CGamepad this -> Gamepad !
+       endof
+
+       Playstation of                  \ we use the standard method
+         false new CGamepad dup this -> Gamepad !
+         new PlaystationJoystick swap -> SetGamepadFunction
+       endof
+
+       Steam of                        \ we use the injector
+         false new CGamepad dup this -> Gamepad !
+         new SteamController swap => InjectFunctionality
+       endof
+                                       \ kill this thingy
+       None of this -> GamePad @ delete endof
+     endcase
+                                       \ show the current status
+     None = unless this -> Gamepad @ -> ShowCase then
+  ;method
+                                       \ set it to "None" first
+  :delete None this -> SetPlatform ;method
+;class
+
+new CGameEngine value Engine           \ now play with the thing
+
+Steam       Engine -> SetPlatform
+f% 0.5      Engine -> Gamepad @ -> GamepadFunctionality @ => SetVibrationPower
+            Engine -> Gamepad @ -> ShowCase
+None        Engine -> SetPlatform
+Xbox        Engine -> SetPlatform
+f% 2.5      Engine -> Gamepad @ -> GamepadFunctionality @ => SetVibrationPower
+            Engine -> Gamepad @ -> ShowCase
+None        Engine -> SetPlatform
+Playstation Engine -> SetPlatform
+f% 0.5      Engine -> Gamepad @ -> GamepadFunctionality @ => SetVibrationPower
+            Engine -> Gamepad @ -> ShowCase
+            Engine delete              \ kill the whole shebang
+

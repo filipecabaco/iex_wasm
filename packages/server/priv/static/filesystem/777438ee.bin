@@ -1,0 +1,49 @@
+\ 4tH library - PARSING - Copyright 2009, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] "parse" [IF]
+: ("=) c@ [char] " = ;                 ( a -- f)
+                                       \ generic parser
+: (parse)                              ( c -- a n)
+  >r dup parse dup                     \ save delimiter and parse
+  if                                   \ is string not empty?
+    over ("=)                          \ is the first character a quote?
+    if                                 ( n1 a2 n2)
+      begin 2dup r@ execute while >r over parse chars + over - dup r> = until
+      2dup 1- chars + ("=) if 1- then chop 0 max
+    then                               \ remove quotes and normalize length
+  then rot drop rdrop                  \ drop the delimiter
+;
+
+\ Perform a normal parse, but take quoted fields
+\ with embedded delimiters into account
+                                       ( c -- a n)
+: "parse" [: 1- chars + ("=) 0= ;] (parse) ;
+
+\ Perform a normal parse, but take quoted fields
+\ with embedded delimiters and escaped quotes into account
+
+: "parse\"                             ( c -- a n)
+  [: 1- 2dup chars + ("=)
+  if dup if 1- chars + c@ [char] \ = ;then then 2drop true ;] (parse)
+;                                      \ return false on unescaped quote
+
+\ Perform a nearly RFC 4180 compliant parse and take quoted fields
+\ with embedded delimiters and quotes into account
+                                       ( c -- a n)
+: parse-csv [: 0 -rot bounds ?do i ("=) if 1+ then loop 1 and ;] (parse) ;
+                                       \ return false on even number of quotes
+\ perform a user defined parse, but leave a false flag when EOL is detected
+: (parse?) >in @ >r execute >in @ r> > ;
+: parse? [: parse ;] (parse?) ;        ( c -- a n f)
+: "parse"? ['] "parse" (parse?) ;      ( c -- a n f)
+: "parse\"? ['] "parse\" (parse?) ;    ( c -- a n f)
+: parse-csv? ['] parse-csv (parse?) ;  ( c -- a n f)
+
+[DEFINED] 4TH# [IF]
+  hide (parse)
+  hide ("=)
+[THEN]
+[THEN]
+

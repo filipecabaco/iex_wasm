@@ -1,0 +1,40 @@
+\ Preprocessor FOOS factory pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ add dynamic memory
+include 4pp/lib/foos.4pp               \ add object orientation
+                                       \ Factory and car interfaces
+:class CarFactory
+   extends Object
+     virtual: makeCar
+   end-extends
+;class
+
+:class Car
+   extends Object
+     virtual: getType
+   end-extends
+;class
+
+                                       \ Implementations of factory and car
+:class Sedan
+   extends Car
+   end-extends
+
+   :virtual getType s" Sedan" ;method
+;class
+
+:class SedanFactory
+   extends CarFactory
+   end-extends
+
+   :virtual makeCar new Sedan ;method
+;class
+                                       \ Client
+new SedanFactory value myfactory
+myfactory => makeCar value mycar
+mycar => getType type cr
+
+mycar delete
+myfactory delete

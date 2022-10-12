@@ -1,0 +1,42 @@
+\ Preprocessor Sine calculation - Copyright 2013, 2014 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include 4pp/lib/standard.4pp           ( uses registers 1 and 4)
+                                       ( n1 n2 -- n3, n3=10000-n1*x*x/n2)
+:macro _kn                             ( where x is the angle)
+  >4> @over @divrm @drop @nip @minus @mul
+  >>> 10000 @divrm @drop >>> 10000 @add
+;
+                                       ( 3rd or 4th quadrant?)
+:macro _sin1                           ( map to 1st or 2nd quadrant)
+  @dup >>> -31416 @add @sign >>> 1 @while
+  @drop @swap @not @swap >>> -31416 @add @dup
+;
+                                       ( 2nd quadrant?)
+:macro _sin2                           ( map to 1st quadrant)
+  @dup >>> -15708 @add @sign >>> 1 @while
+  @drop >>> 31416 @over @minus @add @nip @dup
+;
+                                       ( negate when needed)
+:macro _sin3 @over @if @drop @minus @over ;
+
+:macro sin                             ( first wrap and clip)
+  >#> @dup @sign >>> -1 @match @not @swap @abs >>> 62832 @divrm @nip
+  _sin1 @drop _sin2 @drop              ( x*x scaled by 10K, save in reg. 4)
+  @dup @dup @mul >>> 10000 @divrm @drop <4<
+  >>> 10000 >>> 72 _kn >>> 42 _kn >>> 20 _kn >>> 6 _kn
+  @mul >>> 10000 @divrm @drop _sin3 @drop @nip
+;                                      ( terms 3, 2, and 1 times x)
+                                       \ pop from stack and print it
+:macro .sin sin _#_ dup abs <# # # # # [char] . hold # sign #> type cr ;
+                                       \ some sample values
+." SIN(-3.1416) = " .sin -31416
+." SIN(-2.3561) = " .sin -23561
+." SIN(-1.5708) = " .sin -15708
+." SIN(-0.7853) = " .sin  -7853
+." SIN( 0.0000) = " .sin      0
+." SIN( 0.7853) = " .sin   7853
+." SIN( 1.5708) = " .sin  15708
+." SIN( 2.3561) = " .sin  23561
+." SIN( 3.1416) = " .sin  31416

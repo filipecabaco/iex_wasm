@@ -1,0 +1,47 @@
+\ Preprocessor FOOS demo - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of:
+\ http://en.wikipedia.org/wiki/Encapsulation_%28object-oriented_programming%29
+
+\        public class Account
+\        {
+\            private decimal accountBalance = 500.00m;
+
+\            public decimal CheckBalance()
+\            {
+\                return accountBalance;
+\            }
+\        }
+
+\        static void Main()
+\        {
+\            var myAccount = new Account();
+\            var myBalance = myAccount.CheckBalance();
+\        }
+
+include lib/memcell.4th
+include lib/fp1.4th
+include 4pp/lib/float.4pp              \ preprocessor floating point support
+include 4pp/lib/foos.4pp               \ preprocessor OO support
+
+:class Account
+   extends Object
+     ffield: accountBalance
+     method: CheckBalance
+   end-extends
+
+   :new 500 s>f this -> accountBalance f! ;method
+   :method CheckBalance this -> accountBalance f@ ;method
+
+   private{ accountBalance }
+;class
+
+fvariable myBalance
+
+instance Account myAccount
+myAccount -> CheckBalance myBalance f!
+
+myBalance f@ f. cr
+

@@ -1,0 +1,84 @@
+include lib/ansblock.4th
+include lib/anstools.4th
+include lib/interprt.4th
+include lib/files.4th
+
+[UNDEFINED] Multitask? [IF]
+true constant Multitask?               \ compile for multitasking version?
+[THEN]
+
+.( Retro Forth block editor for 4tH )
+
+: (block) scr @ block ;
+: (line) c/l * (block) + ;
+
+: rows dup c/l type c/l + cr ;
+: .rows l/scr 0 do i 2 .r space rows loop ;
+: .block ." Block: " scr @ dup . updated? negate 43 + emit space ;
+: +--- ." +---" ;
+: :--- ." :---" ;
+: x--- +--- :--- +--- :--- ;
+: --- 3 spaces x--- x--- x--- x--- cr ;
+: vb --- scr @ block .rows drop --- ;
+: .stack ." Stack: " .s ;
+: status .block .stack ;
+: v cr vb status ;
+
+: v* update v ;
+: s dup scr ! block drop v ;
+: ia (line) + >r 0 parse r> swap move v* ;
+: i_ 0 swap ia v* ;
+: d (line) c/l bl fill v* ;
+: x (block) l/scr c/l * bl fill v* ;
+: p -1 scr +! v ;
+: n 1 scr +! v ;
+: q flush close-blockfile quit ;
+: c depth 0 ?do drop loop v ;
+
+: (load)                               ( a n --)
+  2dup exist? unless 2dup 16 -rot create-blockfile then open-blockfile
+;
+
+Multitask? [IF]                        \ multitasking version
+: l bl parse-word dup if (load) ;then 2drop ;
+: pause_ pause ;                       \ pause command
+[THEN]
+
+cr .( editor loaded ) cr
+
+create wordlist
+  ," v"  ' v ,
+  ," u"  ' v* ,
+  ," s"  ' s ,
+  ," e"  ' s ,
+  ," a"  ' ia ,
+  ," i"  ' i_ ,
+  ," d"  ' d ,
+  ," x"  ' x ,
+  ," p"  ' p ,
+  ," b"  ' p ,
+  ," n"  ' n ,
+  ," c"  ' c ,
+  ," q"  ' q ,
+Multitask? [IF]
+  ," l"  ' l ,
+  ," pause"    ' pause_   ,            \ special words multitasking version
+[THEN]
+  NULL ,
+
+wordlist to dictionary                 \ assign wordlist to dictionary
+
+\ create a blockfile, when not given at the prompt
+: init argn 2 < if s" new.scr" else 1 args then (load) ;
+
+\ The interpreter itself
+: retroed
+  init begin                           \ show the prompt and get a command
+    ." OK" cr refill                   \ interpret and issue oops when needed
+  while
+    ['] interpret catch if ." Oops " then
+  repeat q                             \ repeat command loop, save on exit
+;
+
+retroed
+

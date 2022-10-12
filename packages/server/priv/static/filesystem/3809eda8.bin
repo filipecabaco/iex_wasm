@@ -1,0 +1,33 @@
+\ After a program by Rasťo Barancík, BIT 12/92
+\ Assumed to be in the public domain
+
+include lib/graphics.4th               \ for SET_PIXEL
+include lib/fractext.4th               \ for VEXP, VROUND
+
+255 cells array m
+
+256 pic_width !                        \ this fills it up pretty nicely
+192 pic_height !
+color_image 255 whiteout blue
+                                       \ translate coordinates
+: v>ri +1 2 / over 0< if negate then v+ v>i ;
+: plot v>ri >r v>ri 185 swap - r> set_pixel ;
+                                       \ plot a pixel
+vpi 4 i>v v/ vcos                      ( a)
+
+142 1 ?do
+  dup i i>v v*                         ( a e)
+  i i>v 70 i>v - dup v*                ( a e c)
+  142 1 ?do
+     i i>v 70 i>v - dup v*             ( a e c d)
+     over + -1000 i>v v/ vexp 80 i>v v*
+     rot swap over +                   ( a c e y1)
+     over i i>v +                      ( a c e y1 x1)
+     over over v>ri cells m + @ <
+     if drop drop else over over v>ri cells m + ! plot then
+     swap                              ( a e c)
+  loop drop drop
+5 +loop drop
+
+s" g3igraph.ppm" save_image
+

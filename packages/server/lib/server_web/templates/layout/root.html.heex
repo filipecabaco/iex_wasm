@@ -6,24 +6,6 @@
   <script src="https://unpkg.com/xterm-addon-fit@0.5.0/lib/xterm-addon-fit.js"></script>
   <script src="https://unpkg.com/xterm@4.19.0/lib/xterm.js"></script>
   <script src="./lib/libv86.js"></script>
-  <script>
-    window.onload = () => {
-      const baseOptions = {
-        wasm_path: "./lib/v86.wasm",
-        memory_size: 256 * 1024 * 1024,
-        screen_container: document.getElementById("screen_container"),
-        autostart: true,
-        hda:{ url: "./rom_images/debian.img" },
-        bios: { url: "./bios/seabios.bin" },
-        vga_bios: { url: "./bios/vgabios.bin" },
-        cmdline: [
-          "rw",
-          "root=host9p rootfstype=9p rootflags=version=9p2000.L,trans=virtio,cache=loose quiet acpi=off console=ttyS0 tsc=reliable mitigations=off random.trust_cpu=on nowatchdog page_poison=on"
-        ]
-      };
-      new V86Starter(baseOptions);
-    };
-  </script>
 </head>
 
 <body style="background-color: black">

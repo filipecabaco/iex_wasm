@@ -1,0 +1,19 @@
+include lib/zenfloat.4th
+include lib/zenans.4th
+include lib/fpin.4th
+include lib/fpout.4th
+include lib/zenfsqrt.4th
+
+[FLOAT]                                   \ signal floating point 
+
+FLOAT array a   FLOAT array b   FLOAT array c
+FLOAT array disc                          \ Used for discriminant
+
+: FQUADRATICROOT  ( F: a b c -- r1 r2 )   \ Example from Wil Baden's OPG.TXT
+    c F!  b F!  a F!                      \ Pickup coefficients
+    LET disc = SQRT(b*b-4*a*c);           \ Set discriminant
+    LET (-b+disc)/(2*a), (-b-disc)/(2*a); \ Put values on f-stack
+;
+
+( Solve x*x-3*x+2 )  LET FQUADRATICROOT (1,-3, 2); F. F. cr 
+

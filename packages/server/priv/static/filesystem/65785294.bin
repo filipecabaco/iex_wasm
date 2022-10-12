@@ -1,0 +1,111 @@
+\ Preprocessor FOOS visitor pattern demo - Copyright 2017, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Visitor_pattern
+
+include lib/memcell.4th
+include lib/dstringt.4th
+
+include 4pp/lib/foos.4pp
+include 4pp/foos/list.4pp
+
+:class CarElement
+   extends Object
+     virtual: Accepts
+   end-extends
+;class
+
+:class CarElementVisitor
+   extends Object
+     virtual: visit
+   end-extends
+;class
+
+:class Wheel
+   extends CarElement
+     field:  name
+     method: getName
+   end-extends
+
+   :new this -> name dup ds.init ds.place ;method
+   :method getName this -> name ds.count  ;method
+   :virtual Accepts this swap => visit    ;method
+   :delete this -> name ds.free           ;method
+;class
+
+:class Body
+   extends CarElement
+   end-extends
+
+   :virtual Accepts this swap => visit ;method
+;class
+
+:class Engine
+   extends CarElement
+   end-extends
+
+   :virtual Accepts this swap => visit ;method
+;class
+
+:class Car
+   extends CarElement
+     field: elements
+   end-extends
+
+   :new
+     new ObjectList this -> elements !
+
+     s" front left"  new Wheel this -> elements @ -> lpush
+     s" front right" new Wheel this -> elements @ -> lpush
+     s" back left"   new Wheel this -> elements @ -> lpush
+     s" back right"  new Wheel this -> elements @ -> lpush
+
+     new Body   this -> elements @ -> lpush
+     new Engine this -> elements @ -> lpush
+   ;method
+
+   :delete this -> elements @ delete ;method
+
+   :virtual Accepts
+      0 begin                          ( vis i)
+        dup this -> elements @ -> lsize <
+      while
+        over over this -> elements @ -> lget swap => visit 1+
+      repeat drop this over => visit delete
+   ;method
+;class
+
+:class CarElementDoVisitor
+   extends CarElementVisitor
+   end-extends
+
+   :virtual visit
+      dup type@ case
+        typeof Body   of ." Moving my body" drop endof
+        typeof Car    of ." Starting my car" drop endof
+        typeof Wheel  of ." Kicking my " -> getName type ."  wheel" endof
+        typeof Engine of ." Starting my engine" drop endof
+      endcase cr
+   ;method
+;class
+
+:class CarElementPrntVisitor
+   extends CarElementVisitor
+   end-extends
+
+   :virtual visit
+      dup type@ case
+        typeof Body   of ." Visiting body" drop endof
+        typeof Car    of ." Visiting car" drop endof
+        typeof Wheel  of ." Visiting " -> getName type ."  wheel" endof
+        typeof Engine of ." Visiting engine" drop endof
+      endcase cr
+   ;method
+;class
+
+instance Car myCar
+new CarElementPrntVisitor myCar => Accepts cr
+new CarElementDoVisitor myCar => Accepts
+
+mycar delete

@@ -1,0 +1,104 @@
+\ Preprocessor FOOS Chain-of-responsibility pattern demo
+\ Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/constant.4th
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+ 0 constant NONE
+ 1 constant INFO
+ 2 constant DEBUG
+ 4 constant WARNING
+ 8 constant ERROR
+16 constant FUNCTIONALMSG
+32 constant FUNCTIONALERR
+63 constant ALL
+
+\ <summary>
+\ Abstract Handler in chain of responsibility pattern.
+\ </summary>
+
+:class Logger                          ( n --)
+   extends Object
+     field: logMask
+     field: next
+     method: SetNext                   ( x -- x)
+     method: Message                   ( a n1 n2 --)
+     virtual: WriteMessage             ( a n --)
+   end-extends
+
+   :new this -> logMask ! NULL this -> next ! ;method
+   :method SetNext dup this -> next ! ;method
+
+   \ True only if all logMask bits are set in severity
+   :method Message
+      dup >r -rot r> this -> logMask @ and
+      if 2dup this => WriteMessage then
+
+      rot this -> next @ NULL =
+      if drop 2drop else this -> next @ -> Message then
+   ;method
+
+   private{ next logMask }
+;class
+
+:class ConsoleLogger
+   extends Logger
+   end-extends
+
+   :virtual WriteMessage ." Writing to console: " type cr ;method
+;class
+
+\ Placeholder for mail send logic, usually the email configurations are saved
+\ in config file
+
+:class EmailLogger
+   extends Logger
+   end-extends
+
+   :virtual WriteMessage ." Sending via email: " type cr ;method
+;class
+
+\ Placeholder for File writing logic
+
+:class FileLogger
+   extends Logger
+   end-extends
+
+   :virtual WriteMessage ." Writing to Log File: " type cr ;method
+;class
+
+\ Build the chain of responsibility
+ALL
+new ConsoleLogger value mylogger
+
+FUNCTIONALMSG FUNCTIONALERR or
+new EmailLogger mylogger -> SetNext value mylogger1
+
+WARNING ERROR or
+new FileLogger mylogger1 -> SetNext value mylogger2
+
+\ Handled by ConsoleLogger since the console has a loglevel of all
+s" Entering function ProcessOrder()." DEBUG mylogger -> Message
+s" Order record retrieved." INFO mylogger -> Message
+
+\ Handled by ConsoleLogger and FileLogger since filelogger implements
+\ Warning & Error
+s" Customer Address details missing in Branch DataBase."
+WARNING mylogger -> Message
+
+s" Customer Address details missing in Organization DataBase."
+ERROR mylogger -> Message
+
+\ Handled by ConsoleLogger and EmailLogger as it implements functional error
+s" Unable to Process Order ORD1 Dated D1 For Customer C1."
+FUNCTIONALERR mylogger -> Message
+
+\ Handled by ConsoleLogger and EmailLogger
+s" Order Dispatched." FUNCTIONALMSG mylogger -> Message
+
+mylogger  delete
+mylogger1 delete
+mylogger2 delete

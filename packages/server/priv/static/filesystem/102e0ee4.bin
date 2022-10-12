@@ -1,0 +1,106 @@
+\ FOOS translation of "An Assembly Programer's Approach to Object-oriented Forth"
+\ by Andras Zsoter, Department of Chemistry, The University of Hong Kong
+\ See: http://forth.org/literature/andras.html
+
+include lib/gcdlcd.4th
+include 4pp/lib/foos.4pp
+
+:class Numbers                         \ create an interface
+   extends Object
+     virtual: Add ( Number -- )
+     virtual: Sub ( Number -- )
+     virtual: Mul ( Number -- )
+     virtual: Div ( Number -- )
+     virtual: Print
+   end-extends
+;class
+
+:class Integers
+   extends Numbers
+     field: n                          \ store number here
+   end-extends
+
+   :new this -> n ! ;method            \ constructor
+
+   :virtual add   -> n @ this -> n +!                   ;method
+   :virtual sub   -> n @ negate this -> n +!            ;method
+   :virtual mul   -> n @ this -> n @ * this -> n !      ;method
+   :virtual div   -> n @ this -> n @ swap / this -> n ! ;method
+   :virtual print this -> n ?                           ;method
+                                       \ make methods and fields private
+   private{ n }
+;class
+
+:class Rationals
+   extends Numbers
+     field: num                        \ numerator
+     field: den                        \ denominator
+     method: (add)                     ( num den -- )           ( A "factor" of Add )
+     method: Normalize                 ( --)
+     virtual: inv
+   end-extends
+
+   :method Normalize
+      this -> den @ this -> num @      ( get denominator and numerator. )
+      2dup xor -rot                    ( a not quite ansi way to determine the sign. )
+      abs swap abs                     ( calculate the absolute value of both. )
+      2dup gcd                         ( calculate the gcd. )
+      tuck / this -> den ! /           ( normalize the denominator and numerator )
+      swap 0< if negate then           ( adjust the sign. )
+      this -> num !
+   ;method
+
+   :method (Add)                       ( This is not the best way to add two rational numbers)
+      dup this -> num @ * this -> num !
+      this -> den @ tuck * this -> den !
+      * this -> num +! this -> Normalize
+   ;method                         ( num*DEN+NUM*den => NUM )
+
+   :virtual print this -> num @ 0 .r ." /" this -> den ? ;method
+   :virtual add   dup -> num @ swap -> den @ this -> (Add) ;method
+   :virtual sub   dup -> num @ negate swap -> den @ this -> (Add) ;method
+
+   :virtual inv
+      this -> num @ this -> den @ this -> num ! this -> den ! this -> Normalize
+   ;method
+
+   :virtual mul
+      dup -> num @ swap -> den @       ( Get the values of the other Rational. )
+      this -> den @ * this -> den !    ( Multiply denominator by the other's denominator.)
+      this -> num @ * this -> num !    ( Multiply numerator by the other's numerator.)
+      this -> Normalize
+   ;method
+
+   :virtual div
+      dup -> num @ swap -> den @       ( Get the values of the other Rational. )
+      this -> num @ * swap             ( Multiply numerator by the other's denominator.)
+      this -> den @ * this -> den !    ( Multiply denominator by the other's numerator.)
+      this -> num ! this -> Normalize
+   ;method
+
+   :new
+      this -> den !
+      this -> num ! this -> Normalize
+   ;method
+                                       \ make methods and fields private
+   private{ (Add) Normalize num den }
+;class
+
+: %. ( Number -- ) => Print ;
+: %+ ( Number1 Number2 -- Number1+Number2 ) OVER => Add ;
+: %- ( Number1 Number2 -- Number1-Number2 ) OVER => Sub ;
+: %* ( Number1 Number2 -- Number1*Number2 ) OVER => Mul ;
+: %/ ( Number1 Number2 -- Number1/Number2 ) OVER => Div ;
+
+  4 16  static Rationals r1
+-50 100 static Rationals r2
+
+r1 r2 %/ %. cr
+
+10 static Integers i1
+ 5 static Integers i2
+
+i1 i2  %/ %. cr
+
+-50 100 static Rationals r3
+r3 => Inv r3 => print cr

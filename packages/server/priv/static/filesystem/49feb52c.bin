@@ -1,0 +1,27 @@
+\ 4tH library - ISBN, EAN and GTIN check - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] isbn?    [IF]
+[UNDEFINED] is-digit [IF] include lib/istype.4th  [THEN]
+[UNDEFINED] <bounds  [IF] include lib/rbounds.4th [THEN]
+
+: isbn?                                ( a n -- f)
+  <bounds 2>r 0 1 2r> ?do
+    dup i c@ dup is-digit              \ get length and factor, setup loop
+    if [char] 0 - * rot + swap 3 * 8 mod else drop drop then
+  -1 chars +loop drop 10 mod 0=        \ now calculate checksum
+;
+
+aka isbn? ean?
+aka isbn? gtin?
+[THEN]
+
+\ s" 978-1734314502" isbn? .
+\ s" 978-1734314509" isbn? .          ( fail)
+\ s" 978-1788399081" isbn? .
+\ s" 978-1788399083" isbn? .          ( fail)
+\ s" 5 012345 678900" ean? .
+\ s" 5012 3452" ean? .
+\ s" 6583 3254" ean? . cr
+

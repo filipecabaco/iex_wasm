@@ -1,0 +1,184 @@
+\ Preprocessor FOOS blackboard pattern demo - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ for ALLOCATE
+include lib/choose.4th                 \ for CHOOSE
+include 4pp/lib/foos.4pp               \ for OOP support
+include 4pp/foos/dstr.4pp              \ dynamic string class
+include 4pp/foos/list.4pp              \ list class
+
+\ Inspired by a program by Eugene Duboviy (github.com/duboviy)
+
+\ In Blackboard pattern several specialised sub-systems (knowledge sources)
+\ assemble their knowledge to build a possibly partial or approximate solution.
+\ In this way, the sub-systems work together to solve the problem,
+\ where the solution is the sum of its parts.
+
+:class CommonState                     \ this is the common state
+  extends object                       \ of a blackboard
+    field: problems                    \ its problems..
+    field: suggestions                 \ its suggestions..
+    field: contributions               \ a list of distributions
+    field: progress                    \ and the progress that has
+  end-extends                          \ been made
+
+  :new
+    0 dup this -> problems !           \ initialize problems,
+      dup this -> suggestions !        \ suggestions,
+          this -> progress !           \ its progress,
+    new List this -> contributions !   \ and set up the contributions list
+  ;method
+                                       \ drop the contributions list,
+  :delete this -> contributions @ delete ;method
+;class                                 \ which only holds credentials
+
+:class Blackboard                      \ this is our blackboard
+  extends object
+     field: experts                    \ a list of experts
+     field: common_state               \ the common state
+    method: add_expert                 \ add an expert to the list
+  end-extends
+
+  :new                                 \ create a new common state
+    new CommonState this -> common_state !
+    new ObjectList  this -> experts !
+  ;method                              \ create a list of experts
+                                       \ and drop the whole shebang..
+  :delete this -> common_state @ delete this -> experts @ delete ;method
+  :method add_expert this -> experts @ -> lpush ;method
+;class                                 \ .. when the party is over
+
+:class AbstractExpert                  \ this is our expert
+  extends object
+      field: black_board               \ he is connected to a blackboard
+      field: credentials               \ he has certain credentials
+    virtual: is_eager_to_contribute    \ does he want to contribute?
+    virtual: contribute                \ and how does he contribute?
+  end-extends
+                                       \ set up his credentials
+  :new this -> black_board ! Nothing new DStr this -> credentials ! ;method
+  :delete this -> credentials @ delete ;method
+                                       \ and wipe 'em upon destruction
+  :virtual is_eager_to_contribute      \ temporary implementation
+    true abort" Must provide implementation in subclass"
+  ;method
+
+  :virtual contribute                  \ temporary implementation
+    true abort" Must provide implementation in subclass"
+  ;method
+;class
+
+:class Controller
+  extends object
+     field: (blkbrd)                   \ the blackboard for this controller
+    method: run_loop                   \ our evaluation
+  end-extends
+
+  :new this -> (blkbrd) ! ;method      \ connect with blackboard
+                                       \ this is a helper word
+  : consult                            ( obj --)
+    0 begin                            \ we begin at the start of the list
+      over -> lsize over >             \ if it's not the end of the list
+    while                              \ we get our expert
+      over stow -> lget dup            \ see if he feels like contributing
+      => is_eager_to_contribute if => contribute else drop then 1+
+    repeat drop drop                   \ and if he does, we let him
+  ;
+
+  :method run_loop                     \ this evaluates our blackboard
+    this -> (blkbrd) @ begin           \ have we made enough progress
+      dup -> common_state @ -> progress @ 100 <
+    while                              \ if we haven't let's consult
+      dup -> experts @ consult         \ our list of experts
+    repeat -> common_state @ -> contributions @
+  ;method                              \ now return the contributions list
+
+  private{ consult (blkbrd) }
+;class
+
+:class Student                         \ our student expert
+  extends AbstractExpert
+  end-extends
+                                       \ let's add the credentials
+  :new s" Student" this -> credentials @ -> set$  ;method
+  :virtual is_eager_to_contribute true            ;method
+                                       \ the student is always in for making
+  :virtual contribute                  \ a contribution, even if it's not much
+    this -> black_board @ -> common_state @
+    10 choose 1+          over -> problems +!
+    10 choose 1+          over -> suggestions +!
+     2 choose 1+          over -> progress +!
+    this -> credentials @ swap -> contributions @ -> lpush
+  ;method
+;class
+
+:class Scientist                       \ our scientist expert
+  extends AbstractExpert
+  end-extends
+                                       \ let's add the credentials
+  :new s" Scientist" this -> credentials @ -> set$  ;method
+  :virtual is_eager_to_contribute 2 choose          ;method
+                                       \ the scientist only contributes
+  :virtual contribute                  \ when he feels like it
+    this -> black_board @ -> common_state @
+    11 choose 10 +        over -> problems +!
+    11 choose 10 +        over -> suggestions +!
+    21 choose 10 +        over -> progress +!
+    this -> credentials @ swap -> contributions @ -> lpush
+  ;method
+;class
+
+:class Professor                       \ our professor expert
+  extends AbstractExpert
+  end-extends
+                                       \ let's add the credentials
+  :new s" Professor" this -> credentials @ -> set$  ;method
+                                       \ the professor only comes in
+  :virtual is_eager_to_contribute      \ when the problems have mounted
+    this -> black_board @ -> common_state @ -> problems @ 100 >
+  ;method
+                                       \ but if he does,
+  :virtual contribute                  \ he has a lot to contribute
+    this -> black_board @ -> common_state @
+     2 choose  1+         over -> problems +!
+    11 choose 10 +        over -> suggestions +!
+    91 choose 10 +        over -> progress +!
+    this -> credentials @ swap -> contributions @ -> lpush
+  ;method
+;class
+
+instance Blackboard myBlackboard       \ create a blackboard
+                                       \ now let's add a few experts
+myBlackboard new Student   myBlackboard -> add_expert
+myBlackboard new Scientist myBlackboard -> add_expert
+myBlackboard new Professor myBlackboard -> add_expert
+                                       \ let's  create a controller
+myBlackboard instance Controller myController
+myController -> run_loop value myContribution
+                                       \ and get the contributions list
+0 begin                                \ start at the first of the list
+  dup myContribution -> lsize <        \ when not at the end of the list
+while                                  \ get the entry and free it
+  dup myContribution -> lget -> print$ cr 1+
+repeat drop                            \ get the next entry on the list
+
+myBlackboard delete                    \ delete the blackboard
+myController delete                    \ delete the controller
+
+\ ### SAMPLE OUTPUT ###
+\ Student
+\ Student
+\ Scientist
+\ Student
+\ Scientist
+\ Student
+\ Scientist
+\ Student
+\ Scientist
+\ Student
+\ Scientist
+\ Professor
+
+\ depth .
+

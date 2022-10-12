@@ -1,0 +1,101 @@
+\ Preprocessor FOOS type demo - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/math.4th
+include 4pp/lib/foos.4pp
+
+:class figure                          \ define an empty class figure
+   extends Object                      \ with no properties and two
+     virtual: surface                  \ uninitialized methods
+     virtual: outline
+   end-extends
+;class
+
+:class rectangle                       \ define a subtype rectangle
+   extends figure                      \ with two specific properties
+     field: _width                     \ and a private method
+     field: _height
+     method: double
+   end-extends
+                                       \ now initialize surface and outline
+   :method  double 2* ;method
+   :virtual surface this -> _width @ this -> _height @ * ;method
+   :virtual outline
+     this -> _width  @ this -> double
+     this -> _height @ this -> double +
+   ;method
+
+   private{ double }                   \ make method private
+;class
+
+:class circle                          \ define a subtype circle
+   extends figure                      \ with one specific property
+     field: radius                     \ and a private method
+     method: pi*
+   end-extends
+                                       \ now initialize surface and outline
+   :method  pi* 103993 33102 */ ;method
+   :virtual surface this -> radius @ dup * this -> pi* ;method
+   :virtual outline this -> radius @ 2*    this -> pi* ;method
+
+   private{ pi* }                      \ make method private
+;class
+
+:class triangle                        \ define a subtype triangle
+   extends figure                      \ with three specific properties
+     field: sideA                      \ and one private method
+     field: sideB
+     field: sideC
+     method: @-*
+   end-extends
+
+   :method @-* >r over r> @ - * ;method
+                                       \ now initialize surface and outline
+   :virtual outline
+     this -> sideA @ this -> sideB @ this -> sideC @ + +
+   ;method
+
+   :virtual surface
+     this => outline 2/ dup    this -> SideA this -> @-*
+     this -> SideB this -> @-* this -> SideC this -> @-* sqrt nip
+   ;method
+
+   private{ @-* }                      \ make method private
+
+;class
+
+: .sametype? = if ." Same type" else ." Different type" then cr ;
+
+static rectangle MyRectangle           \ make a rectangle instance
+static circle    MyCircle              \ make a circle instance
+static triangle  MyTriangle            \ make a triangle instance
+
+4 MyRectangle -> _width !              \ initialize the rectangle
+5 MyRectangle -> _height !
+
+MyRectangle => surface . cr            \ use both methods
+MyRectangle => outline . cr
+
+25 MyCircle -> radius !                \ initialize the circle
+
+MyCircle => surface . cr               \ use both methods
+MyCircle => outline . cr
+
+10 MyTriangle -> sideA !               \ initialize the triangle
+15 MyTriangle -> sideB !
+20 MyTriangle -> sideC !
+
+MyTriangle => outline . cr             \ use both methods
+MyTriangle => surface . cr
+                                       \ check the types
+MyCircle type@    MyRectangle type@  .sametype?
+MyCircle type@    typeof   triangle  .sametype?
+MyCircle type@    typeof   circle    .sametype?
+MyRectangle type@ typeof   rectangle .sametype?
+MyCircle parent@  typeof   figure    .sametype?
+typeof   figure   parentof circle    .sametype?
+MyCircle parent@  MyTriangle parent@ .sametype?
+MyCircle parent@  parentof circle    .sametype?
+MyCircle type@    kindof   figure    .sametype?
+

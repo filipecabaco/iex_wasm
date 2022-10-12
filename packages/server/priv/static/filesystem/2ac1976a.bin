@@ -1,0 +1,29 @@
+\ Taken from http://rosettacode.org 
+\ 4tH version 2022, Hans Bezemer
+
+: circle                               ( x y r h -- f )
+  rot - dup *
+  rot   dup * +
+  swap  dup * swap
+  < negate invert
+;
+ 
+: pixel                                ( r x y -- r c )
+  rot dup >r -rot
+  2dup r@ 6 / r@ 2 / negate circle if rdrop 2drop [char] # ;then
+  2dup r@ 6 / r@ 2 /        circle if rdrop 2drop [char] . ;then
+  2dup r@ 2 / r@ 2 / negate circle if rdrop 2drop [char] . ;then
+  2dup r@ 2 / r@ 2 /        circle if rdrop 2drop [char] # ;then
+  2dup r@ 0 circle if rdrop drop 0< if [char] . ;then [char] # exit then
+  rdrop 2drop bl
+;
+ 
+: yinyang                              ( r -- )
+  dup dup 1+ swap -1 * do
+   cr
+   dup dup 2 * 1+ swap -2 * do i 2 / j pixel emit loop
+  loop drop cr
+;
+
+8 yinyang
+

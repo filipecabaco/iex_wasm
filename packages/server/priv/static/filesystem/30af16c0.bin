@@ -1,0 +1,8 @@
+\ Preprocessor flow control demo - Copyright 2012,2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro _fac @dup >1> @until @drop >>> 1 @add <2< >2> @mul >2> _fac ;
+:macro factorial @1@ >>> 1 @dup _fac @drop @drop _#_ ;
+
+." 10! = " factorial 10 . cr

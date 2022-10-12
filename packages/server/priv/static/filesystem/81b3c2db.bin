@@ -1,0 +1,36 @@
+\ Preprocessor FOOS delegation demo - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of:
+\   http://en.wikipedia.org/wiki/Delegation_%28programming%29
+
+include 4pp/lib/foos.4pp
+
+:class A
+   extends Object
+     virtual: foo
+     virtual: bar
+   end-extends
+
+   :virtual foo this => bar ;method
+   :virtual bar ." a.bar" cr ;method
+;class
+
+:class B
+   extends A
+     field: (a)                        \ delegation link
+   end-extends
+
+   :new this -> (a) ! ;method          \ call foo on the (a)-instance
+   :virtual foo this -> (a) @ => foo ;method
+   :virtual bar ." b.bar" cr         ;method
+
+   private{ (a) }
+;class
+
+static A MyA
+MyA static B MyB                       \ create delegation between two objects
+                                       \ will result in "a.bar" being
+MyB => foo                             \ printed, since class B "delegates"
+                                       \ method foo to an object of class A

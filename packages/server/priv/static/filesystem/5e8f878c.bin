@@ -1,0 +1,28 @@
+\ Preprocessor closures demo - Copyright 2012, 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include 4pp/lib/closures.4pp
+                                       \ counter creation word
+:: counter                             ( n1 n2 addr --)
+   vars                                \ define closure data
+     var: start                        \ initial value
+     var: inc                          \ increment per call
+   end-vars {                          \ only cells may be used!
+
+     this -> inc ! this -> start !     \ initialise closure
+     {: this -> inc @ this -> start dup ? +! ;}
+   }                                   \ define runtime behavior
+;
+
+5 2 set counter counter1               \ make a counter in dynamic memory
+
+counter1                               \ 5
+counter1                               \ 7
+counter1                               \ 9
+
+13 3 set counter counter2              \ make a counter in static memory
+
+counter2                               \ 13
+counter2                               \ 16
+counter2                               \ 19

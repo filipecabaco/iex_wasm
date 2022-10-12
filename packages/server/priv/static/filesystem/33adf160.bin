@@ -1,0 +1,68 @@
+\ Example program found on the Kotlin website, translated to FOOS
+\ J.L. Bezemer, 2022
+
+\ Copyright (c) 2017 JetBrains
+
+\ Permission is hereby granted, free of charge, to any person obtaining a copy
+\ of this software and associated documentation files (the "Software"), to deal
+\ in the Software without restriction, including without limitation the rights
+\ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+\ copies of the Software, and to permit persons to whom the Software is
+\ furnished to do so, subject to the following conditions:
+
+\ The above copyright notice and this permission notice shall be included in all
+\ copies or substantial portions of the Software.
+
+\ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+\ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+\ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+\ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+\ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+\ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+\ SOFTWARE.
+
+include lib/memcell.4th                \ for ALLOCATE
+include 4pp/lib/foos.4pp               \ for OOP support
+include 4pp/foos/dstr.4pp              \ dynamic string class
+
+:class Person                          \ define a person
+  extends Object                       \ root object
+      field: name                      \ he's got a name
+    virtual: greet                     \ and he's greeting
+  end-extends
+                                       \ use a dStr to store that name
+  :new new dStr this -> name !  ;method
+  :delete this -> name @ delete ;method
+;class
+
+:class FoodConsumer                    \ a consumer is a person
+  extends Person
+    virtual: eat                       \ who eats and pays
+    virtual: pay
+  end-extends
+                                       \ this is the paying part
+  :virtual pay ." Delicious! Here's " . ." bucks!" cr ;method
+;class
+
+:class RestaurantCustomer              \ a restaurant customer
+  extends FoodConsumer                 \ is a consumer
+      field: dish                      \ who orders a dish
+    virtual: order
+  end-extends
+                                       \ use a dStr to store that dish
+  :new new dStr this -> dish !  ;method
+  :delete this -> dish @ delete ;method
+                                       \ implement several methods
+  :virtual order this -> dish @ -> print$ ." , please!"  cr ;method
+  :virtual eat ." *Eats " this -> dish @ -> print$ ." *" cr ;method
+  :virtual greet ." It's me, "this -> name @ -> print$ ." ." cr ;method
+;class
+
+s" Mixed salad" s" Sam" instance RestaurantCustomer sam
+   sam => greet                        \ now say hello,
+   sam => order                        \ .. order,
+   sam => eat                          \ .. eat,
+10 sam => pay                          \ .. pay,
+
+sam delete                             \ .. and get the heck out of here
+

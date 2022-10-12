@@ -1,0 +1,84 @@
+\ Preprocessor FOOS Facade pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+\ The 'Subsystem ClassA' class
+:class CarModel
+   extends Object
+     method: SetModel
+   end-extends
+
+   :method SetModel ." CarModel - SetModel" cr ;method
+;class
+
+\ <summary>
+\ The 'Subsystem ClassB' class
+\ </summary>
+
+:class CarEngine
+   extends Object
+     method: SetEngine
+   end-extends
+
+   :method SetEngine ." CarEngine - SetEngine" cr ;method
+;class
+
+\ The 'Subsystem ClassC' class
+:class CarBody
+   extends Object
+     method: SetBody
+   end-extends
+
+   :method SetBody ." CarBody - SetBody" cr ;method
+;class
+
+\ The 'Subsystem ClassD' class
+:class CarAccessories
+   extends Object
+     method: SetAccessories
+   end-extends
+
+   :method SetAccessories ." CarAccessories - SetAccessories" cr ;method
+;class
+
+\ The 'Facade' class
+:class CarFacade
+   extends Object
+     field: accessories
+     field: body
+     field: engine
+     field: model
+     method: CreateCompleteCar
+   end-extends
+
+   :new
+     new CarAccessories this -> accessories !
+     new CarBody this -> body !
+     new CarEngine this -> engine !
+     new CarModel this -> model !
+   ;method
+
+   :method CreateCompleteCar
+     ." ******** Creating a Car **********" cr
+     this -> model  @ -> SetModel
+     this -> engine @ -> SetEngine
+     this -> body   @ -> SetBody
+     this -> accessories @ -> SetAccessories
+     ." ******** Car creation is completed. **********" cr
+   ;method
+
+   :delete
+     this -> accessories @ delete
+     this -> body @ delete
+     this -> engine @ delete
+     this -> model @ delete
+   ;method
+;class
+
+\ Facade pattern demo
+new CarFacade value facade
+facade -> CreateCompleteCar
+facade delete

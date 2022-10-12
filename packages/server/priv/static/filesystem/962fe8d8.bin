@@ -1,0 +1,68 @@
+\ Preprocessor FOOS demo - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Inspired by Mini-OOF, made by Bernd Paysan, 2008
+
+[pragma] forcecellheap
+include lib/ansmem.4th
+include lib/termansi.4th
+include 4pp/lib/foos.4pp
+
+:class button                          ( addr --)
+   extends Object
+     field: text                       \ address of text to be printed
+     field: len                        \ legth of text to be printed
+     field: x                          \ x-position on the screen
+     field: y                          \ y-position on the screen
+     virtual: init                     \ initialization method
+     virtual: draw                     \ drawing method
+   end-extends
+
+   :default draw ( addr --)            \ define and init drawing method
+      this -> x    @ this -> y   @ at-xy
+      this -> text @ this -> len @ type
+   ;method
+
+   :virtual init ( a n addr -- )       \ define and init initialization method
+      0 this -> x    ! 0 this -> y    !
+        this -> len  !   this -> text !
+   ;method
+
+   private{ text len }                 \ private declarations MUST be made
+;class                                 \ be right before the semi-colon
+
+: reverse  text_reverse ;              \ some helper words for demonstrating
+: normal   text_normal  ;              \ the overriding of a method
+
+page                                   \ clear screen
+
+static button foo                      \ define a static button
+s" thin foo" foo => init               \ initialize the button
+foo => draw                            \ now print it
+                                       \ note the => which acts on methods
+instance button bar                    \ define a new button on the heap
+s" fat bar" bar => init                \ initialize the button
+1 bar -> y !                           \ change a property
+
+bar { :virtual draw reverse this <- draw normal ;method }
+bar => draw cr                         \ override a method on an object
+                                       \ and execute it
+:class button+                         ( addr --)
+   extends button                      \ make a derived class
+     virtual: xy!                      \ add more methods
+     virtual: coords?                  \ e.g. coordinate handling
+   end-extends                         \ initialize the new methods
+                                       \ override method from supertype
+   :virtual draw    reverse this -> default draw normal ;method
+   :virtual xy!     this -> y ! this -> x !             ;method
+   :virtual coords? this -> x ? this -> y ?             ;method
+
+   private{ x y }                      \ from here on, x and y are private!
+;class
+
+instance button+ foobar                \ allocate a new object on the heap
+s" foobar" foobar => init              \ initialize it (still works)
+10 5 foobar => xy!                     \ set coordinates with new method
+foobar => draw cr                      \ draw the button (as always)
+

@@ -1,0 +1,87 @@
+\ Numerical solution of first-order ordinary differential equation
+\ by 2nd order Runge-Kutta algorithm following
+\ Abramowitz & Stegun p. 896, 25.5.6
+
+\ Solves      dx/dt = f(x,t)
+
+\    This is an ANS Forth program requiring FLOATING and FLOATING EXT
+\    wordsets. This program assumes a separate floating point stack.
+
+\    For simplicity and clarity, the program is intended to be compiled
+\    using a FORmula TRANslator
+
+\ This 2nd Order Runge-Kutta algorithim by Julian V. Noble
+\ translated here to 4tH.  Wil Baden's word L.E.T from his OPG package
+\ is used for the FORmula TRANslation.
+
+\ Example
+\    : fnb   ( f: x t -- t^2*exp[-x])
+\        f^2  FSWAP  FNEGATE  FEXP  F*  ;
+\       ' fnb 0e0 0e0 5e0 0.1e0 rungek2
+
+true constant zenfloat?
+
+zenfloat? [IF]
+  include lib/zenfloat.4th
+  include lib/zenans.4th
+  include lib/fpin.4th
+  include lib/fpout.4th
+  include lib/zenconst.4th
+  include lib/zenfalog.4th
+  include lib/zenfsqrt.4th
+[ELSE]
+  include lib/ansfloat.4th
+  include lib/fpin.4th
+  include lib/fpout.4th
+  include lib/falog.4th
+  fclear    9 set-precision
+[THEN] [FLOAT]
+
+
+float array zt
+float array hh
+float array zx
+float array tf
+float array xk
+
+: fstub  ." Equation not defined" abort ;
+
+
+variable (fdummy)                   \ A pointer to equation to solve
+' fstub (fdummy) !
+: fdummy (fdummy) @ execute ;       \ The equation to solve
+
+: x'    \ integration step
+        LET xk = hh*fdummy(zx,zt);          \ compute k
+        LET zt = zt+hh;                     \ increment t
+        LET (xk + hh*fdummy(zx+xk,zt))/2;   ( f: -- dx)
+        zx F@   F+   zx F!  ;               \ x = x + dx
+
+: display  ( -- )
+    cr   zt F@  FS.  5 spaces   zx F@  FS. ;
+
+: done?  tf F@  zt F@  F<  ;
+
+: rungek2   ( xt --)  ( f: x0 t0 tf h -- )
+        hh F!  tf F!  zt F!  zx F!    \ initialize variables
+        (fdummy) !                    \ function pointer
+        BEGIN   display   x'          \ indefinite loop
+        done?   UNTIL  ;
+
+
+\ Example
+float array x
+float array t
+:  myfunction ( x t -- float )  t f!  x f! \ dx/dt = f(x,t)
+            let 4*exp(0.8*t) - 0.5*x;      \ 'Exact' answer x(4.0)=75.33896261
+;                                          \ with initial values of x(0)=2.0
+
+
+      ' myfunction         \ pointer to equation to solve
+      s" 2.0e0" s>float    \ x   or initial function value
+      s" 0.0e0" s>float    \ t   or initial variable value
+      s" 4.0e0" s>float    \ tf  final value
+      s" 0.1e0" s>float    \ h   step size
+      rungek2
+
+

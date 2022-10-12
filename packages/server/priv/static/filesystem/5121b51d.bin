@@ -1,0 +1,50 @@
+\ Published on c.l.f, Wednesday 15 April 2015 20:23:25
+\ Believed to be in the public domain
+
+include lib/memcell.4th                \ for ALLOCATE
+include lib/dstringt.4th               \ for dynamic strings
+include 4pp/lib/foos.4pp               \ for Object orientation
+                                       \ allocate and store a string
+
+:class point                           \ define a point class
+   extends Object
+     field: x                          \ point x-coordinate
+     field: y                          \ point y-coordinate
+     field: name                       \ name of the point
+     method: show                      \ show a point
+     method: delta                     \ modify point coordinates
+   end-extends
+                                       \ constructor
+   :new                                ( x y a n --)
+      this -> name dup ds.init ds.place
+      this -> y ! this -> x !
+   ;method                             \ initialize the point
+
+   :method show                        ( --)
+      this -> name @ count type space
+      ." @ (" this -> x @ 0 .r ." , " this -> y @ 0 .r ." ) " cr
+   ;method
+                                       ( x y --)
+   :method delta this -> y +! this -> x +! ;method
+   :delete this -> name ds.free ;method
+;class
+                                       \ create two points
+7 1 s" Bob the Goblin" instance point goblin
+5 0 s" Protagonist" instance point player
+
+goblin -> show                         \ show both points
+player -> show
+
+-1 0 goblin -> delta                   \ do two modifications and show it
+-1 0 goblin -> delta
+goblin ->  show
+
+-1 0 goblin -> delta                   \ do another two modifications
+goblin -> show
+0 3 goblin -> delta
+
+goblin -> show                         \ show both points
+player -> show
+
+goblin delete                          \ destroy both points
+player delete

@@ -1,0 +1,37 @@
+\ 4tH library - WWWOPEN - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Offers an easy way to get a file from the WWW using the CURL or WGET command
+\ Note that ALL commands return an unchecked file handle!
+
+[UNDEFINED] wwwopen [IF]
+[UNDEFINED] /websiz [IF] 256 constant /websiz [THEN]
+
+/websiz string (web-cmd)               \ command line buffer
+
+[DEFINED] wgetverbose [IF]             \ silent or non-silent pragma
+         s" curl " sconstant (CURL)
+     s" wget -O- " sconstant (WGET)
+[ELSE]
+      s" curl -s " sconstant (CURL)
+  s" wget -O- -q " sconstant (WGET)
+[THEN]
+                                       ( a1 n1 a2 n2 -- f)
+: (webget) (web-cmd) >r r@ place r@ +place r> count input pipe + open ;
+: curlget (CURL) (webget) ;            ( a n -- h)
+: wget (WGET) (webget) ;               ( a n -- h)
+
+' wget alias wwwopen                   \ default is WGET
+
+[DEFINED] 4TH# [IF]
+  hide (web-cmd)
+  hide (webget)
+[THEN]
+[THEN]
+
+\ Typical use:
+\   s" https://thebeez.home.xs4all.nl/4tH/index.html" wwwopen
+\   error? abort" Cannot open URL" dup use
+\   begin refill while 0 parse type cr repeat close
+

@@ -1,0 +1,51 @@
+\ Virtual memory demo - Copyright 2012 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/ansblock.4th
+include lib/ncoding.4th
+include 4pp/lib/standard.4pp
+
+\ Essentially the very same demo program as VMEMTEST.4TH, but this time without
+\ the VMEM.4TH library. Instead, the whole functionality of this library is
+\ performed by the preprocessor - without loss of functionality.
+
+:macro vminit >>> 0 <4< ; vminit      \ initialize register 4 immediately
+:macro /blk >>> 1024 ;                \ define a preprocessor constant
+
+:macro vbuffer[ $3$ ]                 \ the same as 'vallot'
+  >3> /blk @min >4> @add /blk @divrm <#< /blk @mul >4> @max <4<
+  #4# constant >4> >3> @add <4< @3@ #3# does> paging ` ;`
+;
+
+: paging b/buf /mod block + ;
+aka update &
+                                       \ note only constants are defined!
+vbuffer[ 32]  s1
+vbuffer[ 128] s2
+vbuffer[ 128] s3
+vbuffer[ 512] s4
+vbuffer[ 8]   n1
+vbuffer[ 100] s5
+vbuffer[ 256] s6
+vbuffer[ 8]   n2
+
+4 s" vmemtest.scr" create-blockfile    \ create a 4K blockfile
+s" vmemtest.scr" open-blockfile        \ and open it
+                                       \ now do a few assignments
+s" This is the end" s1 place &         \ which span several blocks
+1111 n2 n! &                           \ '&' signifies a dirty block
+s1 count type cr
+n2 n@ . cr
+s1 count type cr
+s" My only friend" s1 place &
+2222 n1 n! &
+s1 count type cr                       \ now check their values
+n2 n@  . cr
+s" , the end" s1 +place &
+n2 n@  . cr
+s1 count type cr
+n1 n@ . cr
+                                       \ and clean up the blockfile
+s" vmemtest.scr" delete-file abort" Cannot delete blockfile"
+depth .                                \ check for stack leaks

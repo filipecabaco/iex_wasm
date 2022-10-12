@@ -1,0 +1,17 @@
+\ 4tH library - Spinner coroutine - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] spin  [IF]
+[UNDEFINED] yield [IF] include lib/yield.4th [THEN]
+
+: spin 8 emit emit sync ;              ( c --)
+
+: spinner                              ( --)
+  begin
+    [char] | spin yield [char] / spin yield 
+    [char] - spin yield [char] \ spin yield
+  again
+;
+[THEN]
+

@@ -1,0 +1,129 @@
+\ FOOS aggregation and composition - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ for ALLOCATE
+include 4pp/lib/foos.4pp               \ for OOP support
+include 4pp/foos/dstr.4pp              \ dynamic string class
+include 4pp/foos/list.4pp              \ list class
+
+:class Professor
+  extends Object
+     field: Name                       \ name of the professor
+    method: getProfName                \ how to get to that name
+  end-extends
+                                       \ use a dStr store that name
+  :new new dStr this -> Name !               ;method
+  :method getProfName this -> Name @ -> get$ ;method
+  :delete this -> Name @ delete              ;method
+                                       \ and free it when done
+  private{ Name }                      \ since we have a getter..
+;class
+
+\ Aggregation: |Professors| will outlive the |Faculty|.
+
+:class Faculty
+  extends Object
+     field: Title                      \ name of the faculty
+     field: Members                    \ who are members of this faculty
+    method: getTitle                   \ get the name of the faculty
+    method: getMember                  \ get an individual member (professor)
+    method: listMembers                \ list all professors on thew payroll
+    method: addMember                  \ add a new professor to the payroll
+  end-extends
+                                       \ create payroll and name
+  :new new dStr this -> Title ! new List this -> Members ! ;method
+  :delete this -> Title @ delete this -> Members @ delete  ;method
+  :method getTitle this -> Title @ -> get$                 ;method
+  :method addMember this -> Members @ -> lpush             ;method
+                                       ( obj --)
+  :method getMember                    ( n -- obj)
+    dup this -> Members @ -> lsize <   \ within range?
+    if  this -> Members @ -> lget else drop Nothing then
+  ;method                              \ if not, return Nothing
+
+  :method listMembers                  ( --)
+    0 begin                            \ start at the beginning of the list
+      dup this -> getMember dup Nothing <>
+    while                              \ was something returned?
+      -> getProfName type cr 1+        \ if so, get his name
+    repeat drop drop                   \ get the next entry on the list
+  ;method
+
+  private{ Members Title }             \ we got getters for this..
+;class
+
+\ Composition: |Faculty|s exist only as long as the faculty exists.
+
+:class University
+  extends Object
+     field: Name                       \ name of the university
+     field: Faculties                  \ list of faculties
+    method: getUniversityName          \ get the name of the university
+    method: getFaculty                 \ get an individual faculty
+    method: listFaculties              \ list all of its faculties
+    method: addFaculty                 \ add another faculty
+  end-extends
+                                       ( a n --)
+  :new new dStr this -> Name ! new ObjectList this -> Faculties ! ;method
+  :delete this -> Name @ delete this -> Faculties @ delete        ;method
+  :method getUniversityName this -> Name @ -> get$                ;method
+  :method addFaculty this -> Faculties @ -> lpush                 ;method
+                                       ( obj --)
+  :method getFaculty                   ( n -- obj)
+    dup this -> Faculties @ -> lsize < \ if within range
+    if  this -> Faculties @ -> lget else drop Nothing then
+  ;method                              \ return something - otherwise Nothing
+                                       \ list all of the faculties
+  :method listFaculties                ( --)
+    0 begin                            \ start at the bottom of the list
+      dup this -> getFaculty dup Nothing <>
+    while                              \ when something was returned
+      -> getTitle type cr 1+           \ write the faculties title
+    repeat drop drop                   \ get the next entry on the list
+  ;method
+
+  private{ Faculties Name }            \ we got getters for all this..
+;class
+                                       \ create a new university
+s" Princeton university" new University value Princeton
+s" Curie, Marie" instance Professor MmeCurie
+                                       \ Mme Curie is a professor
+s" Chemistry" new Faculty              \ now dress up the chemistry faculty
+  MmeCurie                          over -> addMember
+  s" Watson, James"   new Professor over -> addMember
+  s" Crick, Francis"  new Professor over -> addMember
+Princeton -> addFaculty                \ and add it to our university
+
+s" Physics" new Faculty                \ now dress up the physics faculty
+  MmeCurie                              over -> addMember
+  s" Einstein, Albert"    new Professor over -> addMember
+  s" Feynman, Richard"    new Professor over -> addMember
+  s" Oppenheimer, Robert" new Professor over -> addMember
+Princeton -> addFaculty                \ and add it to our university
+
+s" Arts" new Faculty                   \ now dress up the art faculty
+  s" Gropius, Walter"    new Professor over -> addMember
+  s" Klee, Paul"         new Professor over -> addMember
+  s" Kandinsky, Wassily" new Professor over -> addMember
+Princeton -> addFaculty                \ and add it to our university
+                                       \ list the university name
+Princeton -> getUniversityName ." >>> " type cr
+Princeton -> listFaculties cr          \ and its faculties
+
+0 begin                                \ list all of its faculties
+  dup Princeton -> getFaculty dup Nothing <>
+while                                  \ if we're not at the end of the list
+  dup ." *** "
+  -> getTitle type cr                  \ list the title of the faculty
+  -> listMembers cr 1+                 \ and all its members
+repeat drop drop
+
+\ Note that although this will also delete ALL faculties
+\ and their resources, it will NOT delete the professors,
+\ since these are part of an aggregation. However, in this
+\ program MOST will only exist as dangling pointers.
+
+Princeton delete                      \ drop our university
+MmeCurie  delete                      \ I'm so sorry, I can't help myself
+

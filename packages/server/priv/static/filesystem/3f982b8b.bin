@@ -1,0 +1,17 @@
+\ 4tH library - ENTER - Copyright 2003,2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] enter    [IF]
+[UNDEFINED] E.LIBERR [IF] include lib/throw.4th [THEN]
+
+: enter
+  begin
+    refill 0= E.LIBERR throw" EOF on stdin"
+    bl parse-word                      ( a n)
+    number error?                      ( n f)
+  while                                ( n)
+    drop                               ( --)
+  repeat                               ( n)
+;
+[THEN]

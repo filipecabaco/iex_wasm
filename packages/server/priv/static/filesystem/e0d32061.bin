@@ -1,0 +1,17 @@
+;;;
+;;; @@extname@@lib.stub
+;;;
+
+(declcode
+ (.include "@@extname@@.h"))
+
+;; The following entry is a dummy one.
+;; Replace it for your definitions.
+
+(define-cproc test-@@extname@@ ()
+  (return (test_@@extname@@)))
+
+
+;; Local variables:
+;; mode: scheme
+;; end:

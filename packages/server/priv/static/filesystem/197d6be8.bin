@@ -1,0 +1,313 @@
+\ 4tH test - SSCANF - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/sscanf.4th
+
+variable a
+variable b
+64 string c$
+64 string d$
+variable e
+variable f
+variable g
+
+: echo 2dup ." {" type ." }" ;
+
+: clear
+  depth 0 ?do drop loop
+  a b e f g
+  depth 0 ?do (error) swap ! loop
+  c$ d$
+  depth 0 ?do 0 dup rot place loop cr
+;
+
+a b c$ d$ e f g s" %c%c %d%%%s, %4c%c%c" echo cr
+s" a b -12345%This is the end, 543210"   echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a @ emit cr
+.( b  = ) b @ emit cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr
+.( e  = ) e ? cr
+.( f  = ) f @ emit cr
+.( g  = ) g @ emit cr clear
+
+c$ d$ s" %15c%s" echo cr
+s" 012345678901234567890" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+b c$ s" %15c%d" echo cr
+s" 012345678901234567890" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( b  = ) b ? cr
+.( c$ = ) c$ count type cr clear
+
+b c$ s" %15c%d" echo cr
+s" 012345678901234" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( b  = ) b ? cr
+.( c$ = ) c$ count type cr clear
+
+b c$ s" %15c%d" echo cr
+s" 01234567890" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( b  = ) b ? cr
+.( c$ = ) c$ count type cr clear
+
+a b s" %d%d" echo cr
+s" 01234567890" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a ? cr
+.( b  = ) b ? cr clear
+
+a b s" %d,%d" echo cr
+s" 01234567890" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a ? cr
+.( b  = ) b ? cr clear
+
+c$ d$ s" %s%s" echo cr
+s" This is the end" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+c$ d$ s" %s %s" echo cr
+s" This is the end" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+c$ d$ s" %s, %s" echo cr
+s" This is the end, my friend" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+c$ d$ s" %s. %s" echo cr
+s" This is the end." echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+c$ d$ s" %s.%s." echo cr
+s" This. Is. The. End." echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+c$ d$ s" %s.%s." echo cr
+s" The end." echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+b c$ s" %s.%d." echo cr
+s" The end." echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( b  = ) b ? cr clear
+
+a b e c$ s" Invoice issued by %s on %u-%u-%u" echo cr
+s" Invoice issued by Hans Bezemer on 2022-04-03" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( a  = ) a ? cr
+.( b  = ) b ? cr
+.( e  = ) e ? cr clear
+
+a b e c$ s" Invoice issued by: %s, %u-%u-%u" echo cr
+s" Invoice issued by: Hans Bezemer, 2022-04-03" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( a  = ) a ? cr
+.( b  = ) b ? cr
+.( e  = ) e ? cr clear
+
+a b e c$ s" Invoice issued by [%s] on %u-%u-%u" echo cr
+s" Invoice issued by [Hans Bezemer] on 2022-04-03" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr
+.( a  = ) a ? cr
+.( b  = ) b ? cr
+.( e  = ) e ? cr clear
+
+a b e s" %c%c%c" echo cr
+s" a, 1" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a @ emit cr
+.( b  = ) b @ emit cr
+.( e  = ) e @ emit cr clear
+
+a b e s" %c %c %c" echo cr
+s" a, 1" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a @ emit cr
+.( b  = ) b @ emit cr
+.( e  = ) e @ emit cr clear
+
+c$ s" %4c" echo cr
+s" a,1 2" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr clear
+
+c$ s" %s" echo cr
+s" Sir Albert Einstein" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr clear
+
+c$ s" %s " echo cr
+s" Sir Albert Einstein" echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( c$ = ) c$ count type cr clear
+
+a b s" %5d%d" echo cr
+s" 0123456789 " echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a ? cr
+.( b  = ) b ? cr clear
+
+c$ a b d$ s" %s.%c%d.%s" echo cr
+s" The end.!-25." echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a ? cr
+.( b  = ) b @ emit cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+
+c$ a b d$ s" %s.%c%d.%s" echo cr
+s" The end.!." echo cr cr sscanf
+
+.( Unparsed format: ) type cr
+.( Number of data read: ) #scanf ? cr
+.( Stack bleed: ) depth . cr cr
+
+.( Contents) cr
+.( a  = ) a ? cr
+.( b  = ) b @ emit cr
+.( c$ = ) c$ count type cr
+.( d$ = ) d$ count type cr clear
+

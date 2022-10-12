@@ -1,0 +1,50 @@
+\ https://groups.google.com/g/comp.lang.forth/c/b8oaDCKXpm0/m/9smFq1pwAAAJ
+\ http://rosettacode.org/wiki/Modular_arithmetic
+\ https://en.wikipedia.org/wiki/Modular_arithmetic
+
+\ Rosetta Code 2022, Albert van der Horst
+
+\ In mathematics, modular arithmetic is a system of arithmetic for integers,
+\ where numbers "wrap around" when reaching a certain value, called the
+\ modulus. The modern approach to modular arithmetic was developed by
+\ Carl Friedrich Gauss in his book Disquisitiones Arithmeticae,
+\ published in 1801. 
+
+\ We would normally define operators that have a suffix `m' in order
+\ not to be confused:  +m -m *m /m **m
+\ Also useful is %:m reduce a number modulo.
+
+\ Words that may be not be present in the kernel.
+\ This example loads them in ciforth.
+
+include lib/mixed.4th
+
+VARIABLE (m) ( Modulo number)
+
+\ Set the modulus to  m .
+: set-modulus  (m) ! ;
+
+\ For A B return C GCD where C*A+x*B=GCD
+
+: XGCD 1 0 2SWAP   BEGIN OVER /MOD OVER WHILE >R SWAP
+   2SWAP OVER R> * - SWAP 2SWAP REPEAT 2DROP NIP ;
+   
+\ Suffix n : normalized number.
+: (norm-m) DUP 0< NEGATE (m) @ AND + ; ( x -- xn ) \ -m<xn<+m
+: +m   + (m) @ - (norm-m)  ;           ( an bn -- sumn )
+: -m   - (norm-m)  ;                   ( an bn -- diffn)
+: *m   M* (m) @ SM/REM DROP ;          ( an bn -- prodn)
+: /m    (m) @ XGCD DROP (norm-m)  *m ; ( a b -- quotn)
+: %:m  DUP 0< NEGATE (m) @ SM/REM DROP (norm-m)  ;  ( a -- an)
+
+\ Both steps: For A B and C: return A B en C.  Invariant A*B^C.
+: (reduce1-)  1- >R >R    R@ *m   R> R> ;
+: (reduce2/)  2/ >R    DUP *m        R> ;
+                                       ( a b -- apowbn )
+: **m    1 ROT ROT BEGIN   DUP 1 AND IF   (reduce1-)   THEN
+    (reduce2/) DUP 0= UNTIL   2DROP   ;  
+
+\ The solution is
+13 set-modulus
+10  DUP 100 **m +m 1 +m . CR           \ depth .
+

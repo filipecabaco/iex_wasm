@@ -1,0 +1,1 @@
+app dup @ swap cell+ @ / out !

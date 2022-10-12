@@ -1,0 +1,21 @@
+\ 4tH library - Fractional arithmatic extensions - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] vexp     [IF]
+[UNDEFINED] v/       [IF] include lib/fraction.4th [THEN]
+[UNDEFINED] (sin)    [IF] include lib/math.4th     [THEN]
+[UNDEFINED] sqrt-rem [IF] include lib/sqrtrem.4th  [THEN]
+[UNDEFINED] fxexp    [IF] include lib/fxexpln.4th  [THEN]
+                                       ( fn1 -- exp[fn1])
+PI*10K +1 * 10K / 1+ constant vpi      \ rounded pi in fraction form
+
+: vexp dup abs 4 * fxexp swap 0< if 1073741824 swap else 4 then / ;
+: vln 4 * fxln 4 / ;                   ( fn1 -- ln[fn1])
+: vround +1 2 / over 0< if negate then v+ v>i i>v ;
+: vsin v>s (sin) s>v ;
+: vcos v>s (cos) s>v ;
+: vtan v>s dup (sin) swap (cos) v/ ;
+: vsqrt v>s 10K * sqrt-rem drop s>v ;  ( fn1 -- fn2)
+[THEN]
+

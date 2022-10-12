@@ -1,0 +1,26 @@
+\ Preprocessor FOOS array demo - Copyright 2013, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include 4pp/lib/foos.4pp
+                                       \ simply extend the FOOS language
+:macro Objects                         \ this creates an array of objects
+  >#> >#> @over /mangle * constant @dup /mangle @cr
+  @dup /mangle array @dup _#_ @cr
+  @dup _#_ @dup /mangle + _#_ ?do i @dup _#_ /mangle +loop
+;                                      \ syntax: number Objects class name
+
+:macro th sizeof * + ;                 \ address the nth element of an array
+                                       \ N.B. overrrides built-in keyword 'th'
+:class Dog                             \ define an example class
+   extends Object                      \ with a single method
+     method: bark
+   end-extends
+
+   :method bark ." Woof!" cr ;method
+;class
+
+10 constant #Dog                       \ number of dogs
+#Dog Objects Dog Lassies               \ allocate and init the array
+                                       \ now put them all to work
+#Dog 0 ?do Lassies i th Dog -> bark loop

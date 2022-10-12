@@ -1,0 +1,27 @@
+\ FOOS smart pointer implementation - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+                                       \ you can do this for any type
+: integer cells allocate abort" Cannot allocate integer" ;
+
+:class SmartPtr                        \ this is the smart pointer
+  extends Object
+    field:  ptr                        \ holds actual pointer
+    method: (*)                        \ get actual pointer
+  end-extends
+
+  :new this -> ptr ! ;method           \ initialize smart pointer
+  :method (*) this -> ptr @ ;method    \ get raw pointer
+  :delete this -> ptr @ free drop ;method
+                                       \ free actual pointer
+  private{ ptr }                       \ actual pointer is private
+;class
+
+1 integer instance SmartPtr ptr        \ define a smart pointer
+20 ptr (*) !                           \ assign a value to it
+ptr (*) ? cr                           \ print a value
+ptr delete                             \ free smart pointer
+

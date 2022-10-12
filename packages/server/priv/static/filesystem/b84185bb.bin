@@ -1,0 +1,13 @@
+\ Taken from http://rosettacode.org 
+\ 4tH version 2021, Hans Bezemer
+
+\ print a cell, commatized.
+
+[UNDEFINED] .s, [IF]
+: .s,                                  ( n -- ) 
+  dup abs
+  <# begin dup 1000 > while # # # [char] , hold repeat #s sign #> type space
+;
+[THEN]
+
+\ (error) 1+ .s, depth .

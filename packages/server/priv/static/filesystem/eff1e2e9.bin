@@ -1,0 +1,8 @@
+\ Preprocessor ANS-Forth - Copyright 2013, 2020 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro action-of ['] >#> _#_ DEFER@ ;
+:macro synonym AKA >#> >#> _#_ _#_ ;
+:macro begin-structure >#> STRUCT ;
+:macro end-structure END-STRUCT _#_ ;

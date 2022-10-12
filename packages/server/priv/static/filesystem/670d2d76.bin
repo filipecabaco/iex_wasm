@@ -1,0 +1,12 @@
+{application,pkix,
+             [{description,"PKIX management"},
+              {vsn,"1.0.8"},
+              {modules,[pkix,pkix_app,pkix_sup]},
+              {registered,[]},
+              {applications,[kernel,stdlib,crypto,public_key]},
+              {mod,{pkix_app,[]}},
+              {files,["src/","tools/","priv/","LICENSE","rebar.config",
+                      "README.md","rebar.config.script"]},
+              {licenses,["Apache 2.0"]},
+              {links,[{"Github","https://github.com/processone/pkix"}]},
+              {env,[]}]}.

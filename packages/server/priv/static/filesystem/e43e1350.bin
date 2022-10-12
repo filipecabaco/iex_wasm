@@ -1,0 +1,68 @@
+\ Preprocessor FOOS memento pattern demo - Copyright 2017, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Memento_pattern
+
+include lib/memcell.4th
+include lib/dstringt.4th
+
+include 4pp/lib/foos.4pp
+include 4pp/foos/list.4pp
+
+:class Memento
+   extends Object
+     field:  state
+     method: getSavedState
+   end-extends
+
+   :new this -> state dup ds.init ds.place ;method
+   :method getSavedState this -> state ds.count ;method
+   :delete this -> state ds.free ;method
+
+   private{ state }
+;class
+
+:class Originator
+   extends Object
+     field:  state
+     method: set
+     method: saveToMemento
+     method: restoreFromMemento
+   end-extends
+
+   :new this -> state ds.init ;method
+   :delete this -> state ds.free ;method
+
+   :method set
+      ." Originator: Setting state to " 2dup type cr this -> state ds.place
+   ;method
+
+   :method saveToMemento
+      ." Originator: Saving to Memento" cr
+      this -> state ds.count new Memento
+   ;method
+
+   :method restoreFromMemento
+      -> getSavedState this -> state ds.place
+      ." Originator: State after restoring from Memento: "
+      this -> state ds.count type cr
+   ;method
+
+   private{ state }
+;class
+
+instance Originator myorigin
+instance ObjectList mysavestate
+
+s" State1" myorigin -> set
+s" State2" myorigin -> set
+myorigin -> saveToMemento mysavestate -> lpush
+                                       \ We can request multiple mementos
+s" State3" myorigin -> set             \ and choose which one to roll back to
+myorigin -> saveToMemento mysavestate -> lpush
+s" State4" myorigin -> set
+1 mysavestate -> lget myorigin -> restoreFromMemento
+
+myorigin    delete
+mysavestate delete

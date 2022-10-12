@@ -1,0 +1,4 @@
+: zap dup 0 .r ; : fizz ." Fizz" ; : buzz ." Buzz" ; : fizzbuzz fizz buzz ;
+create foo ' zap , ' fizz , ' buzz , ' fizzbuzz ,
+  does> >r dup 5 mod 0= 2* over 3 mod 0= + cells r> + @c execute drop ;
+: bar 101 1 do i foo space loop ; bar

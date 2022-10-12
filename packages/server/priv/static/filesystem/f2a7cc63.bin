@@ -1,0 +1,107 @@
+dnl
+dnl Configuring @@package@@
+dnl  process this file with autoconf to generate 'configure'.
+dnl
+
+AC_PREREQ([2.68])
+AC_INIT(@@package@@, 1.0, shiro@acm.org)
+dnl If you want to use the system name (OS, architecture, etc) in the
+dnl configure, uncomment the following lines.  In such a case, you need
+dnl to copy config.guess and config.sub from automake distribution.
+dnl AC_CANONICAL_BUILD
+dnl AC_CANONICAL_HOST
+dnl AC_CANONICAL_TARGET
+
+dnl Replace @LOCAL_PATHS@ by --with-local option.
+AC_ARG_WITH(local,
+  AS_HELP_STRING([--with-local=PATH:PATH...],
+                 [For each PATH, add PATH/include to the include search
+paths and PATH/lib to the library search paths.  Useful if you have some
+libraries installed in non-standard places. ]),
+  [
+    AS_CASE([$with_local],
+      [yes|no|""], [],  dnl no effect
+                   [LOCAL_PATHS=$with_local])
+  ])
+AC_SUBST(LOCAL_PATHS)
+
+dnl Set up gauche related commands.  The commands are set by scanning
+dnl PATH.  You can override them by "GOSH=/my/gosh ./configure" etc.
+dnl These variables may contain spaces in the pathnames (especially on
+dnl Windows); Makefile.ins and other files that refer to those variables
+dnl have to quote them properly.
+AC_PATH_PROG([GOSH], gosh)
+AC_PATH_PROG([GAUCHE_CONFIG], gauche-config)
+AC_PATH_PROG([GAUCHE_PACKAGE], gauche-package)
+AC_PATH_PROG([GAUCHE_INSTALL], gauche-install)
+AC_PATH_PROG([GAUCHE_CESCONV], gauche-cesconv)
+
+dnl C build settings
+dnl Usually these parameters are set by AC_PROG_CC, but we'd rather use
+dnl the same one as Gauche has been compiled with.
+if test -z "$CC"; then
+  CC=`"$GAUCHE_CONFIG" --cc`
+fi
+if test -z "$CFLAGS"; then
+  CFLAGS=`"$GAUCHE_CONFIG" --default-cflags`
+fi
+AC_SUBST(CC)
+AC_SUBST(CFLAGS)
+AC_SUBST(CPPFLAGS)
+AC_SUBST(LDFLAGS)
+AC_SUBST(LIBS)
+
+dnl For Windows Unicode support
+if gosh -e'(exit (cond-expand ((and gauche.os.windows gauche.ces.utf8) 0) (else 1)))'; then
+  WINDOWS_UNICODE_FLAG="-DUNICODE"
+fi
+AC_SUBST(WINDOWS_UNICODE_FLAG)
+
+SOEXT=`"$GAUCHE_CONFIG" --so-suffix`
+OBJEXT=`"$GAUCHE_CONFIG" --object-suffix`
+EXEEXT=`"$GAUCHE_CONFIG" --executable-suffix`
+AC_SUBST(SOEXT)
+AC_SUBST(OBJEXT)
+AC_SUBST(EXEEXT)
+
+ac_default_prefix=`"$GAUCHE_CONFIG" --prefix`
+
+dnl On MSYS2/MinGW-w64, we must overwrite 'prefix' because
+dnl /mingw64/etc/config.site sets prefix=/mingw64 .
+case "$MSYSTEM" in
+  MINGW64|MINGW32)
+    case "$prefix" in
+      /mingw64|/mingw32)
+        prefix=`"$GAUCHE_CONFIG" --prefix`;;
+    esac;;
+esac
+
+GAUCHE_PKGINCDIR=`"$GAUCHE_CONFIG" --pkgincdir`
+GAUCHE_PKGLIBDIR=`"$GAUCHE_CONFIG" --pkglibdir`
+GAUCHE_PKGARCHDIR=`"$GAUCHE_CONFIG" --pkgarchdir`
+AC_SUBST(GAUCHE_PKGINCDIR)
+AC_SUBST(GAUCHE_PKGLIBDIR)
+AC_SUBST(GAUCHE_PKGARCHDIR)
+
+dnl Check for headers.
+dnl Add your macro calls to check required headers, if you have any.
+
+dnl Check for other programs.
+dnl Add your macro calls to check existence of programs, if you have any.
+
+dnl Check for libraries
+dnl Add your macro calls to check required libraries, if you have any.
+
+dnl Creating gpd (gauche package description) file
+GAUCHE_PACKAGE_CONFIGURE_ARGS=`echo "$ac_configure_args" | sed 's/@<:@\\"\`\$@:>@/\\\\&/g'`
+AC_MSG_NOTICE([creating ${PACKAGE_NAME}.gpd])
+"$GAUCHE_PACKAGE" make-gpd "$PACKAGE_NAME" \
+  -version "$PACKAGE_VERSION" \
+  -configure "./configure $GAUCHE_PACKAGE_CONFIGURE_ARGS"
+
+dnl Output
+AC_CONFIG_COMMANDS([VERSION],
+        [echo "${PACKAGE_VERSION}" > VERSION],
+        [PACKAGE_VERSION="${PACKAGE_VERSION}"])
+AC_CONFIG_FILES([Makefile])
+AC_OUTPUT

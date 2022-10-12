@@ -1,0 +1,58 @@
+\ Preprocessor Forth Object Oriented Simple - Copyright 2012, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Inspired by Mini-OOF, made by Bernd Paysan, 2008
+\ WARNING! Incompatible with CLOSURES.4PP
+
+[DEFINED] allocate [DEFINED] forcecellheap * [IF]
+  : (~~new) allocate abort" Out of heap space" dup ;
+  : ~Object free throw ;
+[ELSE]
+  : ~Object drop ;
+[THEN]
+
+struct
+  field: _create_
+  field: _delete_
+end-struct /Object
+
+(error) constant Nothing               \ a non-object for lazy initialization
+
+: (~~init) >r >r over >r execute r> r> over _create_ ! r> over -> _delete_ ! ;
+: Object ['] Object over -> _create_ ! ['] ~Object swap -> _delete_ !  ;
+: derivative swap begin over over <> while dup cell+ @c tuck = until ;
+
+:macro { >r ; :macro } rdrop ; :macro this r@ ; :macro parent@ @ 1+ @c ;
+:macro :class >#> ; :macro type@ -> _create_ @ ; :macro typeof >#> ['] _#_ ;
+:macro kindof typeof derivative ; :macro parentof typeof 1+ @c ;
+:macro ~mangle ~ |#| ; :macro /mangle / |#| ; :macro _mangle _ |#| ;
+:macro sizeof >#> /mangle ; :macro method: >#> <#< ;
+:macro extends >#> @dup /mangle ; :macro virtual: field: ;
+:macro end-extends end-struct @over /mangle @cr @dup aka ~mangle @over ~mangle
+   @cr : @over _#_  ['] @dup _#_  ['] @over _#_  ['] @over ~mangle (~~init) { ;
+:macro ;class } ` ;` @drop @drop ; :macro => >#> dup _#_ @ execute ;
+:macro :delete hide @over ~mangle @cr : @over ~mangle @dup { >>> __delete ;
+:macro :virtual >#> :noname { >>> __virtual ; :macro derived? derivative = ;
+:macro :default : >#> @dup _mangle { >>> __default ;
+:macro :method : >#> @dup _#_ { >>> __method ; :macro :new @dup >>> __new ;
+:macro delete dup _delete_ @ execute ; :macro virtual => ;
+:macro _defines @dup this -> _#_ ! >>> 1 ;
+:macro _delete  @over r> ~mangle ` ;` ['] latest this -> _delete_ ! >>> 1 ;
+:macro _delete?  @dup >>> __delete  @while @drop @drop _delete ;
+:macro _virtual? @dup >>> __virtual @while @drop @drop _defines ;
+:macro _default? @dup >>> __default @while @drop @drop ['] latest _defines ;
+:macro _new?     @dup >>> __new     @while @drop @drop >>> 1 ;
+:macro _3_;method _default? @else @drop ;
+:macro _2_;method } ` ;` _virtual? @else @drop _3_;method ;
+:macro _1_;method _delete? @else @drop _2_;method ;
+:macro _0_;method _new? @else @drop _1_;method ;
+:macro ;method _0_;method @drop @drop ; :macro <- >#> _mangle ;
+:macro _static array >#> _#_ latest _#_ ; :macro default <- ;
+:macro static extends _static ;
+:macro new >#> @dup /mangle (~~new) >r _#_ r> ; :macro instance new value ;
+:macro _private >#> @dup >>> } @until @drop hide _#_ _private ;
+:macro private{ _private @drop @drop ; :macro overrides >#> this -> _#_ ! ;
+:macro class >#> @dup defer _#_ 0 value /mangle ;
+:macro resolve >#> >#> @over @over ' _#_  is _#_ /mangle to /mangle ;
+

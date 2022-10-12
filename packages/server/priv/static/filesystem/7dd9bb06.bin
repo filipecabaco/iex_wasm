@@ -1,0 +1,15 @@
+\ 4tH library - FENTER - Copyright 2010, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] fenter  [IF]
+[UNDEFINED] >float  [IF] [ABORT] [THEN]
+[UNDEFINED] E.LIBERR [IF] include lib/throw.4th [THEN]
+
+: fenter
+  begin
+    refill 0= E.LIBERR throw" EOF on stdin"
+    bl parse-word >float
+  until
+;
+[THEN]

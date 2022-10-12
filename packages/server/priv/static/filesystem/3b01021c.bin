@@ -1,0 +1,123 @@
+\ 4tH CSVSCAN - Copyright 2009,2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ This program analyzes a CSV file, lists the number of lines and columns
+\ and lists all columns with the maximum length of the fields found.
+\ The first line of the CSV file MUST contain a list of all fields involved.
+
+include lib/parsing.4th                \ for PARSE-CSV?
+include lib/padding.4th                \ for .PADDING
+include lib/getopts.4th                \ for GET-OPTIONS
+include lib/argopen.4th                \ for ARG-OPEN
+include lib/oofods-w.4th               \ for FODSopen
+include lib/sprintf.4th                \ for SPRINTF
+include lib/basename.4th               \ for -EXT
+
+255 constant max-fields                \ maximum number of fields
+ 32 constant max-length                \ maximum length of field
+max-fields max-length * constant /buffer
+
+char ; value delimiter                 \ the delimiter (ASCII value)
+0 value #fields                        \ number of fields
+false value verbose                    \ verbose flag
+false value fodsfile
+
+max-fields array length-fields         \ array with field lengths
+max-fields array filled-fields         \ array with filled fields
+/buffer string field-names             \ array with field names
+/buffer string bigTIB                  \ alternate TIB
+
+255 string fodsname                    \ name of FODS file
+                                       \ buffer with field names
+: Preprocess                           ( --)
+  bigTIB /buffer source!               \ initialize big TIB
+  refill 0= abort" Cannot read header" \ get header line
+  0 field-names >r                     \ initialize variables
+  begin                                \ start scanning field names
+    delimiter parse-csv?               \ parse the header
+  while                                \ if not EOL
+    r@ place r> count 1+ chars + >r 1+ \ save column name, increment counter
+  repeat                               \ next field
+  2drop r> drop dup to #fields         \ clean up and save number of columns
+  0 ?do 0 dup filled-fields i th ! length-fields i th ! loop
+;                                      \ initialize column length
+
+: scan-fields                          ( n -- n)
+  #fields 0 do                         \ scan all fields
+    delimiter parse-csv? 0= verbose and
+    if
+      2drop ." Warning: record " dup 1+ .
+      ." contains " i . ." fields!" cr leave
+    else
+      dup length-fields i th dup @ rot max swap !
+      -trailing if 1 filled-fields i th +! then drop
+    then
+  loop                                 \ next field
+;
+                                       \ write a report to FODS file
+: .FODS                                ( n --)
+  fodsname >r option-index args -ext r@ place s" .fods" r@ +place
+  r> count FODSopen abort" Can't open FODS file"
+  dup #fields s" %d columns, %d rows" fodsname sprintf FODSsheet
+  s" No." FODStype s" Name" FODStype s" Max. length" FODStype
+  s" %Value" FODStype FODScr           \ write header
+
+  field-names #fields 0 do             \ list all fields
+    i 1+ FODS. dup count FODStype swap \ list name
+    length-fields i th @ FODS.         \ list max. length
+    filled-fields i th @ 1000 * over / \ list %values
+    <# [char] % hold # [char] . hold #s #> FODStype FODScr
+    swap count 1+ chars +              \ get next name
+  loop drop drop                       \ drop buffer address and #rows
+
+  FODSend FODSclose                    \ finisdh sheet and close file
+;
+                                       \ write a listing to screen
+: .Listing                             ( n --)
+  option-index args type ." : " #fields . ." columns, " dup . ." rows" cr cr
+  field-names #fields 0 do             \ list all fields
+    ." [" i 1+ 3 .r ." ]  "            \ print field number
+    dup count max-length .padding swap \ show name of field
+    ." : " length-fields i th @ 4 .r   \ print statistics
+    ."   ("  filled-fields i th @ 1000 * over /
+    <# # [char] . hold #s #> type ." %)" cr
+    swap count 1+ chars +              \ get next name
+  loop drop drop                       \ drop buffer address and #rows
+;
+                                       ( -- n)
+: Process 0 begin refill while scan-fields 1+ repeat ;
+: PostProcess swap close fodsfile if .FODS ;then .Listing ;
+                                       ( h n --)
+: get-delimiter                        ( --)
+  get-argument drop c@ to delimiter    \ use first character
+;
+                                       \ get ASCII code delimiter
+: get-code                             ( --)
+  get-argument number error? abort" Invalid ASCII code" to delimiter
+;
+                                       \ set verbose flag
+: set-verbose true to verbose ;        ( --)
+: set-fods    true to fodsfile ;       ( --)
+
+create options
+  char d , ' get-delimiter ,
+  char c , ' get-code ,
+  char v , ' set-verbose ,
+  char f , ' set-fods ,
+  NULL ,
+
+: OpenFile                             ( -- h)
+  options get-options input option-index dup 1+ argn >
+  abort" Usage: csvscan -f -d delimiter -c code -v csv-file"
+  arg-open
+;
+
+: csvscan                              ( --)
+  OpenFile                             \ open file
+  Preprocess                           \ scan the header
+  Process                              \ process the file
+  PostProcess                          \ show results
+;
+
+csvscan

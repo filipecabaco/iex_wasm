@@ -1,0 +1,47 @@
+\ 4tH library - XDUMP - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] xdump [IF]
+[UNDEFINED] /line [IF] 16 constant /line [THEN]
+
+: (.byte) <# # # #> type space ;       ( n --)
+: (>addr) /line * + over + ;           ( a1 +offset line -- a2)
+
+: (.header)                            ( --)
+  cr cr ." --addr---  " /line 0 do i (.byte) loop ."  chars" ;
+
+: (.address)                           ( n --)
+  cr <# # # # # [char] - hold # # # # #> type space space ;
+
+: (.char)                              ( addr --)
+  c@ dup 32 < over 127 > or if drop [char] . then emit ;
+
+: (.line)                              ( a line len -- a)
+  >r >r 0 r@ (>addr) (.address)
+  r> swap r@ 0  do over i swap (>addr) c@ (.byte) loop
+  /line   r@   ?do 3 spaces                       loop
+  space   r@ 0  do over i swap (>addr)    (.char) loop
+  r> rot drop drop ;
+
+: (.lines) 0 ?do i /line (.line) loop ; ( a lines -- a)
+: (.footer) dup if (.line) else drop drop then ;
+                                       ( a line len -- a)
+: xdump                                ( a len --)
+  base @ >r hex (.header) /line /mod swap
+  >r >r r@ (.lines) r> r> (.footer) drop r> base ! cr ;
+
+[DEFINED] 4TH# [IF]
+  hide (.byte)
+  hide (>addr)
+  hide (.header)
+  hide (.address)
+  hide (.char)
+  hide (.line)
+  hide (.lines)
+  hide (.footer)
+  hide /line
+[THEN]
+[THEN]
+
+\ 768 128 do i 256 mod i c! loop 128 512 xdump depth .

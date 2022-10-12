@@ -1,0 +1,111 @@
+\ Cosine function in 32-bit ANS Forth
+
+\ Angle input is 32-bit
+\ Output range is 0 to +/-$7FFFFFFF
+\ Accuracy is 28.7 bits, worst case error 10/2^32.
+\ See Jack Ganssle's Guide to Approximations for FP C version.
+
+/CELL 4 - [IF] [ABORT] [THEN]          \ abort if not a 32-bit system
+
+1 [IF]
+  include lib/ansfloat.4th
+[ELSE]
+  include lib/zenfloat.4th
+  include lib/zenans.4th
+[THEN]
+
+include lib/fpin.4th
+include lib/fpout.4th
+
+[UNDEFINED] ZenFP [IF]
+  include lib/fsinfcos.4th
+  include lib/asinacos.4th
+[ELSE]
+  include lib/zenfsin.4th
+  include lib/zenfasin.4th
+  include lib/zenfsqrt.4th
+  : f2* 2 s>f f* ;
+[THEN]
+
+include 4pp/lib/float.4pp              \ preprocessor floating point support
+
+[HEX]
+  6487ED51 CONSTANT C1  7FFFFFFF CONSTANT C2
+ -7FFFFFFF CONSTANT C3  15555553 CONSTANT C4
+  -16C16B9 CONSTANT C5  000D00BD CONSTANT C6
+     -49E2 CONSTANT C7  00000111 CONSTANT C8
+VARIABLE X2
+
+: ROUND  ( d -- n )     \ round to nearest
+   (error) 0 D+  NIP
+;
+
+: TERM  ( y w -- y' )   \ y*X2/2 + w
+   SWAP  X2 @ M* D2* D2* D2*  ROUND +
+;
+
+: COS1Q  ( angle -- n ) \ 1st quadrant
+   C1 M* D2* D2* ROUND  \ scale to pi/2 = $40000000
+   DUP M* NIP X2 !
+   C8 C7 TERM  C6 TERM  C5 TERM
+   C4 TERM  C3 TERM  C2 TERM
+;
+
+: COS  ( angle -- n )   \ angle is 32-bit circle
+   DUP 0< IF INVERT THEN
+   DUP 40000000 AND  IF  INVERT
+       3FFFFFFF AND  COS1Q NEGATE
+   ELSE COS1Q THEN
+;
+[DECIMAL]
+
+1 [IF]
+\ translate coefficients from
+\ Jack Ganssle's Guide to Approximations.
+\ also test for worst case error
+
+VARIABLE TALLY
+: FRAC ( r -- )     \ convert to 32-bit constants
+   TALLY @ 1 AND 0= IF CR THEN
+   [HEX] (error) [DECIMAL] 0 D>F F*  1 TALLY +!
+   TALLY @ 2 > IF   \ they double as you go down
+      TALLY @ 2 - 0 DO F2* LOOP
+   THEN  ."   "
+   F>S DUP ABS S>D HEX <# # # # # # # # # SIGN #> TYPE
+   ."  CONSTANT C"  DECIMAL TALLY @ .
+;
+
+: SHOW  ( -- ) CR   \ Output coefficients to screen
+f%  1E0 FATAN FRAC
+f%  0.99999999999925182E0 FRAC
+f% -0.49999999997024012E0 FRAC
+f%  0.041666666473384543E0 FRAC
+f% -0.001388888418000423E0 FRAC
+f%  0.000024801040648456E0 FRAC
+f% -0.000000275246963843E0 FRAC
+f%  0.000000001990785685E0 FRAC
+;
+
+\ Test sweeps through the circle to find the maximum error
+\ On a typical PC, "20 WORST" tests a million points fast.
+
+VARIABLE ERROR  VARIABLE SPAN
+FVARIABLE ANGLE
+[HEX]
+: TEST1  ( i -- n ) 20 SPAN @ - LSHIFT COS ;
+: TEST2  ( i -- n ) S>F ANGLE F@ F* FCOS 7FFFFFFF S>F F* F>S ;
+[DECIMAL]
+: SETANGLE ( span -- )
+  >R f% 1E0 FATAN f% 8E0 F* ( 2pi) R> 0 ?DO F2/ LOOP ANGLE F! ;
+: WORST  ( n -- u )  \ Brute force sweep for worst estimate
+   DUP SPAN !  SETANGLE  0 ERROR !
+   1 SPAN @ LSHIFT 0 DO 
+     I TEST1 I TEST2 - ABS
+     ERROR @ MAX ERROR !
+   LOOP
+   ERROR @ ;
+
+fclear 100 set-precision
+10 worst .
+show cr
+[THEN]

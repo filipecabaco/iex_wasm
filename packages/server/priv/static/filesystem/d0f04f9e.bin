@@ -1,0 +1,60 @@
+\ Preprocessor FOOS proxy pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Proxy_pattern
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+:class ICar
+   extends Object
+     virtual: DriveCar
+   end-extends
+;class
+
+:class Driver
+   extends Object
+     field: Age
+   end-extends
+
+   :new this -> Age ! ;method
+;class
+
+:class Car
+   extends ICar
+   end-extends
+
+   :virtual DriveCar ." Car has been driven!" cr ;method
+;class
+
+:class ProxyCar
+   extends ICar
+     field: drivenBy
+     field: realCar
+   end-extends
+
+   :new
+      this -> drivenBy !
+      new Car this -> realCar !
+   ;method
+
+   :delete this -> drivenBy @ delete this -> realCar @ delete ;method
+
+   :virtual DriveCar
+      this -> drivenBy @ -> Age @ 17 <
+      if
+        ." Sorry, the driver is too young to drive." cr
+      else
+        this -> realCar @ => DriveCar
+      then
+   ;method
+;class
+
+16 new Driver new ProxyCar value mycar
+mycar => DriveCar
+mycar delete
+
+25 new Driver new ProxyCar to mycar
+mycar => DriveCar
+mycar delete

@@ -1,0 +1,15 @@
+\ 4tH library - Degrees/Radians conversion - Copyright 2011,2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] deg>rad [IF]
+[UNDEFINED] ZenFP   [IF] [ABORT] [THEN] \ ONLY works with Zen FP library
+/cell 8 -           [IF]                \ 32bit version
+: deg>rad 1745329252 -11 f* ;
+: rad>deg 572957795 -7 f* ;
+[ELSE]                                  \ 64bit version
+: deg>rad 1745329251994329576 -20 f* ;
+: rad>deg 572957795130823208 -16 f* ;
+[THEN]
+[THEN]
+

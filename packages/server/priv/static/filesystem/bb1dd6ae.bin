@@ -1,0 +1,185 @@
+\ FOOS Tamagotchi emulator, converted by J.L. Bezemer 2020, 2021
+\ Original Forth code on Rosetta Stone:
+\ http://rosettacode.org/wiki/Tamagotchi_emulator
+
+include lib/comus.4th                  \ for ON, OFF
+include lib/compare.4th                \ for COMPARE
+include 4pp/lib/foos.4pp
+
+\ If you don't know what Tamagotchi is, take a look at the Wikipedia page
+\ about it.
+
+\ This task is about creating a Tamagotchi emulator, a virtual pet that you
+\ must take care of.
+
+\ Your virtual pet must, like real pets, at least: get hungry, get bored,
+\ age and poop!
+
+\ Against hunger, you must create a way to feed it. Against boredom, you must
+\ play with or pet it. The poop must be cleaned, otherwise the pet might get
+\ sick and if it is not cured, it might die from its disease. Finally, the pet
+\ should grow older and eventually die.
+
+\ On screen, your program must display the virtual pet status data - age,
+\ hunger and happiness levels, when the pet poops, its poop must also be
+\ displayed. Ah, well, an avatar of the pet must be there too, but I guess
+\ that's obvious!
+
+\ What else? Well, use your creativity..
+\ Every pet needs a name. What kind of games, or ‘mini games’ one can play
+\ with his pet? And so on!
+
+\ But, above of all, have fun!
+
+: ++ 1 swap +! ;                       ( v -- v++)
+: -- -1 swap +! ;                      ( v -- v--)
+
+( tamagotchi )
+:class tama
+  extends object
+    field: hunger
+    field: boredom
+    field: age
+    field: hygiene
+    field: digestion
+    field: pooped
+    method: dump
+    method: -poop
+    method: -hunger
+    method: died-from
+    method: by-boredom
+    method: by-sickness
+    method: by-hunger
+    method: by-oldness
+    method: sicken
+    method: digest
+    method: die
+    method: look
+    method: wait
+    method: feed
+    method: clean
+    method: play
+  end-extends
+
+  :method dump ( -- )
+    this -> hunger ? this -> boredom ? this -> age ? this -> hygiene ?
+    ." pooped: " this -> pooped @ if ." yes" else ." no" then cr
+  ;method
+
+\ these words both exit their caller on success
+  :method -poop ( -- )
+    this -> digestion @ 1 = if
+      this -> digestion off this -> pooped on ." tama poops!" cr rdrop
+    then
+  ;method
+
+  :method -hunger ( -- )
+    this -> digestion @ unless
+      this -> hunger ++ ." tama's stomach growls" cr rdrop
+    then
+  ;method
+
+  :method died-from ( 'reason' f -- )
+    if cr ." tama died from " type cr abort then 2drop
+  ;method
+
+  :method by-boredom ( -- )
+    s" boredom"  this -> boredom @ 5 > this -> died-from
+  ;method
+
+  :method by-sickness ( -- )
+    s" sickness" this -> hygiene @ 1 < this -> died-from
+  ;method
+
+  :method by-hunger ( -- )
+    s" hunger"   this -> hunger @ 5 > this -> died-from
+  ;method
+
+  :method by-oldness ( -- )
+    s" age"      this -> age @ 30 > this -> died-from
+  ;method
+
+  :method sicken ( -- )
+    this -> pooped @ if this -> hygiene -- then
+  ;method
+
+  :method digest ( -- )
+    this -> -poop this -> -hunger this -> digestion --
+  ;method
+
+  :method die ( -- )
+    this -> by-boredom this -> by-sickness
+    this -> by-hunger  this -> by-oldness
+  ;method
+
+( tamagotchi ops )
+
+  :method wait ( -- )
+    ." ** time passes **" cr
+    this -> boredom ++ this -> age ++
+    this -> digest this -> sicken this -> die
+  ;method
+
+  :method look ( -- ) 0
+    this -> boredom @ 2 > if 1+ ." tama looks bored" cr then
+    this -> hygiene @ 5 < if 1+ ." tama could use a wash" cr then
+    this -> hunger @  0 > if 1+ ." tama's stomach is grumbling" cr then
+    this -> age @    20 > if 1+ ." tama is getting long in the tooth" cr then
+    this -> pooped @      if 1+ ." tama is disgusted by its own waste" cr then
+    unless ." tama looks fine" cr then
+  ;method
+
+  :method feed ( -- )
+    this -> hunger @ unless ." tama bats the offered food away" cr } ;then
+    ." tama happily devours the offered food" cr
+    this -> hunger off  5 this -> digestion !
+  ;method
+
+  :method clean ( -- )
+    this -> pooped @ unless ." tama is clean enough already." cr } ;then
+    ." You dispose of the mess." cr this -> pooped off  5 this -> hygiene !
+  ;method
+
+  :method play ( -- )
+    this -> boredom @ unless ." tama ignores you." cr } ;then
+    ." tama plays with you for a while." cr this -> boredom off
+  ;method
+                                       \ this is the constructor
+  :new
+    ." tama is born!" cr
+    this -> hunger off  this -> boredom off
+    this -> age off  this -> pooped off
+    5 this -> hygiene ! 5 this -> digestion ! this -> look
+  ;method
+;class
+
+( game mode )
+\ this just permanently sets the current object
+
+cr .( You have a pet tamagotchi!)
+cr
+cr .( commands:  WAIT LOOK FEED CLEAN PLAY)
+cr  ( secret command: DUMP )
+
+static tama pet
+
+\ ---8<---
+\ Very crude 4tH interface, but INTERPRET can't handle this
+\ ---8<---
+
+begin
+  refill drop ." ok" cr
+  begin
+    bl parse-word dup
+  while
+    2dup s" wait"  compare unless pet -> wait  then
+    2dup s" look"  compare unless pet -> look  then
+    2dup s" feed"  compare unless pet -> feed  then
+    2dup s" clean" compare unless pet -> clean then
+    2dup s" play"  compare unless pet -> play  then
+    2dup s" dump"  compare unless pet -> dump  then
+         s" quit"  compare unless quit then
+  repeat 2drop
+repeat
+
+

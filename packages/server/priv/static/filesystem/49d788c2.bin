@@ -1,0 +1,5 @@
+;; generated automatically.  DO NOT EDIT
+#!no-fold-case
+(define-module gauche.process (use gauche.generator) (use gauche.connection) (use scheme.charset) (use srfi-13) (export <process> <process-abnormal-exit> run-process do-process do-process! process? process-alive? process-pid process-command process-input process-output process-error process-upstreams process-wait process-wait/poll process-wait-any process-exit-status process-send-signal process-kill process-stop process-continue process-shutdown process-list run-pipeline do-pipeline open-input-process-port open-output-process-port call-with-input-process call-with-output-process with-input-from-process with-output-to-process call-with-process-io process-output->string process-output->string-list shell-escape-string shell-tokenize-string run-process-pipeline <process-connection> make-process-connection connection-self-address connection-peer-address connection-input-port connection-output-port connection-shutdown connection-close connection-address-name))
+(select-module gauche.process)
+(dynamic-load "gauche--process")

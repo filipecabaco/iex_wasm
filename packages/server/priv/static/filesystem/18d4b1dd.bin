@@ -1,0 +1,6 @@
+\ Semi-Coroutines - Copyright 2014, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro yield r> execute ;
+:macro grab rdrop ;

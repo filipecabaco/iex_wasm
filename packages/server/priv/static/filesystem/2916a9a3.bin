@@ -1,0 +1,12 @@
+include lib/spinner.4th
+                                      
+: payload 10000000 0 do loop dup 1+ swap 100 < ;
+                                       \ dummy task
+: test
+  ." Wait for it.. " spinner 0         \ start coroutine
+  begin payload while yield repeat     \ show spinner while doing it
+  drop grab bl spin cr                 \ grab control, finish spinner
+  ." Done!" cr                         \ all done
+;
+
+test

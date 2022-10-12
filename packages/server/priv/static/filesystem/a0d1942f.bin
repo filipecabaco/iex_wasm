@@ -1,0 +1,12 @@
+\ 4tH library - Inverse BOUNDS - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Hard to convert to ANS-Forth. The closest things are:
+\ either: 1- CHARS OVER + or: 1- CELLS OVER +
+
+[UNDEFINED] <bounds [IF]
+: <bounds >r 1- dup r> + ;             ( a n -- a-1 a-1+n) 
+[THEN]
+
+\ s" This is the end" <bounds ?do i c@ emit -1 chars +loop cr 

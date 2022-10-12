@@ -1,0 +1,74 @@
+\ Preprocessor FOOS builder pattern demo - Copyright 2016, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ add dynamic memory
+include lib/dstringt.4th               \ add dynamic memory
+
+include 4pp/lib/foos.4pp               \ add object orientation
+                                       ( addr --)
+:class Car
+   extends Object
+     field: wheels
+     field: color
+     virtual: Wheels!
+     virtual: GetWheels
+     virtual: Color!
+     virtual: GetColor
+   end-extends
+
+  :new this -> color ds.init ;method
+  :virtual GetWheels this -> wheels @ ;method
+  :virtual Wheels! this -> wheels ! ;method
+  :virtual GetColor this -> color ds.count ;method
+  :virtual Color! this -> color ds.place ;method
+  :delete this -> color ds.free ;method
+
+   private{ wheels color }               \ private declarations MUST be made
+;class
+
+\ The builder abstraction
+:class ICarBuilder
+   extends Object
+     virtual: SetColor
+     virtual: SetWheels
+     virtual: Result@
+   end-extends
+;class
+
+\ Concrete builder implementation
+:class CarBuilder
+   extends ICarBuilder
+     field: _Car_
+   end-extends
+
+   :new new Car this -> _Car_ ! ;method
+   :virtual SetColor this -> _Car_ @ => Color! ;method
+   :virtual SetWheels this -> _Car_ @ => Wheels! ;method
+   :virtual Result@ this -> _Car_ @ ;method
+   :delete this -> _Car_ @ delete ;method
+
+   private{ _Car_ }
+;class
+
+\ The director
+:class CarBuildDirector
+   extends Object
+     field: builder
+     virtual: GetResult
+   end-extends
+
+   :new
+     new CarBuilder this -> builder !
+     s" White" this -> builder @ => SetColor
+     4 this -> builder @ => SetWheels
+   ;method
+
+   :virtual GetResult this -> builder @ => Result@ ;method
+   :delete this -> builder @ delete ;method
+;class
+
+new CarBuildDirector value Director
+Director => GetResult => GetColor type cr
+Director => GetResult => GetWheels . cr
+Director delete

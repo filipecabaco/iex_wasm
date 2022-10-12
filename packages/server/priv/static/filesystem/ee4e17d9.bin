@@ -1,0 +1,7 @@
+\ Preprocessor comparison macros - Copyright 2014 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro @gt @minus @add @sign >>>  1 @while ;
+:macro @eq @minus @add @sign >>>  0 @while ;
+:macro @lt @minus @add @sign >>> -1 @while ;

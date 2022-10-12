@@ -1,0 +1,85 @@
+\ Preprocessor FOOS state pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/ulcase.4th
+include lib/memcell.4th
+
+include 4pp/lib/foos.4pp
+
+:class Statelike
+   extends Object
+     virtual: writeName
+   end-extends
+;class
+
+\ The context class has a state variable that it instantiates in an initial
+\ state, in this case StateLowerCase. In its method, it uses the corresponding
+\ methods of the state object.
+
+:class IStateContext
+   extends Statelike
+     field: myState
+     virtual: setState
+   end-extends
+;class
+
+class StateUpperCase                   \ deferred class definition
+
+:class StateLowerCase
+   extends Statelike
+   end-extends
+
+   :virtual writeName
+      s>lower type cr
+      new StateUpperCase swap => setState
+   ;method
+;class
+
+:class UpperCase
+   extends Statelike
+     field: cnt
+   end-extends
+
+   :new 0 this -> cnt ! ;method
+
+   \ Change state after StateUpperCase's writeName gets invoked twice
+
+   :virtual writeName
+      s>upper type cr this -> cnt 1 over +! @ 2 <
+      if drop else new StateLowerCase swap => setState then
+   ;method                             \ switch state after two times
+
+   private{ cnt }
+;class
+
+resolve StateUpperCase UpperCase       \ resolve deferred StateUpperCase
+
+:class StateContext
+   extends IStateContext
+   end-extends
+                                       \ signal initialization
+   :new (error) this -> myState ! ;method
+
+   \ Setter method for the state.
+   \ Normally only called by classes implementing the State interface.
+
+   :virtual setState
+      this -> myState dup @ error? if drop else delete then !
+   ;method                             \ if just initialized, leave it alone
+                                       \ otherwise, delete object
+   :virtual writeName this -rot this -> myState @ => writeName ;method
+   :new new StateLowerCase this => setState ;method
+;class
+
+new StateContext value sc
+
+s" Monday"    sc => writeName
+s" Tuesday"   sc => writeName
+s" Wednesday" sc => writeName
+s" Thursday"  sc => writeName
+s" Friday"    sc => writeName
+s" Saturday"  sc => writeName
+s" Saturday"  sc => writeName
+s" Sunday"    sc => writeName
+

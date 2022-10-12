@@ -1,0 +1,316 @@
+\ sun 05.08.11 NAB
+\ Sunrise/sunset calculations.
+
+\ Fixed a few non-ANS words and included jd.4th; Anton Ertl 2005-08-28
+\ Now runs on Gforth and contains no non-ANS Forth words.
+
+\ This is the kForth port of Neal Bridges' sunrise/sunset calculator
+\   for Quartus Forth.  K. Myneni 2005-08-20
+
+\ -- Original code and documentation may be found in
+\      http://quartus.net/files/PalmOS/Forth/Examples/sun.zip
+
+\ -- This version uses Wil Baden's Julian Day calculator (jd.4th).
+
+\ -- Modified for Forths without separate fp stack. For Forths with separate
+\      fp stack, modify the word TIME>MH
+
+\ -- local sunrise and sunset words require that the local offset be hardcoded
+\      in the word local-offset.
+
+\ The program uses the following words
+\ from CORE :
+\ : here swap allot ; [ ] Constant spaces 2drop drop >r - dup 0< IF + r>
+\ 1- THEN * / r@ */ > negate 1+ cr mod DO i over = ." ELSE 0= LOOP
+\ Create DOES> s>d
+\ from CORE-EXT :
+\ pick 2r> .r false true
+\ from BLOCK-EXT :
+\ \
+\ from EXCEPTION-EXT :
+\ abort"
+\ from FACILITY-EXT :
+\ time&date
+\ from FILE :
+\ (
+\ from FLOAT :
+\ fconstant fswap f< f/ FLiteral f* fvariable f! f@ fover f>d fdup f0<
+\ f+ f- floor d>f
+\ from FLOAT-EXT :
+\ dfloats fsin fcos ftan fasin facos fatan fabs
+
+[UNDEFINED] ANS [IF]
+  include lib/fp3.4th
+  include lib/fsinfcos.4th
+  include lib/asinacos.4th
+[ELSE]
+  include lib/fp2.4th
+  include lib/zenconst.4th
+  include lib/zenfsin.4th
+  include lib/zenfasin.4th
+[THEN]
+
+include lib/fequals.4th
+include lib/3dup3rot.4th
+include lib/toolbelt.4th
+include lib/ansfacil.4th
+include 4pp/lib/float.4pp              \ preprocessor floating point support
+
+fclear 19 set-precision
+
+: deg>rad ( r1 -- r2 )
+    pi f% 180 f/ f* ;
+
+: rad>deg ( r2 -- r1 )
+    f% 180 pi f/ f* ;
+
+ 1  constant  January
+ 2  constant  February
+ 3  constant  March
+ 4  constant  April
+ 5  constant  May
+ 6  constant  June
+ 7  constant  July
+ 8  constant  August
+ 9  constant  September
+10  constant  October
+11  constant  November
+12  constant  December
+
+\ include jd  ( included below )
+\ jd.4th ==================================================================
+\ jd.4th
+\
+\ Julian Day and Calendar calculator by Wil Baden
+
+\ In gathering old stuff, I came across the following, written long ago,
+\ which I thought would be of interest.
+
+\ The Julian Day is the number of days since 1 January 4713 BC.
+
+
+\  Julian Day
+
+: JD                ( dd mm yyyy -- julian-day )
+    >R                            ( dd mm)( R: yyyy)
+        3 -  DUP 0< IF  12 +  R> 1- >R  THEN
+        306 *  5 +  10 /  +       ( day)
+        R@  1461 4 */  +  1721116 +
+           DUP 2299169 > IF
+               3 +  R@ 100 / -  R@ 400 / +
+           THEN
+    R> DROP                               ( R: )
+;
+
+: BC 1- NEGATE ;
+
+\ With this you can print a calendar, good for any month except
+\ October 1582.
+
+
+: CAL  ( dd mm yyyy -- )
+    1 third 1+ third JD >R      ( R: 1/mm+1/yyyy)
+    1 third third JD >R         ( R: 1/mm+1/yyyy 1/mm/yyyy)
+    JD R@ 1-                ( dd/mm/yyyy 0/mm/yyyy)
+    CR  R@ 1+ 7 MOD  4 *  SPACES
+    R> R> SWAP DO
+        I over -  3 .R
+        over I = IF ." *" ELSE SPACE THEN
+        I 2 +  7 MOD 0= IF  CR  THEN
+    LOOP 2DROP ;
+
+: TODAY   ( -- )
+    TIME&DATE CAL  3DROP ;
+
+\ Here are some test values.
+
+\ 1  1 4713 BC JD . ( 0 )
+\ 31 12 1 BC JD . ( 1721422 )
+\ 1  1    1 JD . ( 1721423 )
+\ 5 10 1582 JD . ( 2299160 )
+\ 15 10 1582 JD . ( 2299161 )
+\ 1  1 1933 JD . ( 2427074 Merriam-Webster dictionary )
+\ 1  1 1965 JD . ( 2438762 Random House dictionary )
+\ 23  5 1968 JD . ( 2440000 Winning Ways )
+
+\ Wil Baden    Costa Mesa, California   Per neilbawd@earthlink.net
+
+\ end jd ============================================================
+
+\ Local latitude and longitude
+\ (west and south are negative, east and north are positive):
+fvariable latitude
+fvariable longitude
+
+\ Sun's zenith for sunrise/sunset:
+fvariable zenith
+
+\ Other working variables:
+fvariable lngHour
+fvariable T
+fvariable L
+fvariable M
+fvariable RA
+fvariable sinDec
+fvariable cosDec
+fvariable cosH
+fvariable H
+
+0 value local-offset
+
+: set-location ( long lat -- )
+  latitude f!  longitude f! ;
+
+: set-zenith ( zenith -- )  zenith f! ;
+
+
+:macro  zenith: ( f -- )
+\ Builds zenith-setting words.
+\  create  ( here f!)  1 dfloats ?allot f!
+\  does> ( -- )  f@ set-zenith ;
+  >#> fvariable @eval latest f!        \ allocate storage
+  does> f@ set-zenith ` ;` ;           \ set runtime behavior
+
+F% 90.83333e zenith: official-zenith
+F%       96  zenith: civil-zenith
+F%      102  zenith: nautical-zenith
+F%      108  zenith: astro-zenith
+
+: day-of-year ( d m y -- day )
+\ Calculate the day-of-year number of a given date (January 1=day 1).
+  dup >r  ( dmy>date) jd
+  1 January r> ( dmy>date) jd - 1+ ;
+
+\ { 20 July 1984 day-of-year -> 202 }
+
+\ Floating-point helper words:
+: ftuck ( a b -- b a b )  fswap fover ;
+
+: range360 ( f1 -- f2 )
+\ Adjust so the range is [0,360).
+  fdup f0< if  f% 360 f+
+  else  fdup f% 360 f> if  f% 360 f-  then
+  then ;
+
+\ { 383e range360 f>s -> 23 }
+\ { -17e range360 f>s -> 343 }
+
+: floor90 ( f1 -- f2 )
+\ Round down to the nearest multiple of 90.
+  f% 90e ftuck f/ floor f* ;
+
+\ { 97e floor90 f>s -> 90 }
+
+: time>mh ( h.m -- min hour )
+\ Convert a floating-point h.m time into integer minutes and hours.
+  fdup floor  fover fswap  f-
+  f% 60e f* f>s >r floor f>s r> swap ;
+
+\ { 3.5e time>mh -> 30 3 }
+
+\ The algorithm works in degrees, so we need separate versions of the
+\ trig functions that operate on degrees rather than radians:
+: fsind  deg>rad fsin ;
+: fcosd  deg>rad fcos ;
+: ftand  deg>rad ftan ;
+: fasind  fasin rad>deg ;
+: facosd  facos rad>deg ;
+: fatand  fatan rad>deg ;
+
+false constant rising
+true constant setting
+
+: UTC-suntime  ( d m y set? -- h.m )
+\ Calculate the UTC sunrise or sunset time for a given day of the year,
+\  using the location set in the longitude and latitude fvariables.
+  >r  \ preserve rise/set value
+  day-of-year  0 d>f  T f!
+  longitude f@ f% 15 f/ lngHour f!               \ let lngHour=longitude/15:
+  r@ rising = if
+    f% 18 lngHour f@ f- f% 24 f/ T f@ f+ T f!    \ let T=T+((18-lngHour)/24):
+  else \ setting
+    f% 6 lngHour f@ f- f% 24 f/ T f@ f+ T f!     \ let T=T+((6-lngHour)/24):
+  then
+  f% 0.9856e T f@ f* f% 3.289e f- M f!           \ let M=(0.9856*T)-3.289:
+
+\  let L=range360(M+(1.916*sin(M))+(0.020*sin(2*M))+282.634):
+  M f@ f% 2 f* fsind f% 0.020e f* M f@ fsind f% 1.916e f* f+ M f@ f+ f% 282.634e f+
+  range360 L f!
+
+\  let RA=range360(atan(0.91764*tan(L))):
+  L f@ ftand f% 0.91764e f* fatand range360 RA f!
+
+\  let RA=(RA+(floor90(L)-floor90(RA)))/15:
+  L f@ floor90 RA f@ floor90 f- RA f@ f+ f% 15 f/ RA f!
+
+  L f@ fsind f% 0.39782e f* sinDec f!                \ let sinDec=0.39782*sin(L):
+  sinDec f@ fasind fcosd cosDec f!                \ let cosDec=cos(asin(sinDec)):
+
+\  let cosH=(cos(zenith)-(sinDec*sin(latitude)))/(cosDec*cos(latitude)):
+  zenith f@ fcosd latitude f@ fsind sinDec f@ f* f-
+  latitude f@ fcosd cosDec f@ f* f/ cosH f!
+
+
+  cosH f@ fabs f% 1 f> ABORT" Fatal Error"    \  let abs(cosH): 1e f> -11 and  throw
+  cosH f@ facosd f% 15 f/ H f!                \  let H=acos(cosH)/15:
+  r> rising = if  f% 24 H f@ f- H f! ( let H=24-H:)  then
+
+\ let H+RA-(0.06571*T)-6.622 -lngHour:
+  H f@ RA f@ f+ f% 0.06571e T f@ f* f- f% 6.622e f- lngHour f@ f-
+;
+
+\ : local-offset ( -- local-offset. )
+\ \ Return the total offset in minutes
+\ \  of the timezone and DST settings.
+\ \ Requires PalmOS 4 and above.
+\  PrefTimeZone >byte
+\  PrefGetPreference
+\  PrefDaylightSavingAdjustment
+\  >byte  PrefGetPreference  d+ ;
+
+: range24 ( f1 -- f2 )
+\ Adjust so the range is [0,24):
+  fdup  f% 24 f> if  f% 24 f-  then
+  fdup  f0< if  f% 24 f+  then ;
+
+: local-suntime  ( d m y set? -- h.m )
+\ Calculate sunrise or sunset time
+\  for the specified date, adjusting
+\  for the local timezone & DST.
+  UTC-suntime
+\ Convert UTC value to local time:
+  local-offset s>f f% 60e f/ f+ range24 ;
+
+
+: sunrise ( d m y -- h.m )
+  rising local-suntime ;
+: sunset ( d m y -- h.m )
+  setting local-suntime ;
+                                       \ This is Delft
+f% 4.38749999e f% 51.9861111e set-location
+60 to local-offset                     \ CET, daylight savings
+official-zenith
+." Delft, standard time" cr cr
+." Sunrise: "
+time&date sunrise time>mh 2 .r ." h" 2 .r 3drop cr
+." Sunset : "
+time&date sunset  time>mh 2 .r ." h" 2 .r 3drop cr
+
+\ {  \ Toronto, Canada: 43.6N 79.4W
+\    f% -79.4e f% 43.6e set-location
+\    official-zenith
+\    23 5 2010 sunrise f. cr
+
+\ gForth test output:
+\    -79.4e 43.6e set-location  ok
+\    official-zenith  ok
+\    23 5 2010 sunrise f. 9.74800757891079  ok
+
+\    20 July 1989 setting UTC-suntime
+\    time>mh . . \ -> 53 0 }
+\    20 July 1989 rising UTC-suntime
+\    time>mh . . \ -> 54 9 }
+\    today
+
+
+

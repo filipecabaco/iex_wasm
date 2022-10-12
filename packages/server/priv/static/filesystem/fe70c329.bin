@@ -1,0 +1,639 @@
+\  *******************************************************************
+\  *                                                                 *
+\  *  Wil Baden  2003-02-14                                          *
+\  *                                                                 *
+\  *                  The Porter Stemming Algorithm                  *
+\  *                                                                 *
+\  *  "An Algorithm for Suffix Stripping", M.F.Porter, 1980          *
+\  *                                                                 *
+\  *  Translated from c_thread_safe.c version                        *
+\  *                                                                 *
+\  *  The link to the Porter stemmer homepage is                     *
+\  *     http://www.tartarus.org/~martin/PorterStemmer/              *
+\  *                                                                 *
+\  *******************************************************************
+
+include lib/pickroll.4th
+include lib/compare.4th
+include lib/anscore.4th
+
+256 string my.pad                      \ in 4tH, PAD is not safe
+
+\ TRUE 0= [IF]  \  Comment out what you already have.
+     :MACRO ANDIF DUP IF DROP ; 
+     :MACRO ORIF  DUP 0= IF DROP ;
+
+     : THIRD   2 PICK ;
+     : FOURTH  3 PICK ;
+     : 3DROP   2DROP DROP ;
+     : End-C@  1- CHARS + C@ ;
+
+\ [THEN]
+
+\  Cons-End is TRUE <=> last letter is a consonant.
+
+: Cons-End     ( z i -- flag )
+    CASE 2dup END-C@       ( z i c )
+    [char] a OF  FALSE  ENDOF
+    [char] e OF  FALSE  ENDOF
+    [char] i OF  FALSE  ENDOF
+    [char] o OF  FALSE  ENDOF
+    [char] u OF  FALSE  ENDOF
+    [char] y OF
+        dup 1 = IF  TRUE  ELSE  2dup 1- RECURSE NOT  THEN
+    ENDOF
+        DROP TRUE
+    0 ENDCASE
+    NIP NIP ;
+
+\  MEASURE measures the number of consonant sequences between 0 and j.
+\  if c is a consonant sequence and v a vowel sequence, and <..>
+\  indicates arbitrary presence,
+
+\      <c><v>       gives 0
+\      <c>vc<v>     gives 1
+\      <c>vcvc<v>   gives 2
+\      <c>vcvcvc<v> gives 3
+\      ....
+
+: MEASURE    ( z j -- m )
+    0 0 2SWAP                     ( n i z j)
+    BEGIN
+        THIRD over > IF
+            3DROP
+        EXIT THEN
+        over FOURTH Cons-End
+    WHILE
+        2>R  1+  2R>
+    REPEAT
+    2>R  1+  2R>
+    BEGIN
+        BEGIN
+            THIRD over > IF
+                3DROP
+            EXIT THEN
+            over FOURTH Cons-End
+        NOT WHILE
+            2>R  1+  2R>
+        REPEAT
+        2>R  1+  >R  1+  R>  2R>
+        BEGIN
+            THIRD over > IF
+                3DROP
+            EXIT THEN
+            over FOURTH Cons-End
+        WHILE
+            2>R  1+  2R>
+        REPEAT
+        2>R  1+  2R>
+    AGAIN ;
+
+\  Vowel-in-Stem is TRUE <=> 0,...j contains a vowel
+
+: Vowel-in-Stem    ( z n -- flag )
+    0 ?DO
+        dup I 1+ Cons-End NOT
+            IF  DROP TRUE UNLOOP  EXIT THEN
+    LOOP
+    DROP FALSE ;
+
+\  Doubled-End is TRUE <=> j,(j-1) contain a double consonant.
+
+: Doubled-End     ( z i -- flag )
+    dup 2 < IF  2DROP  FALSE  EXIT THEN
+    2dup 2 - chars + dup C@ SWAP CHAR+ C@ <>
+        IF  2DROP  FALSE  EXIT  THEN
+    Cons-End ;
+
+\  CVC is TRUE <=> i-2,i-1,i has the form consonant - vowel -
+\  consonant and also if the second c is not w ,x or y. this is used
+\  when trying to restore an e at the end of a short word. e.g.
+
+\     cav(e), lov(e), hop(e), crim(e), but
+\     snow, box, tray.
+
+: CVC        ( z i -- flag )
+    dup 3 <           IF  2DROP  FALSE  EXIT THEN
+    2dup Cons-End NOT     IF  2DROP  FALSE  EXIT THEN
+    2dup 1- Cons-End      IF  2DROP  FALSE  EXIT THEN
+    2dup 2 - Cons-End NOT IF  2DROP  FALSE  EXIT THEN
+    1- chars + C@ dup [char] w = over [char] x = OR SWAP [char] y = OR
+                      IF  FALSE  EXIT THEN
+    TRUE ;
+
+\  ENDS? is TRUE <=> 0,...k ends with the string s.
+
+: ENDS?    ( z j ending i -- z j' flag )
+    2over  dup FOURTH - /STRING  COMPARE 0= ;
+
+\  setto(z, s) sets (j+1),...k to the characters in the string s,
+\  readjusting k. */
+
+: JOIN         ( z j s i -- z j+i )
+    >R  THIRD THIRD chars +  R@ MOVE  R> + ;
+
+\  STEP-1AB gets rid of plurals and -ed or -ing. e.g.
+
+\       caresses  ->  caress
+\       ponies    ->  poni
+\       ties      ->  ti
+\       caress    ->  caress
+\       cats      ->  cat
+
+\       feed      ->  feed
+\       agreed    ->  agree
+\       disabled  ->  disable
+
+\       matting   ->  mat
+\       mating    ->  mate
+\       meeting   ->  meet
+\       milling   ->  mill
+\       messing   ->  mess
+
+\       meetings  ->  meet
+
+: STEP-1AB                  ( z j s i -- z i' )
+    2dup END-C@ [char] s = IF                
+        S" sses" ENDS? IF  2 -  EXIT THEN   
+        S" ies" ENDS? IF  2 -  EXIT THEN    
+        2dup 1- END-C@ [char] s <> IF  1-  ELSE  EXIT THEN
+    THEN
+
+    S" eed" ENDS? IF
+        2dup 3 - MEASURE 0> IF  1-  THEN
+    EXIT THEN
+
+    S" ed" ENDS? IF
+        2dup 2 - Vowel-in-Stem NOT IF  EXIT  THEN
+        2 -
+    ELSE
+    S" ing" ENDS? IF
+        2dup 3 - Vowel-in-Stem NOT IF  EXIT  THEN
+        3 -
+    ELSE
+        EXIT
+    THEN THEN
+
+\  If the second or third of the rules in Step 1b is successful, the
+\  following is done:
+
+\      AT -> ATE                       conflat(ed)  ->  conflate
+\      BL -> BLE                       troubl(ed)   ->  trouble
+\      IZ -> IZE                       siz(ed)      ->  size
+\      (*d and not (*L or *S or *Z))
+\         -> single letter
+\                                      hopp(ing)    ->  hop
+\                                      tann(ed)     ->  tan
+\                                      fall(ing)    ->  fall
+\                                      hiss(ing)    ->  hiss
+\                                      fizz(ed)     ->  fizz
+\      (m=1 and *o) -> E               fail(ing)    ->  fail
+\                                      fil(ing)     ->  file
+
+
+\  The rule to map to a single letter causes the removal of one of the 
+\  double letter pair. The -E is put back on -AT, -BL and -IZ, so that 
+\  the suffixes -ATE, -BLE and -IZE can be recognised later. This E 
+\  may be removed in step 4. 
+
+    S" at" ENDS?  ORIF S" bl" ENDS?  ORIF  S" iz" ENDS? THEN THEN
+        IF  S" e" JOIN  EXIT THEN
+
+    2dup Doubled-End IF
+        1-
+        2dup END-C@
+            dup [char] l = over [char] s = OR SWAP [char] z = OR
+                IF  1+  THEN
+    EXIT THEN
+
+    2dup MEASURE 1 = ANDIF
+    2dup CVC         THEN
+        IF  S" e" JOIN  THEN
+    ;
+
+\  STEP-1C turns terminal y to i when there is another vowel in the stem.
+
+\      (*v*) Y -> I                    happy        ->  happi
+\                                      sky          ->  sky
+
+: STEP-1C   ( z j -- z j' )
+    S" y" ENDS? IF
+        2dup 1- Vowel-in-Stem
+            IF  1- S" i" JOIN  THEN
+    THEN ;
+
+\  STEP 2 maps double suffices to single ones. so -ization ( = -ize
+\  plus -ation) maps to -ize etc. note that the string before the
+\  suffix must give m(z) > 0.
+
+\      (m>0) ENCI    ->  ENCE          valenci        ->  valence
+\      (m>0) ANCI    ->  ANCE          hesitanci      ->  hesitance
+\      (m>0) IZER    ->  IZE           digitizer      ->  digitize
+\      (m>0) LOGI    ->  LOG           archeologi     ->  archeolog
+\      (m>0) BLI     ->  BLE           conformabli    ->  conformable
+\      (m>0) ALLI    ->  AL            radicalli      ->  radical
+\      (m>0) ENTLI   ->  ENT           differentli    ->  different
+\      (m>0) ELI     ->  E             vileli         ->  vile
+\      (m>0) OUSLI   ->  OUS           analogousli    ->  analogous
+\      (m>0) IZATION ->  IZE           vietnamization ->  vietnamize
+\      (m>0) ATION   ->  ATE           predication    ->  predicate
+\      (m>0) ATOR    ->  ATE           operator       ->  operate
+\      (m>0) ALISM   ->  AL            feudalism      ->  feudal
+\      (m>0) IVENESS ->  IVE           decisiveness   ->  decisive
+\      (m>0) FULNESS ->  FUL           hopefulness    ->  hopeful
+\      (m>0) OUSNESS ->  OUS           callousness    ->  callous
+\      (m>0) ALITI   ->  AL            formaliti      ->  formal
+\      (m>0) IVITI   ->  IVE           sensitiviti    ->  sensitive
+\      (m>0) BILITI  ->  BLE           sensibiliti    ->  sensible
+
+\  The test for the string S1 can be made fast by doing a program 
+\  switch on the penultimate letter of the word being tested. This 
+\  gives a fairly even breakdown of the possible values of the string 
+\  S1. It will be seen in fact that the S1-strings in step 2 are 
+\  presented here in the alphabetical order of their penultimate 
+\  letter. Similar techniques may be applied in the other steps. 
+
+: STEP-2         ( z j -- z j-i )
+    CASE     2dup 1- END-C@
+    [char] a OF
+        S" ational" ENDS? IF
+            2dup  7 - MEASURE 0>
+                IF  7 -  S" ate" JOIN  THEN
+        EXIT THEN
+        S" tional" ENDS? IF
+            2dup  6 - MEASURE 0>
+                IF  6 -  S" tion" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] c OF
+        S" enci" ENDS? IF
+            2dup  4 - MEASURE 0>
+                IF  4 -  S" ence" JOIN  THEN
+        EXIT THEN
+        S" anci" ENDS? IF
+            2dup  4 - MEASURE 0>
+                IF  4 -  S" ance" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] e OF
+        S" izer" ENDS? IF
+            2dup  4 - MEASURE 0>
+                IF  4 -  S" ize" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] g OF
+        S" logi" ENDS? IF
+            2dup  4 - MEASURE 0>
+                IF  4 -  S" log" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] l OF
+        S" bli" ENDS? IF
+            2dup  3 - MEASURE 0>
+                IF  3 -  S" ble" JOIN  THEN
+        EXIT THEN
+        S" alli" ENDS? IF
+            2dup  4 - MEASURE 0>
+                IF  4 -  S" al" JOIN  THEN
+        EXIT THEN
+        S" entli" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" ent" JOIN  THEN
+        EXIT THEN
+        S" eli" ENDS? IF
+            2dup  3 - MEASURE 0>
+                IF  3 -  S" e" JOIN  THEN
+        EXIT THEN
+        S" ousli" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" ous" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] o OF
+        S" ization" ENDS? IF
+            2dup  7 - MEASURE 0>
+                IF  7 -  S" ate" JOIN  THEN
+        EXIT THEN
+        S" ation" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" ate" JOIN  THEN
+        EXIT THEN
+        S" ator" ENDS? ANDIF  2dup  4 - MEASURE 0>  THEN
+            IF  4 -  S" ate" JOIN  EXIT THEN
+    ENDOF
+    [char] s OF
+        S" alism" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" al" JOIN  THEN
+        EXIT THEN
+        S" iveness" ENDS? IF
+            2dup  7 - MEASURE 0>
+                IF  7 -  S" ive" JOIN  THEN
+        EXIT THEN
+        S" fulness" ENDS? IF
+            2dup  7 - MEASURE 0>
+                IF  7 -  S" ful" JOIN  THEN
+        EXIT THEN
+        S" ousness" ENDS? IF
+            2dup  7 - MEASURE 0>
+                IF  7 -  S" ous" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] t OF
+        S" aliti" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" al" JOIN  THEN
+        EXIT THEN
+        S" iviti" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" ive" JOIN  THEN
+        EXIT THEN
+        S" biliti" ENDS? IF
+            2dup  6 - MEASURE 0>
+                IF  6 -  S" ble" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    ENDCASE ;
+
+\  STEP-3 deals with -ic-, -full, -ness etc. similar strategy to step-2.
+
+\      (m>0) ICATE ->  IC              triplicate     ->  triplic
+\      (m>0) ATIVE ->                  formative      ->  form
+\      (m>0) ALIZE ->  AL              formalize      ->  formal
+\      (m>0) ICITI ->  IC              electriciti    ->  electric
+\      (m>0) ICAL  ->  IC              electrical     ->  electric
+\      (m>0) FUL   ->                  hopeful        ->  hope
+\      (m>0) NESS  ->                  goodness       ->  good
+
+: STEP-3
+    CASE  2dup END-C@
+    [char] e OF
+        S" icate" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" ic" JOIN  THEN
+        EXIT THEN
+        S" ative" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -               THEN
+        EXIT THEN
+        S" alize" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" al" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] i OF
+        S" iciti" ENDS? IF
+            2dup  5 - MEASURE 0>
+                IF  5 -  S" ic" JOIN  THEN
+        EXIT THEN
+    ENDOF
+    [char] l OF
+        S" ical" ENDS? IF
+            2dup  4 - MEASURE 0>
+                IF  4 -  S" ic" JOIN  THEN
+        EXIT THEN
+        S" ful" ENDS? IF
+            2dup  3 - MEASURE 0>
+                IF  3 -               THEN
+        EXIT THEN
+    ENDOF
+    [char] s OF
+        S" ness" ENDS? IF
+            2dup  4 - MEASURE 0>
+                IF  4 -               THEN
+        EXIT THEN
+    ENDOF
+    ENDCASE ;
+
+\  STEP4 takes off -ant, -ence etc., in context <c>vcvc<v>.
+
+\    (m>1) AL    ->                  revival        ->  reviv
+\    (m>1) ANCE  ->                  allowance      ->  allow
+\    (m>1) ENCE  ->                  inference      ->  infer
+\    (m>1) ER    ->                  airliner       ->  airlin
+\    (m>1) IC    ->                  gyroscopic     ->  gyroscop
+\    (m>1) ABLE  ->                  adjustable     ->  adjust
+\    (m>1) IBLE  ->                  defensible     ->  defens
+\    (m>1) ANT   ->                  irritant       ->  irrit
+\    (m>1) EMENT ->                  replacement    ->  replac
+\    (m>1) MENT  ->                  adjustment     ->  adjust
+\    (m>1) ENT   ->                  dependent      ->  depend
+\    (m>1 and (*S or *T)) ION ->     adoption       ->  adopt
+\    (m>1) OU    ->                  homologou      ->  homolog
+\    (m>1) ISM   ->                  communism      ->  commun
+\    (m>1) ATE   ->                  activate       ->  activ
+\    (m>1) ITI   ->                  angulariti     ->  angular
+\    (m>1) OUS   ->                  homologous     ->  homolog
+\    (m>1) IVE   ->                  effective      ->  effect
+\    (m>1) IZE   ->                  bowdlerize     ->  bowdler
+
+: STEP-4
+    CASE  2dup 1- END-C@
+    [char] a OF
+        S" al" ENDS? IF
+            2dup 2 - MEASURE 1 >
+                IF  2 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] c OF
+        S" ance" ENDS?  IF
+            2dup 4 - MEASURE 1 >
+                IF  4 -  THEN
+        EXIT THEN
+        S" ence" ENDS?  IF
+            2dup 4 - MEASURE 1 >
+                IF  4 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] e OF
+        S" er" ENDS?  IF
+            2dup 2 - MEASURE 1 >
+                IF  2 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] i OF
+        S" ic" ENDS?  IF
+            2dup 2 - MEASURE 1 >
+                IF  2 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] l OF
+        S" able" ENDS?  IF
+            2dup 4 - MEASURE 1 >
+                IF  4 -  THEN
+        EXIT THEN
+        S" ible" ENDS?  IF
+            2dup 4 - MEASURE 1 >
+                IF  4 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] n OF
+        S" ant" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+        S" ement" ENDS?  IF
+            2dup 5 - MEASURE 1 >
+                IF  5 -  THEN
+        EXIT THEN
+        S" ment" ENDS?  IF
+            2dup 4 - MEASURE 1 >
+                IF  4 -  THEN
+        EXIT THEN
+        S" ent" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] o OF
+        S" tion" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+        S" sion" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+        S" ou" ENDS?    IF
+            2dup 2 - MEASURE 1 >
+                IF  2 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] s OF
+        S" ism" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] t OF
+        S" ate" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+        S" iti" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] u OF
+        S" ous" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] v OF
+        S" ive" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+    ENDOF
+    [char] z OF
+        S" ize" ENDS?  IF
+            2dup 3 - MEASURE 1 >
+                IF  3 -  THEN
+        EXIT THEN
+    ENDOF
+    ENDCASE ;
+
+\  STEP-5 removes a final -e if m(z) > 1, and changes -ll to -l if
+\  m(z) > 1.
+
+\  The suffixes are now removed. All that remains is a little tidying up.
+
+\      (m>1) E     ->                  probate        ->  probat
+\                                      rate           ->  rate
+\      (m=1 and not *o) E ->           cease          ->  ceas
+\      (m > 1 and *d and *L) -> single letter
+\                                      controll       ->  control
+\                                      roll           ->  roll
+
+: STEP-5
+    S" e" ENDS? IF
+        2dup 1- MEASURE 1 > IF  1-
+        ELSE
+        2dup 1- MEASURE 1 =  ANDIF  2dup 1- CVC NOT THEN
+            IF  1-  THEN
+        THEN
+    THEN
+    S" ll" ENDS? IF
+        2dup  1- MEASURE 1 >
+            IF 1- THEN
+    THEN ;
+
+\  The algorithm is careful not to remove a suffix when the stem is 
+\  too short, the length of the stem being given by its measure, m. 
+\  There is no linguistic basis for this approach. It was merely 
+\  observed that m could be used quite effectively to help decide 
+\  whether or not it was wise to take off a suffix. For example, in 
+\  the following two lists: 
+
+\                    list A        list B
+\                    ------        ------
+\                    RELATE        DERIVATE
+\                    PROBATE       ACTIVATE
+\                    CONFLATE      DEMONSTRATE
+\                    PIRATE        NECESSITATE
+\                    PRELATE       RENOVATE
+
+\  -ATE is removed from the list B words, but not from the list A 
+\  words. This means that the pairs DERIVATE/DERIVE, ACTIVATE/ACTIVE, 
+\  DEMONSTRATE/DEMONS- TRABLE, NECESSITATE/NECESSITOUS, will conflate 
+\  together. The fact that no attempt is made to identify prefixes can 
+\  make the results look rather inconsistent. Thus PRELATE does not 
+\  lose the -ATE, but ARCHPRELATE becomes ARCHPREL. In practice this 
+\  does not matter too much, because the presence of the prefix 
+\  decreases the probability of an erroneous conflation. 
+
+\  Complex suffixes are removed bit by bit in the different steps. 
+\  Thus GENERALIZATIONS is stripped to GENERALIZATION (Step 1), then 
+\  to GENERALIZE (Step 2), then to GENERAL (Step 3), and then to GENER 
+\  (Step 4). OSCILLATORS is stripped to OSCILLATOR (Step 1), then to 
+\  OSCILLATE (Step 2), then to OSCILL (Step 4), and then to OSCIL 
+\  (Step 5). In a vocabulary of 10,000 words, the reduction in size 
+\  of the stem was distributed among the steps as follows: 
+
+\      Suffix stripping of a vocabulary of 10,000 words
+\      ------------------------------------------------
+\      Number of words reduced in step 1:   3597
+\                    "                 2:    766
+\                    "                 3:    327
+\                    "                 4:   2424
+\                    "                 5:   1373
+\      Number of words not reduced:         3650
+
+: STEM    ( z j -- z' j' )
+\     >R  PAD R@ MOVE  PAD R>
+    my.pad place my.pad count
+    dup 3 < IF  EXIT  THEN
+    STEP-1AB
+    STEP-1C
+    STEP-2
+    STEP-3
+    STEP-4
+    STEP-5
+    ;
+
+s" caresses" stem type cr  \  caress
+s" ponies" stem type cr    \  poni
+s" ties" stem type cr      \  ti
+s" caress" stem type cr    \  caress
+s" cats" stem type cr      \  cat
+
+s" feed" stem type cr      \  feed
+s" agreed" stem type cr    \  agre
+s" disabled" stem type cr  \  disabl
+
+s" matting" stem type cr   \  mat
+s" mating" stem type cr    \  mate
+s" meeting" stem type cr   \  meet
+s" milling" stem type cr   \  mill
+s" messing" stem type cr   \  mess
+s" meetings" stem type cr  \  meet
+s" information" stem type cr
+s" wickedness" stem type cr
+s" horrible" stem type cr
+s" sensational" stem type cr
+s" tentative" stem type cr
+s" standardization" stem type cr
+s" tentatively" stem type cr
+

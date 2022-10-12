@@ -1,0 +1,26 @@
+\ 4tH library - Integer square root remainder - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] sqrt-rem [IF]
+
+\ The integer square root of a non─negative number is computed
+\ using a version of quadratic residue, which has the advantage
+\ that only integer arithmetic is required.
+
+: sqrt-rem                             ( n -- sqrt rem)
+  >r 0 1 begin dup r@ > except 4 * repeat
+  begin                                \ find a power of 4 greater than TORS
+    dup 1 >                            \ compute while greater than unity
+  while
+    2/ 2/ swap over over + negate r@ + \ integer divide by 4
+    dup 0< if drop 2/ else rdrop >r 2/ over + then swap
+  repeat drop r>                       ( sqrt rem)
+;
+[THEN]
+
+\ ." Integer square roots of 7^n" cr
+\ 7 21 0 do i 1+ 2 .r 3 spaces dup sqrt-rem drop . cr 7 * loop
+
+
+

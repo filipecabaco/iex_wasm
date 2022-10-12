@@ -1,0 +1,43 @@
+\ Preprocessor FOOS demo - Copyright 2013, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Derived from: http://rosettacode.org/wiki/Polymorphic_copy#Aikido
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+:class T()                             \ super class T
+   extends Object
+     virtual: print                    \ print message
+     method:  clone                    \ clone yourself
+   end-extends
+                                       \ implementing methods
+   :virtual print ." class T" cr ;method
+
+   :method clone                       ( a1 -- a2)
+     this allocated dup allocate abort" Cannot create object"
+     tuck this swap rot smove
+   ;method
+;class
+
+:class S()                             \ class S
+   extends T()                         \ derived from T
+   end-extends                         \ print message
+                                       \ clone yourself
+   :virtual print ." class S" cr ;method
+;class
+
+instance T() t                         \ create a new object t
+instance S() s                         \ create a new object s
+
+." before copy" cr
+t => print                             \ use "print" methods
+s => print
+
+t -> clone value tcopy                 \ cloning t, spawning tcopy
+s -> clone value scopy                 \ cloning s, spawning scopy
+
+." after copy" cr
+tcopy => print                         \ use "print" methods
+scopy => print

@@ -1,0 +1,4 @@
+\ Range extensions for CASE..OF..ENDOF..ENDCASE
+\ Allegedly first published in FD, believed to be in the Public Domain
+
+:macro le over min ; :macro ge over max ; :macro lt 1- le ; :macro gt 1- ge ;

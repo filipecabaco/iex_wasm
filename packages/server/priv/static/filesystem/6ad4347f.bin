@@ -1,0 +1,100 @@
+\ Preprocessor mediator pattern demo
+\ 4tH version - Copyright 2017, 2022 J.L. Bezemer
+
+\ The Code Project Open License (CPOL) 1.02
+\ Full license: https://www.codeproject.com/info/cpol10.aspx
+
+\ Translation of https://www.codeproject.com/Articles/186187/Mediator-Design-Pattern
+
+include lib/memcell.4th
+include lib/dstringt.4th
+
+include 4pp/lib/foos.4pp
+include 4pp/foos/list.4pp
+
+:class IMediator
+   extends Object
+     field:   Colleagues
+     virtual: DistributeMessage
+     virtual: Register
+   end-extends
+;class
+
+:class IColleague
+   extends Object
+     virtual: SendMessage
+     virtual: ReceiveMessage
+   end-extends
+;class
+
+:class ConcreteMediator
+   extends IMediator
+   end-extends
+
+   :new new List this -> Colleagues ! ;method
+   :delete this -> Colleagues @ delete ;method
+                                       ( col --)
+   :virtual Register this -> Colleagues @ -> lpush ;method
+
+   :virtual DistributeMessage          ( a n col --)
+      this -> Colleagues @ -> lsize 1-
+      begin                            ( a n col i)
+        dup 0<
+      except                           ( a n i col1 col2 f)
+        tuck this -> Colleagues @ -> lget over over =
+        if drop else -rot >r >r >r 2dup r> => ReceiveMessage r> r> then swap 1-
+      repeat drop drop 2drop
+   ;method
+;class
+
+:class ConcreteColleague
+   extends IColleague
+     field: name
+   end-extends
+
+   :new this -> name dup ds.init ds.place ;method
+   :delete this -> name ds.free ;method
+                                       ( a n med --)
+   :virtual SendMessage this swap => DistributeMessage ;method
+
+   :virtual ReceiveMessage             ( a n --)
+      this -> name ds.count type ."  received " type cr
+   ;method
+;class
+
+\ list of participants
+s" ColleagueA" new ConcreteColleague value colleagueA
+s" ColleagueB" new ConcreteColleague value colleagueB
+s" ColleagueC" new ConcreteColleague value colleagueC
+s" ColleagueD" new ConcreteColleague value colleagueD
+
+\ first mediator
+new ConcreteMediator value mediator1
+
+\ participants registers to the mediator
+colleagueA mediator1 => Register
+colleagueB mediator1 => Register
+colleagueC mediator1 => Register
+
+\ participantA sends out a message
+s" MessageX from ColleagueA" mediator1 colleagueA => SendMessage
+
+\ second mediator
+new ConcreteMediator value mediator2
+
+\ participants registers to the mediator
+colleagueB mediator2 => Register
+colleagueD mediator2 => Register
+
+\ participantB sends out a message
+s" MessageY from ColleagueB" mediator2 colleagueB => SendMessage
+
+\ clean up the whole shebang
+colleagueA delete
+colleagueB delete
+colleagueC delete
+colleagueD delete
+
+mediator1 delete
+mediator2 delete
+

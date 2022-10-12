@@ -1,0 +1,66 @@
+\ 4tH library - Dynamic arrays - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+[UNDEFINED] +darray  [IF]
+[UNDEFINED] resize   [IF] include lib/memcell.4th [THEN]
+[UNDEFINED] E.LIBERR [IF] include lib/throw.4th   [THEN]
+
+4 constant (/dlen)                     \ initial size
+
+struct
+  field: (nxt)                         \ next available element
+  field: (max)                         \ maximum number of elements
+end-struct (/darray)                   \ length of headers
+                                       \ prepare for resizing, get info
+: (d.size) @ dup -> (max) @ 2 cells ;  ( v -- a n cells*2)
+                                       \ resize the dynamic array
+: (d.resize)                           ( a1 n1 +/-1 v --)
+  >r >r dup (/darray) + rot swap resize E.LIBERR throw" Cannot resize darray"
+  r> over -> (nxt) +! tuck -> (max) ! r> !
+;                                      \ update fields
+                                       \ check if address within range
+: (d.check)                            ( n1 v -- a2)
+  over over @ -> (nxt) @ < if @ -> (/darray) cells + swap cells + ;then
+  true E.LIBERR throw" Index darray out of range"
+;                                      \ if not, bomb out
+                                       \ create a dynamic array from variable
+: +darray                              ( v --)
+  (/darray) (/dlen) cells + allocate E.LIBERR throw" Cannot allocate darray"
+  0 over -> (nxt) ! (/dlen) over -> (max) ! swap !
+;                                      \ initialize and store address
+                                       ( v --)
+: -darray @ free E.LIBERR throw" Cannot free darray" ;
+: d.len @ -> (nxt) @ ;                 ( v -- n)
+                                       \ extend the dynamic array
+: d.cell+                              ( v --)
+  dup >r d.len r@ @ -> (max) @ < if 1 r> @ -> (nxt) +! ;then
+  r@ (d.size) * 1 r> (d.resize)        \ within range, adjust count
+;                                      \ resize to double size if needed
+                                       \ shrink the dynamic array
+: d.cell-                              ( v --)
+  dup >r @ -> (max) @ 2/ r@ d.len 1- < if -1 r> @ -> (nxt) +! ;then
+  r@ (d.size) / -1 r> (d.resize)       \ within range, adjust count
+;                                      \ resize to half size if needed
+
+( n1 n2 v --)       ( n1 v -- n2)
+: d.! (d.check) ! ; : d.@ (d.check) @ ;
+                                       \ debugging tool
+\ : (d.dump) @ dup -> (max) @ cells (/darray) + bounds ?do i ? loop cr ;
+
+[DEFINED] 4TH# [IF]
+  hide (nxt)
+  hide (max)
+  hide (/darray)
+  hide (/dlen)
+  hide (d.size)
+  hide (d.resize)
+  hide (d.check)
+[THEN]
+[THEN]
+
+\ variable myarray myarray +darray myarray d.cell+ 15 0 myarray d.!
+\ 0 myarray d.@ . cr myarray d.cell+ myarray d.cell+ myarray d.cell+
+\ myarray d.cell+ myarray d.cell+ 125 4 myarray d.! 4 myarray d.@ . cr
+\ myarray d.cell- myarray -darray depth .
+

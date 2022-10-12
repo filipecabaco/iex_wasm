@@ -1,0 +1,703 @@
+\ TEONW-based on the original report by Energy Commission USA
+\ Developed on a Digital PDP-11 with BASIC V01B-02
+
+\ A long time ago, when I was still a student, I got my hands on a very
+\ fascinating book called "The effects of nuclear weapons" from the Energy
+\ Commision USA. It was filled with diagrams and tables and enabled you to
+\ calculate the effects of a nuclear attack. After five long hours, I got my
+\ first results. And it was 4 AM. I knew when I stayed on working and
+\ calculating, I was gonna lose a lot of sleep.
+
+\ However, it was 1981 and at the institute we had a highly modern machine: a
+\ real PDP-11 with a massive memory of 256 kB and two (floppy) diskdrives. I
+\ converted the diagrams into tables and wrote a program in BASIC V10B-02. It
+\ was called TEONW (The Effects Of Nuclear Weapons).
+
+\ I had never heard of structured programming and to debug the program I
+\ needed a room as long as the listing. If the program said 'GOTO 5670' I
+\ really crawled to line 5670! I never got all the bugs ironed out..
+
+\ For old time sake I converted the program to the Spectrum, maintaining the
+\ look and feel of these old machines. However, I used some dirty routines I
+\ had picked up somewhere to allow 64 chars per line and entering data in the
+\ upper screen.
+
+\ When the Z80 Spectrum emulator of Gerton Lunter came out, I wrote BDDE and
+\ transferred the program to an .Z80 file. The .Z80 file was moved from MS-DOS
+\ to Linux. I extracted the ZX-Basic with Fuse-utils "listbasic"
+\ (http://fuse-emulator.sourceforge.net/) and made it run under "blassic"
+\ (http://blassic.org/) for analysis and debugging purposes.
+
+[UNDEFINED] ANS [IF]
+  include lib/zenfloat.4th
+  include lib/zenans.4th
+[ELSE]
+  include lib/ansfloat.4th
+[THEN]
+
+include lib/fpin.4th
+include lib/fpout.4th
+include lib/fequals.4th
+include lib/fenter.4th
+include lib/ulcase.4th
+include lib/compare.4th
+include lib/yesorno.4th
+
+[DEFINED] ZenFP [IF]
+  include lib/zenconst.4th
+  include lib/zenfalog.4th
+  include lib/zenfsqrt.4th
+[ELSE]
+  include lib/falog.4th
+  include lib/ftrunc.4th
+[THEN]
+
+include 4pp/lib/float.4pp              \ preprocessor floating point support
+
+hide e                                 \ override floating point constant
+
+:macro farray @1@ floats array #1# does> swap floats + ` ;` ;
+
+ 1 constant R1:_OUT_OF_COMPUTERDATA
+ 2 constant R2:_OUT_OF_COMPUTERDATA
+ 4 constant HIGH_ALTITUDE_AIR          \ T$ message
+ 8 constant HIGH_ALTITUDE_HEAT         \ V$ message
+16 constant NO_50_PERCENT_BORDER
+
+ 0 value  status                       \ special cases
+ 0 value  #err                         \ exception counter W3
+
+ 5 farray m                            \ temporary airpressure array
+64 string myname                       \ name of player
+
+fvariable yield                        \ J1
+fvariable J2                           \ J2
+fvariable density                      \ J3
+fvariable J4                           \ J4
+fvariable height                       \ J5
+fvariable P1                           \ P1
+fvariable P2                           \ P2
+fvariable 210J                         \ R1
+fvariable 42J                          \ R2
+fvariable crater-radius                \ S1
+fvariable crater-depth                 \ S2
+fvariable crater-rim                   \ S3
+fvariable S4                           \ S4
+fvariable casualties                   \ S5
+fvariable V1                           \ V1
+fvariable V2                           \ V2
+fvariable V3                           \ V3
+fvariable V4                           \ V4
+fvariable V8                           \ V8
+fvariable W1                           \ W1
+fvariable W2                           \ W2
+fvariable W4                           \ W4
+fvariable Z1                           \ Z1
+fvariable Z2                           \ Z2
+fvariable Z4                           \ Z4
+
+create a 104 , 129 , 404 , 777 , 1165 ,
+create b ," 81.96e" ," 101.67e" ," 318.4e"  ," 612.38e" ," 918.17e"
+create c ," 57.35e" ," 71.13e"  ," 222.77e" ," 428.44e" ," 642.28e"
+create d ," 31.62e" ," 39.23e"  ," 122.85e" ," 236.27e" ," 354.25e"
+create e ," 15.48e" ," 19.2e"   ," 60.14e"  ," 115.66e" ," 173.42e"
+create f ," 7.58e"  ," 9.4e"    ," 29.45e"  ," 56.64e"  ," 84.92e"
+create g ," 5.43e"  ," 6.74e"   ," 21.1e"   ," 40.57e"  ," 60.84e"
+create h ," 1.9e"   ," 2.35e"   ," 7.37e"   ," 14.18e"  ," 21.26e"
+                                       \ runtime behavior constants
+: constant@  swap cells + @c s>f ;
+: fconstant@ swap cells + @c count s>float ;
+                                       \ assign runtime behavior to arrays
+:redo a constant@  ; :redo b fconstant@ ;
+:redo c fconstant@ ; :redo d fconstant@ ;
+:redo e fconstant@ ; :redo f fconstant@ ;
+:redo g fconstant@ ; :redo h fconstant@ ;
+
+: surface-circle fdup f* pi f* ;       ( f1 -- f2)
+: +status status or to status ;        ( n --)
+: status? status and 0<> ;             ( n -- f)
+: +exception #err 1+ dup to #err 2 < if W2 f@ 210J f! then 210J f@ f0< throw ;
+: f? f@ 2 0 f.r space ;                ( r --)
+: .km f@ f% 1000 f/ 2 0 f.r space ;   ( r --)
+
+: 42J=W4 W4 f@ fdup 42J f! f0< throw ; ( --)
+: check-W4? >r >r W4 f@ fover r> s>f f% 100 f/ f* r> s>f f+ f<= ;
+                                       ( r n1 n2 -- r f)
+: check-210J                           ( r n1 n2 n3 -- r)
+  210J f@ f% 0 f<=
+  if
+    >r >r >r V4 f@ r> s>f f/ fover fdup f* fover fover f>=
+    if f- fsqrt W2 f! else fdrop fdrop then
+    W2 f@ fover r> s>f f% 100 f/ f* r> s>f f+ f<= if +exception then
+  else                                  \ W2=SQR ((V4*n)-(J5*J5))
+    drop drop drop
+  then
+;
+
+: ?set-W4                              ( r n -- r)
+  >r V8 f@ r> s>f f/ fover fdup f* fover fover f>=
+  if f- fsqrt W4 f! else fdrop fdrop then
+;                                      \ W4=SQR ((V8*n)-(J5*J5))
+
+: calculate-casualties                 ( --)
+  S4 f@ density f@ fover fover f/ 1 m f@ f% 1000 f/ surface-circle
+  fswap f- fswap f% 0.75e f* f* f+ ftrunc casualties f!
+;                            \ S5=INT ((((((M(2)/1000)*(M(2)/1000))*PI)
+                             \ -(S4/J3))*(J3*.75))+S4)
+: correct-casualties                   ( --)
+  Z1 f@ surface-circle Z2 f@ surface-circle f-
+  density f@ f% 4 f/ f* S4 f@ f+ casualties f!
+;                            \ S5=(((FN Q(Z1)-FN Q(Z2))*(J3/4))+S4)
+
+\ ###PRESENTATIE
+
+: presentation                         ( --)
+  cr ." CONGRATULATIONS! YOU ACHIEVED EXCELLENT RESULTS!" cr
+  J2 f@ f% -5 f<
+  if
+    ." YOUR BOMB EXPLODED TOO HIGH TO MAKE A CRATER." cr
+  else
+    J2 f@ f% 62 f<
+    if
+      ." YOUR BOMB MADE A CRATER WITH A RADIUS OF " crater-radius f?
+      ." METER," cr ." A DEPTH OF " crater-depth f?
+      ." METER AND A RIM OF " crater-rim f? ." METER." cr
+    else                               \ PRINT SUBROUTINE "GROT"
+      ." THE UNDERGROUND EXPLOSION WAS TOO DEEP TO REACH THE SURFACE." cr
+      ." HOWEVER, A CHIMNEY OF CONSIDERABLE SIZE WAS FORMED." cr
+    then
+  then
+
+  HIGH_ALTITUDE_HEAT status?
+  if
+    ." BECAUSE THE CONSIDERABLE ALTITUDE OF EXPLOSION, MOST OF" cr
+    ." THE RADIATION DIMINISHED. IT ONLY CAUSED EYE DAMAGE TO" cr
+    ." THOSE WHO WERE LOOKING STRAIGHT INTO THE FIREBALL." cr
+  else
+    J2 f@ f% 0 f<= R1:_OUT_OF_COMPUTERDATA status? 0= and
+    if
+      ." OVER A DISTANCE OF " 210J f? ." METER EVERTHING IS BURNED TO THE "
+      ." GROUND." cr
+      R2:_OUT_OF_COMPUTERDATA status? 0=
+      if
+        ." THE HEAT WAS SO INTENSE THAT EVEN AFTER " 42J f? ." METER, IT WAS" cr
+        ." STILL POWERFUL ENOUGH TO CAUSE DAMAGE TO BUILDINGS AND PEOPLE." cr
+      then
+    then
+  then
+
+  ." NOT A LIVING SOUL HAS SURVIVED WITHIN A RADIUS OF " 0 m f? ." METER." cr
+
+  NO_50_PERCENT_BORDER status? 0=
+  if
+    1 m f@ f0= 0=
+    if
+      ." AND EVEN " 1 m .km ." KM FROM GROUND ZERO ONLY HALF "
+      ." THE POPULATION MADE IT." cr
+    then
+
+    Z1 f@ f0= 0= J2 f@ f% 0 f<= and
+    if ." THE BLAST EFFECTS DIMINISHED AFTER " Z1 .km ." KM." cr then
+  then
+
+  ." ALL IN ALL, ABOUT " casualties f@ f>s . ." PEOPLE WERE KILLED TODAY." cr
+
+  HIGH_ALTITUDE_AIR status?
+  if
+    ." BECAUSE OF THE HIGH ALTITUDE OF THE EXPLOSION, THE SHOCK WAVE HAD "
+    ." LITTLE EFFECT."
+  else
+    ." NOT THAT THERE WOULD BE ANY SHELTER FOR THEM. OVER A DISTANCE OF" cr
+    2 m .km ." KM NOT A STONE HAS BEEN LEFT ON TOP OF THE "
+    ." OTHER." cr ." EVEN BUILDINGS "
+    4 m .km ." KM AWAY ARE RIPPED APART." cr
+    ." THE BLAST THAT CAUSED IT WAS SO POWERFUL, THAT EVEN AFTER " cr
+    3 m .km ." KM IT HAD THE FORCE OF A HURRICANE." cr
+  then
+
+  ." AN EXCELLENT RESULT! I WILL RECOMMEND YOU TO A COLLEGUE OF MINE IN" cr
+  ." THE PENTAGON. MAYBE PRESIDENT REAGAN WILL GIVE YOU THE OPPORTUNITY" cr
+  ." TO DO IT AGAIN, BUT THIS TIME FOR REAL!" cr
+  s" WOULD YOU LIKE THAT" yes/no?
+  if
+    ." FINALLY A MAN WITH A SENSE OF RESPONSIBILITY!" cr
+  else
+    ." YOU'RE YELLOW, " myname count type
+    ." . I EXPECTED SO MUCH MORE OF YOU!" cr
+  then
+;
+                                       ( --)
+: exception?
+  catch if
+    ." THAT'S BEYOND ME!" cr cr ." ?BAH" cr
+    s" DO YOU WANT TO PLAY AGAIN" yes/no?
+    if ." I DON'T." cr else abort then
+  else
+    presentation abort
+  then
+;
+
+\ ###SLACHTOFFERCORRECTIES
+
+: casualty-corrections
+  density f@ f% 1000000 f/ density f!
+  yield f@ f% 0.4e f** fdup f% 200 f* 1 m f! f% 365 f* Z1 f!
+  0 m f@ 1 m f@ f<
+  if
+    S4 f@ 1 m f@ surface-circle 0 m f@ surface-circle f-
+    density f@ f% 0.75e f* f* f+ S4 f! 1 m f@ Z2 f! correct-casualties
+  else                       \ S4=S4+((FN Q(M(2))-FN Q(M(1)))*(J3*.75))
+    NO_50_PERCENT_BORDER +status
+    0 m f@ Z1 f@ f>
+    if S4 f@ ftrunc casualties f! else 0 m f@ Z2 f! correct-casualties then
+  then
+;
+
+\   R1: 210 J/CM^2
+\   R2: 42 J/CM^2
+\   S1: STRAAL KRATER
+\   S2: DIEPTE KRATER
+\   S3: HOOGTE RAND
+
+: calc-crater
+  P1 f@ J4 f@ f* fdup fdup crater-radius f!
+  0 m f@ f>= J2 f@ f% 0 f> and
+  if                         \ S1=P1*J4
+    f% 1.25e f* 0 m f!       \ M(1)=S1*1.25
+    f% 0 1 m f!              \ M(2)=0
+    NO_50_PERCENT_BORDER +status
+  else
+    fdrop
+  then                       \ S2=P2*J4 : S3=S2/4
+
+  P2 f@ J4 f@ f* fdup crater-depth f! f% 4 f/ crater-rim f!
+  210J f@ 0 m f@  fover f< if 0 m f! else fdrop then
+  0 m f@ f% 1000 f/ surface-circle density f@ f* S4 f!
+                             \ S4=(M(1)/1000)*(M(1)/1000)*PI*J3
+  J2 f@ f% -5 f<
+  if
+    height f@ fnegate yield f@ f% 0.4e f** f/ f% 200 f>
+    if
+      calculate-casualties
+    else
+      1 m f@ 0 m f@ fover f> >r yield f@ f% 0.4e f** f% 200 f* f< r> or
+      if casualty-corrections then
+    then
+  else
+    J2 f@ f% 0 f> if calculate-casualties else casualty-corrections then
+  then
+;
+
+\ ###HITTESTRALING
+
+: energy-corrections                   ( r --)
+  fnegate height f!                    \ J5=J5*-1
+  210J f@ 42J f@  fover f<= if R2:_OUT_OF_COMPUTERDATA +status then
+  f% 0 f<= if HIGH_ALTITUDE_HEAT +status then
+;
+
+: final-radiation                      ( -- r)
+  W1 f@ yield f@ f* fdup
+  f% 159155 f* V4 f!                   \ V4=W1*J1*159155
+  f% 795773 f* V8 f!                   \ V8=W1*J1*795773
+  height f@ fdup f% 1500 f>            ( height f)
+  if
+    V8 f@ f% 2 f/ fover fdup f* f- fsqrt W4 f!
+  else
+    V4 f@ fover fdup f* f>=            \ W2=SQR (V4-(J5*J5))
+    if V4 f@ fover fdup f* f- fsqrt W2 f! then
+    V8 f@ fover fdup f* f<             ( height f)
+    if
+      exit
+    else                               \ W4=SQR (V8-(J5*J5))
+      V8 f@ fover fdup f* f- fsqrt W4 f!
+      W2 f@ f% 1500 f<= if +exception then
+      W4 f@ f% 1500 f>                 ( height f)
+      if                               \ W4=SQR ((V8*.5)-(J5*J5))
+        V8 f@ f% 2 f/ fover fdup f* fover fover f>=
+        if f- fsqrt W4 f! else fdrop fdrop then
+      else
+        42J=W4 exit
+      then
+    then
+  then
+
+  2 340 9500 check-210J
+  340 9500 check-W4? if 42J=W4 exit then
+  10 ?set-W4
+
+  10 1175 26300 check-210J
+  1175 26300 check-W4? if 42J=W4 exit then
+  100 ?set-W4
+
+  100 2075 51000 check-210J
+  2075 51000 check-W4? if 42J=W4 exit then
+  1000 ?set-W4
+
+  1000 3675 100000 check-210J
+  3675 100000 check-W4? if 42J=W4 exit then
+  10000 ?set-W4
+
+  10000 6475 200000 check-210J
+  6475 200000 check-W4? if 42J=W4 then
+;
+                        \ W1=((100000-J5)/20000)*.25
+: height>80000          ( r --)
+  f% 100000 fswap f- f% 80000 f/
+;
+                        \ LET W1=.25
+: height>60000          ( r --)
+  fdrop f% 0.25e
+;
+                        \ W1=(((J5-50000)/10000)*.25)+(((60000-J5)/10000)*.6)
+: height>50000
+  fdup f% 50000 f- f% 10000 f/ f% 0.25e f*
+  f% 60000 frot f- f% 10000 f/ f% 0.6e f* f+
+;
+                        \ W1=(((J5-30000)/20000)*.6)+(((50000-J5)/20000)*.42)
+: height>30000
+  fdup f% 30000 f- f% 20000 f/ f% 0.6e f*
+  f% 50000 frot f- f% 20000 f/ f% 0.42e f* f+
+;
+                        \ W1=(((J5-20000)/10000)*.42)+(((30000-J5)/10000)*.35)
+: height>20000
+  fdup f% 20000 f- f% 10000 f/ f% 0.42e f*
+  f% 30000 frot f- f% 10000 f/ f% 0.35e f* f+
+;
+
+create calc-heat
+  80000 , ' height>80000 ,
+  60000 , ' height>60000 ,
+  50000 , ' height>50000 ,
+  30000 , ' height>30000 ,
+  20000 , ' height>20000 ,
+
+does>                                  \ 20000 < height < 100000
+  >r begin fdup r@ @c s>f f< while r> cell+ cell+ >r repeat
+  r> cell+ @c execute
+;
+
+: calc-radiation
+  height f@ fdup f% 100000 f>=
+  if
+    fdrop HIGH_ALTITUDE_HEAT +status f% 0 W1 f!
+  else
+    fdup f% 20000 f<=
+    if
+      yield f@ flog
+      f% 1.8e fover f** f% 16 f* V1 f! \ V1=16*(1.8^(LOG10(J1)))
+      f% 2    fover f** f% 32 f* V2 f! \ V2=32*(2^(LOG10(J1)))
+      f% 2.3e fswap f** f% 64 f* V3 f! \ V3=64*(2.3^(LOG10(J1)))
+      fdup V1 f@ f<=
+      if
+        fdrop f% 0.2e W1 f!
+      else
+        fdup V2 f@ f<=
+        if                \ W1=(((J5-V1)/(V2-V1))*.25)+(((V2-J5)/(V2-V1))*.2)
+          fdup V1 f@ f- V2 f@ V1 f@ f- f/ f% 0.25e f*
+          V2 f@ frot f- V2 f@ V1 f@ f- f/ f% 0.2e  f* f+ W1 f!
+        else
+          fdup V3 f@ f<
+          if              \ W1=(((J5-V2)/(V3-V2))*.35)+(((V3-J5)/(V3-V2))*.25)
+            fdup V2 f@ f- V3 f@ V2 f@ f- f/ f% 0.35e f*
+            V3 f@ frot f- V3 f@ V2 f@ f- f/ f% 0.25e f* f+ W1 f!
+          else
+            fdrop f% 0.35e W1 f!
+          then
+        then
+      then
+    else
+      calc-heat W1 f!
+    then final-radiation
+  then energy-corrections
+;
+
+\ # TOPEKA, MIDDELPUNT U.S.A-PROEFGEBIED
+\ - CALCUTTA:     40,000 INWONERS PER KM^2
+\ - MANHATTAN:    25,000 INWONERS PER KM^2
+\ - NEW YORK:     10,000 INWONERS PER KM^2
+\ - U.S.A.:           25 INWONERS PER KM^2
+\ - ##STAD X:       5750 INWONERS PER KM^2
+\ - JAPAN:          2000 INWONERS PER KM^2
+
+: J2>250                     ( r -- r)
+  f% 0 fdup 0 m f! 1 m f!    \ M(1)=0 : M(2)=0 : M(3)=604
+  f% 604 2 m f!
+;
+
+: J2>193                     ( r -- r)
+  f% 0 fdup 0 m f! 1 m f!    \ M(1)=0 : M(2)=0 : M(3)=A(3)+(J2*.8)
+  2 a fover f% 0.8e f* f+ 2 m f!
+;
+
+: J2>160                     ( r -- r)
+  f% 0 0 m f!                \ M(1)=0 : M(2)=137.5-((J2-138)*2.5)
+  f% 137.5e fover f% 138 f- f% 2.5e f* f- 1 m f!
+  2 a fover f% 0.8e f* f+ 2 m f!   \ M(3)=A(3)+(J2*.8)
+;
+
+: J2>138                     \ M(1)=A(1)-((J2-108)*2)
+  0 a fover f% 108 f- fdup f+ f- 0 m f!
+  f% 137.5e fover f% 138 f- f% 2.5e f* f- 1 m f!
+  2 a fover f% 0.8e f* f+ 2 m f!
+;                            \ M(2)=137.5-((J2-138)*2.5) : M(3)=A(3)+(J2*.8)
+
+: J2>108                     \ M(1)=A(1)-((J2-108)*2)
+  0 a fover f% 108 f- fdup f+ f- 0 m f!
+  1 a fover f% 0.0615e f* f+ 1 m f!
+  2 a fover f% 0.8e f* f+ 2 m f!
+;                            \ M(2)=A(2)+(J2*.0615) : M(3)=A(3)+(J2*.8)
+
+: J2<108                     ( r -- r)
+  0 a 0 m f!                 \ M(1)=A(1)
+  1 a fover f% 0.0615e f* f+ 1 m f!
+  2 a fover f% 0.8e f* f+ 2 m f!
+;                            \ M(2)=A(2)+(J2*.0615) : M(3)=A(3)+(J2*.8)
+
+create calc-J2
+   250 , ' J2>250 ,
+   193 , ' J2>193 ,
+   160 , ' J2>160 ,
+   138 , ' J2>138 ,
+   108 , ' J2>108 ,
+
+does>                                  \ 108 < J2 < 305
+  >r begin fdup r@ @c s>f f<= while r> cell+ cell+ >r repeat
+  r> cell+ @c execute
+;
+
+\ ###LUCHTDRUK BIJ AIRBURSTS
+                        \ Z4=(((J5-45750)/6500)*.1)+(((52250-J5)/6500)*.3)
+: air>45750
+  fdup f% 45750 f- f% 6500 f/ f% 0.1e f*
+  f% 52250 frot f- f% 6500 f/ f% 0.3e f* f+
+;
+                        \ Z4=(((J5-36500)/9250)*.3)+(((45750-J5)/9250)*.55)
+: air>36500
+  fdup f% 36500 f- f% 9250 f/ f% 0.3e  f*
+  f% 45750 frot f- f% 9250 f/ f% 0.55e f* f+
+;
+                        \ Z4=(((J5-27500)/9000)*.55)+(((36500-J5)/9000)*.75)
+: air>27500
+  fdup f% 27500 f- f% 9000 f/ f% 0.55e f*
+  f% 36500 frot f- f% 9000 f/ f% 0.75e f* f+
+;
+                        \ Z4=(((J5-18000)/9500)*.75)+(((27500-J5)/9500)*.9)
+: air>18000
+  fdup f% 18000 f- f% 9500 f/ f% 0.75e f*
+  f% 27500 frot f- f% 9500 f/ f% 0.9e  f* f+
+;
+                        \ Z4=(((J5-12000)/6000)*.9)+(((18000-J5)/6000)*.95)
+: air>12000
+  fdup f% 12000 f- f% 6000 f/ f% 0.9e  f*
+  f% 18000 frot f- f% 6000 f/ f% 0.95e f* f+
+;
+
+create calc-air                        \ 12000 < height < 52250
+   45750 , ' air>45750 ,
+   36500 , ' air>36500 ,
+   27500 , ' air>27500 ,
+   18000 , ' air>18000 ,
+   12000 , ' air>12000 ,
+
+does>
+  >r begin fdup r@ @c s>f f<= while r> cell+ cell+ >r repeat
+  fdrop r> cell+ @c execute
+;
+
+: adjust>12000                         ( Z4 --)
+  yield f@ f* fdup yield f! f% 1 f% 3 f/ f** fdup J4 f!
+  height f@ fswap f/ J2 f!
+;
+
+: surface-pressure
+  yield  f@ J2 f@ J4 f@      \ save original values
+  height f@ fdup f% 52250 f>
+  if
+    fdrop HIGH_ALTITUDE_AIR +status
+    fdrop fnegate J2 f! fdrop
+  else
+    fdup f% 12000 f>        \ J1=J1*Z4 : J4=J1^(1/3) : J2=J5/J4
+    if calc-air fdup Z4 f! adjust>12000 else fdrop then
+
+    J2 f@ fdup f% 305 f> throw
+    fdup f% 108 f<= if J2<108 else calc-J2 then
+
+    3 a fover f% 1.6e f* f+ 3 m f!
+    f% 2.65e f* 4 a f+ 4 m f!
+                             \ M(4)=A(4)+(J2*1.6) : M(5)=A(5)+(J2*2.65)
+    5 0 do i m f@ J4 f@ f* i m f! loop \ scale calculated values
+    J4 f! fnegate J2 f! yield f!       \ restore values
+  then                       \ FOR N=1 TO 5 : M(N)=M(N)*J4 : NEXT N
+                             \ J2=-1*J2
+  height f@ f% 12000 f> if Z4 f@ adjust>12000 then
+  calc-radiation
+;
+
+\ ###AFMETINGEN KRATER
+
+: crater>60                  \ P1=(1550-(J2*25))/2 : P2=(403-(J2*6.5))/2
+  f% 1550 J2 f@ f% 25   f* f- f% 2 f/ P1 f!
+  f%  403 J2 f@ f% 6.5e f* f- f% 2 f/ P2 f!
+;
+
+: crater>55                  \  P1=(1025-(J2*15))/5 : P2=(782.5+(J2*12.5))/5
+  f% 1025    J2 f@ f% 15    f* f- f% 5 f/ P1 f!
+  f%  782.5e J2 f@ f% 12.5e f* f+ f% 5 f/ P2 f!
+;
+
+\ ###LUCHTDRUK BIJ ONDERGRONDSE EXPLOSIES
+
+: under>62
+  5 0 do                     \ LET Z1=((J2-62)/22)*H(N)
+    J2 f@ f% 62 f- f% 22 f/ i h f* fdup Z1 f!
+    f% 84 J2 f@ f- f% 22 f/ i g f* fdup Z2 f!
+    f+ J4 f@ f* i m f!       \ LET Z2=((84-J2)/22)*G(N)
+  loop                       \ LET M(N)=(Z1+Z2)*J4
+;
+
+: under>55
+  5 0 do                     \ LET Z1=((J2-55)/7)*G(N)
+    J2 f@ f% 55 f- f% 7 f/ i g f* fdup Z1 f!
+    f% 62 J2 f@ f- f% 7 f/ i f f* fdup Z2 f!
+    f+ J4 f@ f* i m f!       \ Z2=((62-J2)/7)*F(N) : M(N)=(Z1+Z2)*J4
+  loop
+
+  J2 f@ f% 60 f> if crater>60 else crater>55 then
+;
+
+: under>40
+  5 0 do                     \ LET Z1=((J2-40)/15)*F(N)
+    J2 f@ f% 40 f- f% 15 f/ i f f* fdup Z1 f!
+    f% 55 J2 f@ f- f% 15 f/ i e f* fdup Z2 f!
+    f+ J4 f@ f* i m f!       \ Z2=((55-J2)/15)*E(N) : M(N)=(Z1+Z2)*J4
+  loop                       \ P1=(1081.25+(J2*8.75))/15
+                             \ P2=(807.5+(J2*9.5))/15
+  f% 1081.25e J2 f@ f% 8.75e f* f+ f% 15 f/ P1 f!
+  f%  807.5e  J2 f@ f% 9.5e  f* f+ f% 15 f/ P2 f!
+;
+
+: under>25
+  5 0 do                     \ LET Z1=((J2-25)/15)*E(N)
+    J2 f@ f% 25 f- f% 15 f/ i e f* fdup Z1 f!
+    f% 40 J2 f@ f- f% 15 f/ i d f* fdup Z2 f!
+    f+ J4 f@ f* i m f!       \ Z2=((40-J2)/15)*D(N) : M(N)=(Z1+Z2)*J4
+  loop                       \ P1=(681.25+(J2*1.25))/15
+                             \ P2=(327.5+(J2*2.5))/15
+  f% 681.25e J2 f@ f% 1.25e f* f+ f% 15 f/ P1 f!
+  f% 327.5e  J2 f@ f% 2.5e  f* f+ f% 15 f/ P2 f!
+;
+
+: under>12.5
+  5 0 do                     \ LET Z1=((J2-12.5)/12.5)*D(N)
+    J2 f@ f% 12.5e f- f% 12.5e f/ i d f* fdup Z1 f!
+    f% 25 J2 f@ f- f% 12.5e f/ i c f* fdup Z2 f!
+    f+ J4 f@ f* i m f!       \ Z2=((25-J2)/12.5)*C(N) : M(N)=(Z1+Z2)*J4
+  loop                       \ P1=(406.25+(J2*7.5))/12.5
+                             \ P2=(200+(J2*5))/12.5
+  f% 406.25e J2 f@ f% 7.5e f* f+ f% 12.5e f/ P1 f!
+  f% 200     J2 f@ f% 5    f* f+ f% 12.5e f/ P2 f!
+;
+
+: under>5
+  5 0 do                     \ LET Z1=((J2-5)/7.5)*C(N)
+    J2 f@ f% 5 f- f% 7.5e f/ i c f* fdup Z1 f!
+    f% 12.5e J2 f@ f- f% 7.5e f/ i b f* fdup Z2 f!
+    f+ J4 f@ f* i m f!       \ Z2=((12.5-J2)/7.5)*B(N) : M(N)=(Z1+Z2)*J4
+  loop                       \ P1=(112.5+(J2*15))/7.5 : P2=(32+(J2*10))/7.5
+
+  f% 112.5e J2 f@ f% 15 f* f+ f% 7.5e f/ P1 f!
+  f% 32     J2 f@ f% 10 f* f+ f% 7.5e f/ P2 f!
+;
+
+: under>0
+  5 0 do                     \ LET Z1=(J2/5)*B(N)
+    J2 f@ f% 5 f/ i b f* fdup Z1 f!
+    f% 5 J2 f@ f- f% 5 f/ i a f* fdup Z2 f!
+    f+ J4 f@ f* i m f!       \ Z2=((5-J2)/5)*A(N) : M(N)=(Z1+Z2)*J4
+  loop                       \ P1=(75+(J2*10))/5 : P2=(37.5+(J2*2.5))/5
+
+  f% 75    J2 f@ f% 10   f* f+ f% 5 f/ P1 f!
+  f% 37.5e J2 f@ f% 2.5e f* f+ f% 5 f/ P2 f!
+;
+
+: under>-5
+  5 0 do                     \ LET Z1=0
+    f% 0 fdup Z1 f! Z2 f!    \ LET Z2=0
+    i a J4 f@ f* i m f!      \ LET M(N)=A(N)*J4
+  loop
+                             \ LET P1=(75+(J2*15))/5
+  f% 75    J2 f@ f% 15    f* f+ f% 5 f/ P1 f!
+  f% 37.5e J2 f@ f%  7.5e f* f+ f% 5 f/ P2 f!
+  height f@ fnegate height f! calc-radiation
+;                            \ LET P2=(37.5+(J2*7.5))/5
+
+create calc-under                      \ -5 < J2 < 84
+   620 ,  ' under>62 ,
+   550 ,  ' under>55 ,
+   400 ,  ' under>40 ,
+   250 ,  ' under>25 ,
+   125 ,  ' under>12.5 ,
+    50 ,  ' under>5 ,
+     0 ,  ' under>0 ,
+   -50 ,  ' under>-5 ,
+
+does>
+  >r begin fdup r@ @c s>f f% 10 f/ f<= while r> cell+ cell+ >r repeat
+  fdrop r> cell+ @c execute
+;
+
+: underground-pressure
+  height f@ fnegate height f!          \ work with positive number for depth
+  J2 f@ fnegate fdup J2 f! fdup f% 84 f> throw calc-under
+;
+
+\ M(1): 100% DODEN (7 BAR OVERPRESSURE)
+\ M(2): 50% DODEN (4.5 BAR OVERPRESSURE)
+\ M(3): ZWARE SCHADE BIJ 0.42 BAR OVERPRESSURE
+\ M(4): BEAUFORT 12 BIJ 0.14 BAR OVERPRESSURE
+\ M(5): LICHTE SCHADE BIJ .07 BAR OVERPRESSURE
+
+: calc-airpressure                     ( -- f)
+  height f@ yield f@ f% 1 f% 3 f/ f** fdup J4 f! f/ fdup J2 f!
+  f% 5 f>= if surface-pressure else underground-pressure then
+;
+
+: enter-name                           ( --)
+  refill drop 0 parse s>upper 2dup myname count compare 0=
+  abort" I TOLD YOU: I DON'T WANT TO PLAY WITH YOU ANYMORE!"
+  2dup ." WELCOME, " type ." !" cr myname place
+;
+
+: enter-parameters                     ( --)
+  ." YOUR NAME, PLEASE." cr
+  enter-name
+
+  ." TODAY YOU CAN LAUNCH A VIRTUAL NUCLEAR ATTACK, WHEREVER YOU WANT TO." cr
+
+  ." WHAT IS THE YIELD OF YOUR BOMB IN KILOTONS TNT?" cr
+  fenter yield f!
+
+  ." WHAT IS THE ALTITUDE OF THE EXPLOSION IN METERS?" cr
+  ." ENTER A NEGATIVE VALUE FOR UNDERGROUND EXPLOSIONS." cr
+  fenter height f!
+
+  ." WHAT IS THE POPULATION DENSITY IN NUMBER OF PEOPLE PER SQUARE KM?" cr
+  fenter density f!
+;
+
+: reset f% 0 fdup 210J f! fdup 42J f! fdup W2 f! fdup W4 f! Z1 f! ;
+
+: (teonw)
+  reset
+  enter-parameters
+  calc-airpressure
+  calc-crater
+;
+
+: teonw
+  fclear 20 set-precision 0 dup myname place
+  begin ['] (teonw) exception? again
+;
+
+teonw

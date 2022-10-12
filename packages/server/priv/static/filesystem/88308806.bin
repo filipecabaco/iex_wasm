@@ -1,0 +1,38 @@
+\ 4tH program - Make blockfile - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/cstring.4th                \ for STRING/C
+
+1024 constant b/buf                    \ size of a standard block
+b/buf buffer: screen                   \ to speed up writing
+
+: getsize                              ( a n1 -- n2)
+  2dup number error?                   \ just number of blocks?
+  
+  if                                   \ ok, it must be a size
+    drop string/c bl or >r number error? if rdrop ;then r>
+                                       \ what remains must be a number
+    case                               \ now see what we got
+      [char] m of 1024 * ;endof        \ megabytes are required
+      [char] k of ;endof               \ kilobytes are required
+      >r dup 0> if negate then r>      \ this is no good at all      
+    endcase                            \ return a negative number
+  ;then >r 2drop r>                    \ we got it, drop the string
+;    
+
+: makeblk                              \ give a name or we choose one
+  argn 3 < if s" new.scr" else 2 args then
+  argn 2 < abort" Usage: makeblk size|number <blockfile>"
+  1 args getsize dup 0< abort" Invalid size" -rot
+                                       \ get requested size
+  output open error? abort" Cannot open blockfile"
+  dup use                              \ try opening the file
+
+  b/buf screen blank                   \ blank the buffer
+  swap 0 ?do screen b/buf type loop    \ now write them out
+  
+  close                                \ close the file
+;
+
+makeblk

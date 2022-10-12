@@ -1,0 +1,99 @@
+\ Example taken from: http://soton.mpeforth.com/flag/fms/index.html
+\ Assumed to be in the public domain
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+:class point
+  extends object
+    field:   x                         \ define an instance variable
+    field:   y
+    virtual: show:
+    method:  dot:
+  end-extends
+                                       \ define a message name
+  :virtual show: this -> x ? this -> y ? ;method
+                                       \ a late bound send of show: to self
+  :method dot: ." Point at " this => show: ;method  
+  :new 0 this -> x ! 0 this -> y ! ;method
+;class                                 \ called at object instantiation time
+
+instance point origin                  \ instantiate point object named origin
+origin -> dot: cr                      \ send a message to the object
+\ =>   Point at 0 0
+
+:class label-point 
+  extends point                        \ the superclass is class point
+  end-extends
+  
+  :virtual show: ." X" this -> x ?  ." Y" this -> y ? ;method
+;class
+
+instance label-point p1
+
+p1 -> dot: cr
+\ => Point at X0 Y0                    \ demonstrates that show:
+
+p1 delete 
+                                       \ is late-bound in class point
+:class rectangle
+  extends object
+    sizeof point +field ul             \ use a previously defined class
+    sizeof point +field lr             \ to create two embedded objects
+    method: dot
+    method: show
+  end-extends
+                                       \ initialize the two embedded objects
+  :new this -> ul point this -> lr point ;method
+  :method show this -> ul -> dot: this -> lr -> dot: ;method
+  :method dot ." Rectangle, " this -> show ;method
+;class
+
+instance rectangle r
+
+r -> dot cr
+\ => Rectangle, Point at 0 0 Point at 0 0
+
+r delete
+
+\ Dynamically allocate objects in the heap.
+\ Once created, their use is identical to dictionary objects.
+
+new point                             \ nameless object is placed on the stack
+dup -> dot: cr                        \ message sends are the same
+\ =>  Point at 0 0     
+
+delete                                \ free the heap memory
+
+\ Accessing overridden methods using SUPER  
+
+:class foo
+  extends object
+    virtual: x:
+    virtual: y: 
+  end-extends
+  
+  :default x:  ." x: from foo  " ;method
+  :default y:  ." y: from foo  " this => x: ;method 
+;class
+
+instance foo myfoo
+myfoo => y: cr
+\ =>  y: from foo  x: from foo 
+
+myfoo delete
+
+:class bar 
+  extends foo
+  end-extends
+  
+  :virtual x:  ." x: from bar  " ;method
+  :virtual y:  ." y: from bar  " this <- y: ;method
+;class                                 \ overridden y: method using <-
+
+instance bar mybar                     \ note that “x: from bar” is invoked
+mybar => y: cr                         \ by “this => x:” in class foo
+
+\ =>  y: from bar  y: from foo  x: from bar 
+mybar delete 
+ 

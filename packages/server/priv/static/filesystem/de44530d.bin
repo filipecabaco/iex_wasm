@@ -1,0 +1,32 @@
+\ 4tH library - Damm checksum algorithm - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ 1. Calculate checksum => submit number, returns checksum digit
+\ 2. Check number with valid last digit checksum = submit number, returns 0
+
+[UNDEFINED] damm [IF]
+
+offset (damm)
+  0 c, 3 c, 1 c, 7 c, 5 c, 9 c, 8 c, 6 c, 4 c, 2 c,
+  7 c, 0 c, 9 c, 2 c, 1 c, 5 c, 4 c, 8 c, 6 c, 3 c,
+  4 c, 2 c, 0 c, 6 c, 8 c, 7 c, 1 c, 3 c, 5 c, 9 c,
+  1 c, 7 c, 5 c, 0 c, 9 c, 8 c, 3 c, 4 c, 2 c, 6 c,
+  6 c, 1 c, 2 c, 3 c, 0 c, 4 c, 5 c, 9 c, 7 c, 8 c,
+  3 c, 6 c, 7 c, 4 c, 2 c, 0 c, 9 c, 5 c, 8 c, 1 c,
+  5 c, 8 c, 6 c, 9 c, 7 c, 2 c, 0 c, 1 c, 3 c, 4 c,
+  8 c, 9 c, 4 c, 5 c, 3 c, 6 c, 2 c, 0 c, 1 c, 7 c,
+  9 c, 4 c, 3 c, 8 c, 6 c, 1 c, 7 c, 2 c, 0 c, 5 c,
+  2 c, 5 c, 8 c, 1 c, 4 c, 3 c, 6 c, 7 c, 9 c, 0 c,
+
+: damm                                 ( n1 -- n2)
+  (error) >r begin dup while 10 /mod swap >r repeat
+  begin r> (error) over <> while swap 10 * + (damm) repeat drop
+;                                      \ unroll the number to the stack
+                                       \ and calculate checksum
+[DEFINED] 4TH# [IF] hide (damm) [THEN]
+[THEN]
+
+\ 10008 damm . ( valid) depth .
+
+

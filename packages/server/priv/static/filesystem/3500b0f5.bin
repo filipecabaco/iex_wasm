@@ -1,0 +1,32 @@
+\ 4tH library - Binary Quicksort - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ NOTE: This routine can ONLY be used to sort unsigned integers!
+\       Although PRECEDES is provided, it has NO effect!
+
+[UNDEFINED] sort     [IF]
+[UNDEFINED] highbit  [IF] include lib/constant.4th [THEN]
+[UNDEFINED] precedes [IF] defer precedes [THEN]
+                                       \ for QSORT compatibility
+: binquick                             ( a1 a2 n -- )
+  >r over over over over = unless      \ pointers must be unequal
+    begin
+      over over <                      \ begin pointer less than end pointer
+    while
+      swap                             \ find highest zero bit element
+      begin over over > while dup @ r@ and except cell+ repeat swap
+      begin over over < while dup @ r@ and while  cell- repeat
+      over over < if over @ over @ >r over ! over r> swap ! >r cell+ r> then
+    repeat                             \ swap with lowest non-zero bit
+                                       \ adjust the pointers
+    dup  @ r@ and unless swap >r over over > if cell+ then r> swap then
+    over @ r@ and if >r  swap >r over over < if cell- then r> swap r> then
+                                       \ shift right, if non-zero recurse
+    r> 1 rshift dup >r if rot r@ recurse r> recurse ;then
+  then drop drop drop drop rdrop       \ drop all values
+;
+                                       ( a n --)
+: sort 1- cells over + highbit binquick ;
+[THEN]                                 \ QSORT type stack diagram
+

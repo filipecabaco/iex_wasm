@@ -1,0 +1,51 @@
+\ Preprocessor template pattern demo - Copyright 2021, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+
+:class Game
+   extends Object
+     virtual: initialize
+     virtual: startPlay
+     virtual: endPlay
+     method:  Play
+   end-extends
+
+  :method play                         \ this is the template method
+     this => initialize
+     this => startplay
+     this => endPlay
+  ;method
+;class
+
+:class Mario                           \ implement the specific methods
+  extends Game
+  end-extends
+
+  :virtual initialize ." Mario Game Initialized! Start playing." cr ;method
+  :virtual startPlay ." Mario Game Started. Enjoy the game!" cr ;method
+  :virtual endPlay ." Mario Game Finished!" cr ;method
+;class
+
+:class Tankfight                       \ implement the specific methods
+  extends Game
+  end-extends
+
+  :virtual initialize
+     ." Tankfight Game Initialized! Start playing." cr
+  ;method
+
+  :virtual startPlay ." Tankfight Game Started. Enjoy the game!" cr ;method
+  :virtual endPlay ." Tankfight Game Finished!" cr ;method
+;class
+
+new Tankfight value myGame             \ create a game instance
+myGame -> play cr                      \ play it
+myGame delete                          \ now destroy it
+
+new Mario to myGame                    \ and do it once again
+myGame -> play cr
+myGame delete
+

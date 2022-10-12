@@ -1,0 +1,39 @@
+\ 4tH test - EOL terminations - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+defer EOL
+
+: text
+  ." The Merman"  EOL
+  EOL
+  ." This morning" EOL
+  ." I was woken by the sun" EOL
+  ." Its rays felt like the long hair" EOL
+  ." of a beautiful fairhaired woman" EOL
+  EOL
+  ." I dressed and went outside" EOL
+  ." to see that the sky had changed" EOL
+  EOL
+  ." I read all the signs:" EOL
+  ." The dew on the roses was perfect" EOL
+  ." The birds flew in the right direction" EOL
+  EOL
+  ." May be it is time" EOL
+  ." to return to the water" EOL
+;
+
+: .tab 9 emit ;
+: .eol 0 parse 2dup 1- chars + 0 max c@ . .tab type cr ;
+: >file output open dup use text close ;
+: file> input open dup use begin refill while .eol repeat close cr ;
+
+[: 13 emit ;] is EOL         s" crfile.txt"   >file
+[: 13 emit 10 emit ;] is EOL s" crlffile.txt" >file
+[: 10 emit ;] is EOL         s" lffile.txt"   >file
+
+.( CR file)   cr s" crfile.txt"   file>
+.( CRLF file) cr s" crlffile.txt" file>
+.( LF file)   cr s" lffile.txt"   file>
+
+.( Stack: ) depth . cr

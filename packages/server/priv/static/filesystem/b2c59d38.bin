@@ -1,0 +1,188 @@
+\ High Accuracy Table Lookup Using Cubic Interpolation
+
+\ Author: Brad Eckert                                   brad@tinyboot.com
+
+\ Adapted for 4tH by J.L. Bezemer, 18 December 2011
+
+\ This algorithm basically trades speed for table size by assuming that the
+\ line joining points in a lookup table is really a curve. The value in question
+\ rests on the curve between the two middle points of a four point segment.  The
+\ curve is assumed to be a third degree polynomial that passes through all four
+\ points.
+
+\ Intended for use on small processors, this code uses only integer arithmetic.
+\ I originally wrote this code to calculate various transcendental functions to
+\ 16-bit precision.  There are more efficient ways to approximate such
+\ functions, but the general purpose method presented here lends itself to
+\ arbitrary functions too.
+
+\ This implemention is in ANS Forth using the CORE and CORE EXT wordsets.
+
+\ The theory behind the algorithm is as follows:
+
+\ Given points y0, y1, y2 and y3, there is a point f(x) between y1 and y2
+\ where the region of interest is 0 <= x < 1.
+
+\ f(x) = w0 + w1 * x + w2 * x^2 + w3 * x^3
+
+\ Here, I use two different ways of constraining the equation.  One method
+\ forces the curve to pass through all four points:
+
+\     For four equally spaced points (n = -1,0,1,2), f(n) gives four equations:
+
+\     f(-1) = y0 = w0 - w1 + w2 - w3
+\     f(0)  = y1 = w0
+\     f(1)  = y2 = w0 + w1 + w2 + w3
+\     f(2)  = y3 = w0 + 2w1 + 4w2 + 8w3
+
+\     Simultaneously solving these equations yields the following coefficients
+\     upon which the algorithm is based:
+
+\     w0 = y1
+\     w1 = (-2y0 - 3y1 + 6y2 -  y3) / 6
+\     w2 = ( 3y0 - 6y1 + 3y2      ) / 6
+\     w3 = ( -y0 + 3y1 - 3y2 +  y3) / 6
+
+\ The other method forces the curve to pass through the two middle points and
+\ the slope of the curve at either middle point to be fixed as the slope between
+\ its neighbors.
+
+\     f(0) = y1
+\     f(1) = y2
+\     f'(0) = (y2-y0)/2
+\     f'(1) = (y3-y1)/2
+
+\     By differentiating f(x) a couple of times and applying a little algebra,
+\     we get the following coefficients:
+
+\     w0 = y1
+\     w1 = ( -y0 + y2 ) / 2
+\     w2 = ( 2y0 - 5y1 + 4y2 - y3 ) / 2
+\     w3 = ( -y0 + 3y1 - 3y2 + y3 ) / 2
+
+\     This method forces the slopes of each table segment to match up, giving a
+\     smoother result. Use this one for calibration tables and motion profiles
+\     where you want more smoothness, and the other for math functions where
+\     you want better accuracy. Note that one method doesn't use division.
+
+\ The word CUBIC4 does the approximation using four data points at an address.
+\ CUBIC does indexing and scaling so as to be useful in using a lookup table.
+
+\ The algorithm takes some shortcuts to keep the math simple, so a wildly
+\ varying lookup table could cause an overflow.  In typical applications, you
+\ won't come close to this situation.  But, it always pays to test.
+
+\ The example at the end represents the first quadrant of a sine function using
+\ 19 data points.  This gives better than 16-bit precision.
+
+\ To find the worst case error, let g(x) be the fourth derivative of f(x).  Find
+\ the value of x that gives the highest absolute value of g(x).  Feed CUBIC4 a
+\ frac value of maxint/2 and an address pointing to the worst case position.
+\ Then, compare the result to f(x).
+
+[DEFINED] 4TH# [IF]                    \ if compiling for 4tH
+  include lib/fp1.4th                  \ choose FP configuration
+  [DEFINED] ZenFP [IF]                 \ if a Zen configuration
+    include lib/zenfsin.4th            \ for FSIN
+    include lib/zendegrd.4th           \ for DEG>RAD
+  [ELSE]                               \ if an ANS configuration
+    include lib/fsinfcos.4th           \ for FSIN
+    include lib/fdeg2rad.4th           \ for DEG>RAD
+    fclear 100 set-precision           \ initialize ANS FP
+  [THEN]
+  :macro s>d dup 0< negate ;           \ create a true S>D
+  include 4pp/lib/float.4pp            \ preprocessor floating point support
+[ELSE]                                 \ if compiling for ANS-Forth
+  include lib/ezpp4th.4th              \ for F%
+  : @c @ ;                             \ define @C
+[THEN]
+
+1 constant smoother? ( Smoother or more accurate? See above explanation. )
+
+\ : d2*           2dup d+ ;
+: d3*           2dup d2* d+ ;           \ quick multiply by constant
+: d4*           d2* d2* ;
+: d5*           2dup d2* d2* d+ ;           
+: d6*           d2* d3* ;
+
+variable wptr   \ points to the input data
+
+: @seq          ( -- d )                \ get next point for coefficients
+                wptr @ @c s>d           ( write in assembly for speed )
+                1 cells wptr +! ;
+
+: seqnew        ( a -- 0.0 )            \ set up for coefficient calculation
+                wptr ! ( 0.0) 0 s>d ;
+
+: cterm         ( frac n1 n2 -- n3 )    \ n3 = n1 * frac + n2
+                >r m* d2*
+                -1 1 rshift invert s>d d+ nip  \ round
+                r> + ;
+
+smoother? [IF]
+
+: w1            ( a -- n )              \ 2 * w1 = -y0+y2
+        seqnew  @seq d-         @seq 2drop
+                @seq d+         drop ;
+
+: w2            ( a -- n )              \ 2 * w2 = 2y0-5y1+4y2-y3
+        seqnew  @seq d2* d+     @seq d5* d-
+                @seq d4* d+     @seq d- drop ;
+
+: w3            ( a -- n )              \ 2 * w3 = -y0+3y1-3y2+y3
+        seqnew  @seq d-         @seq d3* d+
+                @seq d3* d-     @seq d+ drop ;
+
+: cubic4        ( frac a -- n )         \ frac = 0..maxint
+\ perform cubic interpolation on 4-cell table at a
+                >r dup dup r@ w3        \ w3
+                r@ w2      cterm        \ w3*f + w2
+                r@ w1      cterm 2/     \ (w3*n*n + w2*n + w1) / 2
+                r> cell+ @c cterm ;     \ *n + y1
+[ELSE]
+: w1            ( a -- n )              \ 6 * w1
+        seqnew  @seq d2* d-     @seq d3* d-
+                @seq d6* d+     @seq d-         drop ;
+
+: w2            ( a -- n )              \ 6 * w2
+        seqnew  @seq d3* d+     @seq d6* d-
+                @seq d3* d+                     drop ;
+
+: w3            ( a -- n )              \ 6 * w3
+        seqnew  @seq d-         @seq d3* d+
+                @seq d3* d-     @seq d+         drop ;
+
+: cubic4        ( frac a -- n )         \ frac = 0..maxint
+\ perform cubic interpolation on 4-cell table at a
+                >r dup dup r@ w3        \ w3
+                r@ w2      cterm        \ w3*f + w2
+                r@ w1      cterm 6 /    \ (w3*n*n + w2*n + w1) / 6
+                r> cell+ @c cterm ;     \ *n + y1
+[THEN]
+
+: tcubic        ( n1 addr -- n2 )
+\ perform cubic interpolation on table at addr
+\ n1 = 0..2^cellsize-1
+                dup cell+ >r  @c       ( n1 tablesize | addr )
+                um*   >r 1 rshift r>   ( frac offset | addr )
+                cells r> + cubic4 ;
+
+: CUBIC         ( n1 span addr -- n2 )
+\ perform cubic interpolation on table at addr, n1 = 0..span-1
+                >r >r 0 swap r> um/mod nip
+                r> tcubic ;
+
+create exampletable                    \ Sine table (1st quadrant)
+16 ,                                   ( 16 points plus 3 endpoints )
+-3212 , 0 , 3212 , 6393 , 9512 , 12540 , 15447 , 18205 ,
+20788 , 23170 , 25330 , 27246 , 28899 , 30274 , 31357 , 32138 ,
+32610 , 32767 , 32610 ,                \ clipped to maxint for 16-bit 4ths
+
+
+CR .( Cubic interpolation using 19-pt integer table )
+CR .( 32768*sin[10degrees] is )      10 90 ExampleTable CUBIC .
+CR
+CR .( Floating-point calculation )
+CR .( 10e deg>rad FSIN 32768e F* is ) f% 10 deg>rad FSIN f% 32768 F* F. cr
+
+

@@ -1,0 +1,55 @@
+\ The MIT License (MIT)
+
+\ Copyright (c) 2016 Andy Cook (dizzib)
+
+\ Permission is hereby granted, free of charge, to any person obtaining a copy of
+\ this software and associated documentation files (the "Software"), to deal in
+\ the Software without restriction, including without limitation the rights to
+\ use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+\ the Software, and to permit persons to whom the Software is furnished to do so,
+\ subject to the following conditions:
+
+\ The above copyright notice and this permission notice shall be included in all
+\ copies or substantial portions of the Software.
+
+\ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+\ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+\ FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+\ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+\ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+\ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+\ Translated from Javascript, https://github.com/dizzib/earthcalc
+
+\ This app calculates how much a distant object is obscured by the earth's
+\ curvature, and makes the following assumptions:
+
+\ 1. the earth is a convex sphere of radius 6371 kilometres
+\ 2. light travels in straight lines
+
+include lib/fp2.4th
+include lib/fenter.4th
+include lib/zenfsqrt.4th
+
+6371 constant EarthRadius
+
+: getHorizonDistance_km                ( f1 -- f2)
+  fdup fdup f* fswap EarthRadius dup + s>f f* f+ fsqrt
+;
+
+: getHiddenHeight_km                   ( f1 -- f2)
+  fdup f0< if fdrop 0 s>f ;then
+  fdup f* EarthRadius dup * s>f f+ fsqrt EarthRadius s>f f-
+;
+
+: EarthCurve                           ( --)
+  ." Enter eye height      (m) : " fenter 1000 s>f f/ getHorizonDistance_km
+  ." Enter target distance (km): " fenter fover f- getHiddenHeight_km
+
+  fswap cr                             \ all calculated, show results
+  ." Horizon distance    " 3 10 f.r ."  km" cr
+  ." Target hidden height" 1000 s>f f* 2 10 f.r ."  m" cr
+;
+
+EarthCurve
+

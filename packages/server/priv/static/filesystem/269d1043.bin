@@ -1,0 +1,69 @@
+\ Preprocessor FOOS bridge pattern demo - Copyright 2017, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/fp4.4th
+include lib/memcell.4th
+include 4pp/lib/foos.4pp
+include 4pp/lib/float.4pp
+
+:class DrawingAPI
+   extends Object
+     virtual: drawCircle
+   end-extends
+;class
+
+:class DrawingAPI1
+   extends DrawingAPI
+   end-extends
+
+   :virtual drawCircle
+     ." API1.circle at " 0 .r ." :". ." radius " f. cr
+   ;method
+;class
+
+:class DrawingAPI2
+   extends DrawingAPI
+   end-extends
+
+   :virtual drawCircle
+     ." API2.circle at " 0 .r ." :". ." radius " f. cr
+   ;method
+;class
+
+:class Shape
+   extends Object
+     field: API
+     virtual: draw
+     virtual: resizeByPercentage
+   end-extends
+
+   :new this -> API ! ;method
+   :delete this -> API @ delete ;method
+;class
+
+:class CircleShape
+   extends Shape
+     field: x
+     field: y
+     ffield: radius
+   end-extends
+
+   :new this -> radius f! this -> y ! this -> x ! ;method
+   :virtual resizeByPercentage this -> radius dup f@ f* f! ;method
+
+   :virtual draw
+      this -> radius f@ this -> y @ this -> x @ this -> API @ => drawCircle
+   ;method
+
+   private{ x y radius }
+;class
+
+fclear
+
+1 3 f%  7 new DrawingAPI1 new CircleShape
+5 7 f% 11 new DrawingAPI2 new CircleShape swap
+
+dup dup f% 2.5e => resizeByPercentage => draw delete
+dup dup f% 2.5e => resizeByPercentage => draw delete
+

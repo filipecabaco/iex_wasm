@@ -1,0 +1,44 @@
+\ 4tH library - Human readable time - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ After Paul Rubin and Peter Honeyman
+
+\ This routine returns two transient strings which
+\ need further processing, e.g. by typing them
+
+[UNDEFINED] smh>str [IF]
+[UNDEFINED] smh>s   [IF] include lib/time.4th [THEN]
+
+create (hours)
+  ," twelve" ," one" ," two" ," three"
+  ," four" ," five" ," six" ," seven"
+  ," eight" ," nine" ," ten" ," eleven"
+does> swap 12 mod th @c count ;
+
+create (minutes)
+  ," o'clock" ," five after"
+  ," ten after" ," quarter past"
+  ," twenty after" ," twenty-five after"
+  ," half past" ," twenty-five til"
+  ," twenty til" ," quarter til"
+  ," ten til" ," five til"
+does> swap th @c count ;
+
+: s>str                                ( s -- a1 n1 a2 n2 )
+  150 + s/hour /mod (hours) 2>r
+  s/min / 5 / dup (minutes) rot 2r> rot if 2swap then
+;
+
+: smh>str smh>s s>str ;                ( s m h -- a1 n1 a2 n2 )
+
+aka smh>str time>str
+
+[DEFINED] 4TH# [IF]
+  hide (minutes)
+  hide (hours)
+[THEN]
+[THEN]
+
+\ now smh>str type space type cr
+

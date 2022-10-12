@@ -1,0 +1,17 @@
+\ Preprocessor standard macros - Copyright 2012, 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro @swap @over <1< @nip >1> ;         ( vars 1 | n1 n2 -- n2 n1)
+:macro @rot <2< @swap >2> @swap ;         ( vars 1, 2 | n1 n2 n3 -- n2 n3 n1)
+                                          ( --- | n1 -- |n1|)
+:macro _abs >>> -1 @while @drop @minus @dup ;
+:macro @abs @dup @sign _abs @drop ;
+                                          ( --- | n1 n2 -- n3)
+:macro _min >>> 1 @while @drop @nip @dup @dup ;
+:macro @min @over @over @minus @add @sign _min @drop @drop ;
+                                          ( --- | n1 n2 -- n3)
+:macro _max >>> -1 @while @drop @nip @dup @dup ;
+:macro @max @over @over @minus @add @sign _max @drop @drop ;
+                                          ( --- | f -- -f)
+:macro @not @sign @abs >>> -1 @add @abs ;

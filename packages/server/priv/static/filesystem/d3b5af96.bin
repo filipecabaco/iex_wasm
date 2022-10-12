@@ -1,0 +1,78 @@
+\ Preprocessor interpreter pattern demo - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ for ALLOCATE
+include lib/dstringt.4th               \ for DS.PLACE
+include lib/search.4th                 \ for SEARCH
+include 4pp/lib/foos.4pp
+
+: .bool if ." true" ;then ." false" ;  ( f --)
+
+:class Expression                      \ interface for all expressions
+  extends Object
+    virtual: interpret
+  end-extends
+;class
+
+:class TerminalExpression              \ holds a single, literal expression
+  extends Expression
+    field: data                        \ dynamic string, holds literal
+  end-extends
+                                       \ setup dstring and initialize it
+  :new this -> data dup ds.init ds.place ;method
+  :delete this -> data ds.free ;method \ free dynamic string
+  :virtual interpret this -> data ds.count search nip nip ;method
+                                       ( a n -- f)
+  private{ data }
+;class
+
+:class BoolExpression                  \ holds two expressions
+  extends Expression                   \ and evaluates them
+    field: expr1
+    field: expr2
+  end-extends
+                                       ( o1 o2 --)
+  :new this -> expr1 ! this -> expr2 ! ;method
+  :delete this -> expr1 @ delete this -> expr2 @ delete ;method
+
+  :default interpret                   ( a n -- f1 f2)
+    2dup this -> expr1 @ => interpret -rot this -> expr2 @ => interpret
+  ;method
+
+  private{ expr1 expr2 }
+;class
+
+:class OrExpression                    \ evaluates an "OR" expression
+  extends BoolExpression
+  end-extends
+                                       \ call default and do an "OR"
+  :virtual interpret this <- interpret or ;method
+;class                                 ( a n -- f)
+
+:class AndExpression                   \ evaluates an "AND" expression
+  extends BoolExpression
+  end-extends
+                                       \ call default and do an "AND"
+  :virtual interpret this <- interpret and ;method
+;class                                 ( a n -- f)
+
+\ Rule: Robert and John are male
+s" Robert" new TerminalExpression
+s" John"   new TerminalExpression
+instance OrExpression isMale
+
+\ Rule: Julie is a married women
+s" Julie"   new TerminalExpression
+s" Married" new TerminalExpression
+instance AndExpression isMarried
+
+." John is male? "                     \ query the rules
+s" John" isMale => interpret .bool cr
+
+." Julie is a married women? "         \ query the rules
+s" Married Julie" isMarried => interpret .bool cr
+
+isMale delete                          \ destroy expression
+isMarried delete                       \ destroy expression
+

@@ -1,0 +1,67 @@
+\ Preprocessor FOOS decorator pattern demo - Copyright 2016, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ add dynamic memory
+include 4pp/lib/foos.4pp               \ add object orientation
+
+:class SimpleCoffee                    \ simple base class
+   extends Object
+     virtual: getCost                  \ the price of this coffee
+     virtual: getIngredients           \ the ingredients of this coffee
+   end-extends
+
+   :virtual getCost 100 ;method
+   :virtual getIngredients ." Coffee" ;method
+;class
+
+:class CoffeeDecorator                 \ the decorator class
+   extends SimpleCoffee
+     field: CoffeeDecoration           \ inherited object
+   end-extends
+
+   :new this -> CoffeeDecoration ! ;method
+   :delete this -> CoffeeDecoration @ delete ;method
+   :virtual getCost this -> CoffeeDecoration @ => getCost ;method
+                                       \ get previous methods
+   :virtual getIngredients
+     this -> CoffeeDecoration @ => getIngredients
+   ;method
+;class
+
+:class WithMilk                        \ now add milk
+   extends CoffeeDecorator
+   end-extends
+                                       \ milk is 50 cents
+   :virtual getCost this -> CoffeeDecoration @ => getCost 50 + ;method
+
+   :virtual getIngredients           \ show what we got
+     this -> CoffeeDecoration @ => getIngredients ." , Milk"
+   ;method
+;class
+
+:class WithSprinkles                   \ now add sprinkles
+   extends CoffeeDecorator
+   end-extends
+                                       \ sprinkles is 20 cents
+   :virtual getCost this -> CoffeeDecoration @ => getCost 20 + ;method
+
+   :virtual getIngredients           \ show what we got
+     this -> CoffeeDecoration @ => getIngredients ." , Sprinkles"
+   ;method
+;class
+
+new SimpleCoffee value mycoffee        \ start with a simple coffee
+mycoffee => getCost . ." cents" cr     \ now what's the damage
+mycoffee => getIngredients cr cr       \ and what did we get
+
+mycoffee new WithMilk to mycoffee      \ add milk to it
+mycoffee => getCost . ." cents" cr     \ now what's the damage
+mycoffee => getIngredients cr cr       \ and what did we get
+
+mycoffee new WithSprinkles to mycoffee \ add sprinkles to it
+mycoffee => getCost . ." cents" cr     \ now what's the damage
+mycoffee => getIngredients cr          \ and what did we get
+
+mycoffee delete                        \ clean up after yourself
+

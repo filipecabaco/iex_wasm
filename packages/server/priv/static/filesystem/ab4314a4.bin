@@ -1,0 +1,56 @@
+\ Preprocessor lazy pattern demo - Copyright 2017, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of https://en.wikipedia.org/wiki/Lazy_initialization
+
+32 constant #Hashes                    \ size of hashmap
+
+include lib/memcell.4th
+include lib/dstringt.4th
+
+include 4pp/lib/foos.4pp
+include 4pp/foos/hashmap.4pp
+
+instance ObjectMap types               \ create an hashmap containing objects
+
+:class Fruit
+   extends Object
+     field:  ftype
+     method: getFruit
+     method: printCurrentTypes
+   end-extends
+
+  :new this -> ftype dup ds.init ds.place ;method
+
+  :method getFruit
+    2dup types -> hget Nothing =
+    if 2dup new Fruit -rot types -> hput else 2drop then
+  ;method
+
+  :method printCurrentTypes
+    ." Number of instances made: " types -> hsize . cr
+    types -> hsize 1-
+    begin
+      dup 0<
+    except
+      dup types -> hval -> ftype ds.count type cr 1-
+    repeat drop cr
+  ;method
+
+  :delete this -> ftype ds.free ;method
+
+  private{ ftype }
+;class
+
+s" Apple" Nothing -> getFruit
+Nothing -> printCurrentTypes
+
+s" Banana" Nothing -> getFruit
+Nothing -> printCurrentTypes
+
+s" Apple" Nothing -> getFruit
+Nothing -> printCurrentTypes
+                                       \ free all instances
+types delete
+

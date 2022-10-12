@@ -1,0 +1,11 @@
+\ Preprocessor flow control demo - Copyright 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ This version is entirely stack-based, using no registers
+
+:macro _fac @dup >>> 1 @while @drop >>> 1 @dup ;
+:macro __fac _fac @else @drop @dup >>> -1 @add __fac @drop @mul @dup ;
+:macro factorial >#> __fac @drop @mul _#_ ;
+
+." 10! = " factorial 10 . cr

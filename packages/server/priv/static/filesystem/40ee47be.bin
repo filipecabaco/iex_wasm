@@ -1,0 +1,9 @@
+\ 4tH test - BASE&EXEC - Copyright 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Change the base temporarily and execute
+
+[UNDEFINED] base&exec [IF]             ( xt n -- )
+: base&exec base @ >r base ! execute r> base ! ; 
+[THEN]

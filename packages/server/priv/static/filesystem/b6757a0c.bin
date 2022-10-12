@@ -1,0 +1,45 @@
+\ Preprocessor Sine Wave - Copyright 2014 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include 4pp/lib/standard.4pp           ( uses registers 1 and 4)
+                                       ( n1 n2 -- n3, n3=10000-n1*x*x/n2)
+:macro _kn                             ( where x is the angle)
+  >4> @over @divrm @drop @nip @minus @mul
+  >>> 10000 @divrm @drop >>> 10000 @add
+;
+                                       ( 3rd or 4th quadrant?)
+:macro _sin1                           ( map to 1st or 2nd quadrant)
+  @dup >>> -31416 @add @sign >>> 1 @while
+  @drop @swap @not @swap >>> -31416 @add @dup
+;
+                                       ( 2nd quadrant?)
+:macro _sin2                           ( map to 1st quadrant)
+  @dup >>> -15708 @add @sign >>> 1 @while
+  @drop >>> 31416 @over @minus @add @nip @dup
+;
+                                       ( negate when needed)
+:macro _sin3 @over @if @drop @minus @over ;
+
+:macro sin                             ( first wrap and clip)
+  @dup @sign >>> -1 @match @not @swap @abs >>> 62832 @divrm @nip
+  _sin1 @drop _sin2 @drop              ( x*x scaled by 10K, save in reg. 4)
+  @dup @dup @mul >>> 10000 @divrm @drop <4<
+  >>> 10000 >>> 72 _kn >>> 42 _kn >>> 20 _kn >>> 6 _kn
+  @mul >>> 10000 @divrm @drop _sin3 @drop @nip
+;                                      ( terms 3, 2, and 1 times x)
+
+:macro _label2 @if Preprocessor ;      ( change label with each line)
+:macro _label1 @dup _label2 @else 4tH compiler ;
+:macro _spaces >>> `  ` |#| >>> -1 @add @dup >>> 0 @until @drop _spaces ;
+                                       ( print number of spaces)
+:macro _calc                           ( calculate the offset)
+  @dup >>> 10000 @mul >>> 4 @divrm @drop sin
+  >>> 25 @mul >>> 260000 @add >>> 10000 @divrm @drop 
+  _spaces @drop @drop @swap _label1 @drop @not @swap @cr
+;
+                                       ( set up the sine wave and loop)
+:macro _wave _calc >>> 1 @add @dup >>> -160 @add >>> 0 @until @drop _wave ;
+:macro wave >>> 0 @dup _wave @drop @drop @drop ;
+
+wave

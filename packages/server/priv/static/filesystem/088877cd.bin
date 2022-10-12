@@ -1,0 +1,89 @@
+\ made portable by Anton Ertl, 4tH version J.L. Bezemer
+\ (*
+\  * LANGUAGE    : ANS Forth with extensions
+\  * PROJECT     : Forth Environments
+\  * DESCRIPTION : Sieve of Atkin, fastest Sieve O(n)
+\  * CATEGORY    : Example
+\  * AUTHOR      : Marcel Hendrix
+\  * LAST CHANGE : Saturday, May 21, 2022, 9:54 AM, mhx;
+\ *)
+
+\ \	NEEDS -miscutil
+
+\ 	REVISION -sieveofatkin "--- Sieve of Atkin      Version 0.04 ---"
+
+\ 	PRIVATES
+
+\ DOC
+\ (*
+\ 		 n 	runtime (ms)	     primes
+\              1,000           0	        168
+\             10,000           0	      1,229
+\            100,000           0	      9,592
+\          1,000,000           4	     78,498
+\         10,000,000          60	    664,579
+\        100,000,000        1728	  5,761,455
+\      1,000,000,000       20900	 50,847,534
+\     10,000,000,000      301417	455,052,511
+\ *)
+\ ENDDOC
+
+32768 constant /heap
+include lib/memchar.4th
+include lib/isqrt.4th
+include lib/timer.4th
+
+: sqr dup * ;
+
+aka ISQRT SQRT
+
+\ DEPTH 0= IF CR .( Stack Empty) ABORT  THEN
+
+16384 constant limit 			
+1 constant #times				
+limit SQRT 2 + value SQRT(limit+2)		
+limit SQRT 1+ value SQRT(limit+1)		
+limit 1+ ALLOCATE THROW value sieve	
+\ limit 1+ ALLOCATE THROW constant mods	
+
+\ : set# ( -- )	    limit 2 + 0 DO  I 12 MOD  mods I + C!  LOOP ;   set# 
+: init ( -- )       sieve limit 1+ ERASE ( set# ) ; 
+: flip ( ix --  )   sieve + DUP C@ 0= SWAP C! ; 
+: fi1  ( I J -- u ) SQR 4 *  SWAP SQR + ; 
+: fi2  ( I J -- u ) SQR 3 *  SWAP SQR + ; 
+: fi3  ( I J -- u ) SQR 3 *  SWAP SQR - ; 
+: #MOD ( s -- u )   12 mod ; 
+: test1  ( s -- )   DUP  limit >    IF  DROP ELSE  >R R@ #MOD DUP 1 =  SWAP 5 = OR IF  R@ flip  THEN R> DROP  THEN ; 
+: test2  ( s -- )   DUP  limit >    IF  DROP ELSE  >R R@ #MOD     7 =  	           IF  R@ flip  THEN R> DROP  THEN ; 
+: +test3 ( s ? -- ) OVER limit > OR IF  DROP ELSE  >R R@ #MOD   11 =  	           IF  R@ flip  THEN R> DROP  THEN ; 
+: no-p^2 ( -- )     SQRT(limit+1) 5 DO  sieve I + C@ IF  limit 2 +  I SQR DO  0 sieve I + C!  J SQR +LOOP  THEN  LOOP ; 
+: cnt    ( -- u )   2 ( 2 and 3 ) limit 1+ 5 DO  sieve I + C@ 1 AND +  LOOP ; 
+
+: SieveOfAtkin ( -- u )
+	init
+	SQRT(limit+2)
+	1 DO 	SQRT(limit+2)
+		1 DO	I J fi1          test1
+			I J fi2          test2
+			I J fi3  J I <= +test3
+		LOOP
+	LOOP
+	no-p^2
+	cnt ( sz) ;
+
+: PRIMES CR #times . ." iterations." TIMER-RESET
+	 0 #times 0 DO  DROP  SieveOfAtkin  LOOP
+	 ( MS? SWAP ) CR .  ." primes found, " .ELAPSED
+	 ( DEC. ." ms elapsed." ) ;
+
+\ :ABOUT	CR ." Try: SieveOfAtkin . "
+\ 	CR ."      PRIMES " ;
+
+\ NESTING @ 1 = [IF] .ABOUT -sieveofatkin [THEN]
+
+\	DEPRIVE
+
+SieveOfAtkin .
+PRIMES CR
+
+\ (* End of Source *)

@@ -1,0 +1,35 @@
+\ Testing the main fixed point functions
+\ N.B. 64bit ONLY!!
+
+/CELL 8 - [IF]
+.( This program requires a 64-bit 4tH compiler) cr
+[ELSE]
+include lib/fractext.4th
+
+." SIN" cr
+13 0 do PI*10K i * 120000 v/ dup v. vsin v. cr loop cr
+
+." COS" cr
+13 0 do PI*10K i * 120000 v/ dup v. vcos v. cr loop cr
+
+." TAN" cr
+13 0 do PI*10K i * 120000 v/ dup v. vtan v. cr loop cr
+
+." SQRT" cr
+13 0 do i 10000 * s>v dup v. vsqrt v. cr loop cr
+
+." LN1" cr
+16 1 do i 2500 * s>v dup v. vln v. cr loop cr
+
+." LN2" cr
+2 15 0 do dup 10000 * s>v dup v. vln v. cr 2 * loop drop cr
+
+." EXP1" cr
+11 -6 do i 2500 * s>v dup v. vexp v. cr loop cr
+
+." EXP2" cr
+11 -6 do i 10000 * s>v dup v. vexp v. cr loop cr
+
+depth if ." Memory leak detected" cr then
+[THEN]
+

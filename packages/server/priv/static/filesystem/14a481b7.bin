@@ -1,0 +1,5 @@
+;; generated automatically.  DO NOT EDIT
+#!no-fold-case
+(define-module sxml.ssax (use srfi-1) (use srfi-13) (use gauche.parameter) (extend srfi-11 sxml.adaptor text.parse) (export-all))
+(select-module sxml.ssax)
+(dynamic-load "sxml--ssax")

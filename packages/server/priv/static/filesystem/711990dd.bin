@@ -1,0 +1,90 @@
+\ Preprocessor template pattern demo - Copyright 2017, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th
+include lib/dstringt.4th
+include lib/constant.4th
+include 4pp/lib/foos.4pp
+
+: "" 0 dup ;                           \ empty string
+
+:class Movie
+   extends Object
+     field:   title
+     field:   director
+     method:  assignDirector
+     method:  fireDirector
+     virtual: playing
+     virtual: rewinding
+   end-extends
+
+   :new
+     this -> title    dup ds.init ds.place ""
+     this -> director dup ds.init ds.place
+   ;method
+
+   :method assignDirector this -> director ds.place ;method
+   :method fireDirector "" this -> assignDirector ;method
+   :default rewinding ;method
+   :delete this -> title ds.free this -> director ds.free ;method
+
+   :default playing
+      .| "| this -> title ds.count type
+      .| " by |  this -> director ds.count type cr
+   ;method
+
+   private{ title director }
+;class
+
+:class Film
+   extends Movie
+     method: ChangeReel
+   end-extends
+
+   :virtual rewinding ." Rewinding reel." cr ;method
+   :method  changeReel this => rewinding ." Next reel." cr ;method
+
+   :virtual playing
+      this <- playing ." First reel is rolling." cr
+      this -> changeReel this => rewinding
+   ;method
+;class
+
+:class VHS
+   extends Movie
+   end-extends
+
+   :virtual rewinding ." Rewinding tape." cr ;method
+
+   :virtual playing
+      this <- playing this => rewinding ." Cassette is turning." cr
+   ;method
+;class
+
+:class DVD
+   extends Movie
+   end-extends
+
+   :virtual playing this <- playing ." DVD is spinning." cr ;method
+;class
+
+s" Casablanca" new Film value Casablanca
+s" Michael Curtiz" Casablanca -> assignDirector
+Casablanca => playing cr
+
+s" Debbie does Dallas" new VHS value Debbie
+s" Jim Buckley" Debbie -> assignDirector
+                Debbie -> fireDirector
+s" Jim Clark"   Debbie -> assignDirector
+Debbie => playing cr
+
+s" The Matrix" new DVD value Matrix
+s" The Wachowski Brothers" Matrix -> assignDirector
+                           Matrix -> fireDirector
+s" The Wachowski Sisters"  Matrix -> assignDirector
+Matrix => playing cr
+
+Casablanca delete
+Debbie delete
+Matrix delete

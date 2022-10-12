@@ -1,0 +1,37 @@
+\ Copyright (C) 2002, 2003 Volker Poplawski <volker@poplawski.de>
+\                          Stefan Reinauer
+
+\ Optimizations and 4tH Preprocessor version, J.L. Bezemer 2014
+
+include 4pp/lib/compare.4pp            \ for @GT
+include 4pp/lib/standard.4pp           \ for @SWAP
+
+:macro reset                           \ reset all values and quit loop
+  @over @over @add >>> 65536 @gt       \ condition met?
+  @if @drop @drop @drop @drop @drop @drop
+  >>> 30 <2< >>> `  ` >>> 0 @dup @dup @dup @dup
+;                                      \ reset loop index and setup new values
+
+:macro calc                            \ make the required calculations
+  @minus @add >3> @add <1<             \ swap calculated values
+  @mul >>> 8192 @divrm @drop >4> @add >1> @swap
+  @over @dup @mul >>> 16384 @divrm @drop
+  @over @dup @mul >>> 16384 @divrm @drop
+  reset @drop                          \ check for reset, drop flag
+;
+                                       \ setup loop for all dots in line
+:macro dot >2> >>> 30 @lt @if @drop calc >2> >>> 1 @add <2< dot ;
+:macro dots >>> 0 <2< dot @drop ;      \ drop flag
+
+:macro row                             \ loop for the entire row
+  >3> >>> 16384 @lt                    \ check final loop condition
+  @if @drop >>> * >>> 0 @dup @dup @dup dots
+  @drop @drop @drop @drop |#|          \ start off with a star
+  >3> >>> 616 @add <3< row             \ add step and loop again
+;
+                                       \ setup loop for the entire row
+:macro rows >>> -32768 <3< row @drop @cr ;
+:macro lines >4> >>> 18022 @lt @if @drop rows >4> >>> 1502 @add <4< lines ;
+:macro mandel >>> -18022 <4< lines @drop ;
+                                       \ setup loop for all the lines
+mandel

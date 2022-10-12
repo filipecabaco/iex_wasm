@@ -1,0 +1,203 @@
+\ cf.4th -- compiles under any ANS-Forth system
+\ This is from Nathaniel Grossman's article: "Long Divisors and Short
+\ Fractions" (Forth Dimensions Sept/Oct 1984).
+\ The only modifications I made were to allow the program to run under size of
+\ cell. Specifically, I changed SUPERBASE to be an appropriate value for
+\ whatever size of cell we have. I don't understand how the algorithm works,
+\ so I left it exactly as Grossman wrote it.
+
+\ We don't need novice.4th for this file --- it stands alone.
+
+\ In Forth integer arithmetic, we generally use rational approximations in
+\ conjunction with */ the scaler. For example, 355 113 */ effectively
+\ multiplies by pi; this is a well-known approximation. To get rational
+\ approximations of better accuracy, give CF a rational using double-precision
+\ numbers.
+
+\ I think that the larger the partial-quotient value, the better the precision
+\ --- but I'm not sure.
+
+\ In general, you use the largest rational such that both values fit in your
+\ cell size. For example, for a 16-bit computer, pi would be represented by:
+\ 355/113 By comparison, for pi/2 the largest 16-bit numbers are: 52174/33215
+\ Use this to multiply by pi/2, then double the result to effectively multiply
+\ by pi, to obtain better precision than 355/113.
+
+include lib/mixed.4th
+include lib/dbldot.4th
+include lib/todbl.4th
+include 4pp/lib/double.4pp             \ preprocessor double cell support
+
+\ ******
+\ ****** This is the first section, which provides UD/MOD.
+\ ******
+
+: 1. 1 u>d ;
+
+: LPswap ( d1 d2 d3 d4 -- d3 d4 d1 d2 )
+    >r >r 2swap  >r >r 2swap  r> r> r> r> 2swap
+    >r >r 2swap  r> r> ;
+    
+: LPdup ( d1 d2 -- d1 d2 d1 d2 )    
+    2dup >r >r  2over r> r> ;
+    
+: LPover ( d1 d2 d3 d4 -- d1 d2 d3 d4 d1 d2 )        
+    >r >r >r >r  LPdup  r> r> r> r>  LPswap ;
+
+: LProt ( d1 d2 d3 d4 d5 d6 -- d3 d4 d5 d6 d1 d2 )
+    >r >r >r >r LPswap  r> r> r> r> LPswap ;
+    
+: LPdrop ( d1 d2 -- )   
+    drop drop drop drop ;
+    
+: um/ ( ud un -- un )                   \ divide UD by UN and drop remainder
+    um/mod  swap drop ;
+    
+: u*/ ( Umultiplier Udividend Udivisor -- Uquotient )     
+    >r um*  r> um/mod nip ;
+        
+: t* ( ud un -- ut )    
+    dup rot um* >r >r
+            um*
+    0 r> r> d+ ;            
+
+: t/ ( ut un -- ud )
+    >r      r@ um/mod swap
+    rot 0   r@ um/mod swap
+    rot     r> um/mod swap drop
+    0 2swap swap d+ ;
+    
+: ut*/ ( ud un un -- ud )               \ this was called U*/ in Grossman's article, but I'm already using that name
+    >r  t*  r> t/ ;
+
+: narrow-ud/mod ( UDividend UNdivisor -- UDremainder UDquotient )
+    drop >r 2dup r@                     \ shuck high cell of divisor
+    1 swap ut*/                         \ -- UDquotient
+    2swap 2over r> 1 ut*/ d- 2swap ;    \ -- UDrem UDquot
+    
+variable numH
+variable denH
+variable denL
+variable denscale
+2variable num
+2variable den
+0 1 2constant superbase                 \ this was 65536. in Grossman's article
+
+: ud/mod-tuck ( ud ud -- )              \ save parts of num and den
+    2dup den 2!  denH !  denL !
+    2dup num 2!  numH !  drop ;
+    
+: ud/mod-denscale ( -- un )             \ for scaling-up den
+    superbase  denH @ 1+ um/
+    denscale ! ;
+    
+: scale-den ( -- )                      \ multiply denominator by scale factor
+    den 2@  denscale @  1  ut*/
+    denH !  denL ! ;
+    
+: wide-quot ( -- ud )                   \ if divisor needs more than one cell
+    num 2@  numH @  u>d
+    denL @  denH @  ut*/  d-
+    denscale @  denH @  ut*/  swap drop ;
+    
+: ?narrow-divisor ( d -- ? )            \ is divisor < superbase?
+    dup 0= ;
+    
+: wide-rem ( -- ud )                    \ remainder in wide division
+    dup num 2@ rot  den 2@
+    rot 1 ut*/ d-  rot u>d ;
+    
+: wide-ud/mod ( UDdividend UDdivisor -- UDremainder UDquotient )    
+    ud/mod-tuck
+    ud/mod-denscale
+    scale-den
+    wide-quot
+    wide-rem ;
+    
+: ud/mod ( UDdividend UDdivisor -- UDremainder UDquotient )    
+    ?narrow-divisor if  narrow-ud/mod
+    else                wide-ud/mod     then ;
+    
+: udmod ( UDdividend UDdivisor -- UDremainder )    
+    ud/mod  2drop ;
+    
+: ud/ ( UDdividend UDdivisor -- UDquotient )    
+    ud/mod  2swap 2drop ;
+
+    
+\ ****** 
+\ ****** This is the second section, which provides CF.
+\ ****** 
+
+: dgcd ( d1 d2 -- gcd )    
+    begin
+        2swap 2over udmod  2dup d0= until 2drop 
+    d. ;
+        
+: fib ( n -- )                          \ display first N fibonacci numbers
+    >r 0. 1. r> 1+ 1  cr
+    do
+        space space I .
+        2dup d.  space  [char] ~ emit
+        2swap 2over d+  loop ;
+        
+: cf* ( ud1 ud2 -- ud )                 \ product of double factors when one is really single
+    dup if
+        2swap dup if  cr abort" *** CF* overflow ***"
+        else  drop 1 ut*/  then
+    else
+        drop 1 ut*/  then ;
+
+2variable b-bin
+2variable q-bin
+2variable r-bin
+
+: .cf-heading ( -- )
+    ." partial-quot"
+    ."              numerator"  
+    ."            denominator" ;
+    
+: init'ize-recurrence
+    1. 0. LPswap 0. 1. LPswap ;
+    
+: get-partial-quotient
+    2swap 2over ud/mod ;
+    
+: .partial-quotient
+    cr 2dup 12 d.r ;
+
+: save-gcd-elements
+    b-bin 2!  R-bin 2!  q-bin 2! ;
+    
+: init-to-calc-convergent
+    LPswap LPover ;
+    
+: get-numerator
+    b-bin 2@ cf* 2rot d+ ;
+    
+: .numerator
+    2dup 22 d.r ;
+    
+: get-denominator
+    2rot 2rot b-bin 2@ cf* d+ ;
+
+: .denominator
+    2dup 22 d.r ;
+    
+: reinit'ize-recurrence
+    2swap q-bin 2@ r-bin 2@ ;
+    
+: ?end-gcd-algorithm
+    2dup d0= ;
+    
+: cf ( Dnumerator Ddenominator -- )
+    .cf-heading  init'ize-recurrence
+    begin                               \ euclidean gcd algorithm loop
+        get-partial-quotient    .partial-quotient
+        save-gcd-elements       init-to-calc-convergent
+        get-numerator           .numerator
+        get-denominator         .denominator
+        reinit'ize-recurrence   ?end-gcd-algorithm until
+    6 0 do 2drop loop cr ;
+
+d% 3141592653589793238 d% 1000000000000000000 cf

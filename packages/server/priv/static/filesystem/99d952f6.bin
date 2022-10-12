@@ -1,0 +1,83 @@
+\ This is the source for the ANS test harness, it is based on the
+\ harness originally developed by John Hayes
+
+\ (C) 1995 JOHNS HOPKINS UNIVERSITY / APPLIED PHYSICS LABORATORY
+\ MAY BE DISTRIBUTED FREELY AS LONG AS THIS COPYRIGHT NOTICE REMAINS.
+\ VERSION 1.1
+
+[DEFINED] ANS [IF]
+include lib/fp3.4th
+include lib/fatan2.4th
+[ELSE]
+include lib/fp1.4th
+include lib/zenconst.4th
+include lib/zenatan2.4th
+include lib/zenfprox.4th
+[THEN]
+
+include lib/ttester.4th
+include 4pp/lib/float.4pp
+                                       \ 64-bit accuracy
+[DEFINED] ANS [IF]
+s" 8e-11"  s>float rel-near f!
+[ELSE]
+s" 8e-10"  s>float rel-near f!
+[THEN]
+
+SET-NEAR FCLEAR
+
+0 S>F FNEGATE FCONSTANT -0e
+PI FNEGATE FCONSTANT -pi
+
+F%   0.7853981633974483096157E0 FCONSTANT pi/4
+F%  -0.7853981633974483096157E0 FCONSTANT -pi/4
+F%   0.1570796326794896619231E1 FCONSTANT pi/2
+F%  -0.1570796326794896619231E1 FCONSTANT -pi/2
+F%   0.4712388980384689857694E1 FCONSTANT 3pi/2
+F%   0.2356194490192344928847E1 FCONSTANT 3pi/4
+F%  -0.2356194490192344928847E1 FCONSTANT -3pi/4
+
+\ y x rad deg
+T{  F% 0  F% 1 FATAN2 =>   F% 0 R}T   \ 0
+T{  F% 1  F% 1 FATAN2 =>   pi/4 R}T   \ 45
+T{  F% 1  F% 0 FATAN2 =>   pi/2 R}T   \ 90
+T{ F% -1 F% -1 FATAN2 => -3pi/4 R}T   \ 135
+T{  F% 0 F% -1 FATAN2 =>   pi   R}T   \ 180
+T{ F% -1  F% 1 FATAN2 =>  -pi/4 R}T   \ 225
+T{ F% -1  F% 0 FATAN2 =>  -pi/2 R}T   \ 270
+T{ F% -1  F% 1 FATAN2 =>  -pi/4 R}T   \ 315
+
+.( TESTING Single UNIX 3 special values spec) CR
+
+\ ISO C / Single UNIX Specification Version 3:
+\    http://www.unix.org/single_unix_specification/
+\ Select "Topic", then "Math Interfaces", then "atan2()":
+\    http://www.opengroup.org/onlinepubs/009695399/
+\    functions/atan2f.html
+
+\ If y is +/-0 and x is < 0, +/-pi shall be returned.
+T{  F% 0 F% -1 FATAN2 =>  pi R}T
+T{   -0e F% -1 FATAN2 =>  -pi R}T      \ fails!
+
+\ If y is +/-0 and x is > 0, +/-0 shall be returned.
+T{  F% 0  F% 1 FATAN2 =>  F% 0 R}T
+T{   -0e  F% 1 FATAN2 => -0e R}T
+
+\ If y is < 0 and x is +/-0, -pi/2 shall be returned.
+T{ F% -1  F% 0 FATAN2 => -pi/2 R}T
+T{   F% -1 -0e FATAN2 => -pi/2 R}T
+
+\ If y is > 0 and x is +/-0, pi/2 shall be returned.
+T{  F% 1  F% 0 FATAN2 => pi/2 R}T
+T{    F% 1 -0e FATAN2 => pi/2 R}T
+
+[DEFINED] ANS [IF]
+\ If y is +/-0 and x is -0, +/-pi shall be returned.
+T{  F% 0 -0e FATAN2 =>  pi R}T         \ fails!
+T{   -0e -0e FATAN2 => -pi R}T         \ fails
+
+\ If y is +/-0 and x is +0, +/-0 shall be returned.
+T{  F% 0  F% 0 FATAN2 => F% 0 R}T
+T{   -0e  F% 0 FATAN2 => -0e R}T
+[THEN]
+

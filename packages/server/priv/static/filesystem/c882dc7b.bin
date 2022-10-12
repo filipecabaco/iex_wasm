@@ -1,0 +1,25 @@
+\ Tower of hanoi                Written by : Luke Lee
+\ A demonstration for recursive program for MetaForth
+\ Ported to 4tH by J.L. Bezemer - September 1999
+
+[NEEDS lib/enter.4th]
+[NEEDS lib/pickroll.4th]
+
+: MOVE-DISK ( source destination temp n -- )
+    DUP 0<> IF
+       DUP 1- >R 3 PICK 2 PICK 4 PICK R> RECURSE
+       ." Move disc " DUP . ." from " 3 PICK EMIT ."  to " 2 PICK EMIT
+       [CHAR] . EMIT CR
+       DUP 1- >R 1 PICK 3 PICK 5 PICK R> RECURSE
+    THEN DROP DROP DROP DROP ;
+
+: TOWER-OF-HANOI ( N -- ) CR >R [CHAR] A [CHAR] C [CHAR] B R> MOVE-DISK ;
+
+: HANOI
+  ." How many discs? "
+  ENTER TOWER-OF-HANOI
+;
+
+HANOI
+
+

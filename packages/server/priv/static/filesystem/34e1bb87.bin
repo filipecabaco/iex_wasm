@@ -1,0 +1,26 @@
+\ Preprocessor FOOS demo - Copyright 2013, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ http://rosettacode.org/wiki/Inheritance/Single
+
+\     Animal
+\       /\
+\      /  \
+\     /    \
+\    Dog   Cat
+\    /\
+\   /  \
+\  /    \
+\ Lab   Collie
+
+include 4pp/lib/foos.4pp
+
+:class Animal extends Object end-extends ;class
+:class Dog extends    Animal end-extends ;class
+:class Cat extends    Animal end-extends ;class
+:class Lab extends    Dog    end-extends ;class
+:class Collie extends Dog    end-extends ;class
+
+static Collie Lassie
+Lassie type@ kindof Animal = . cr

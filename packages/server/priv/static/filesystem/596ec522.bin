@@ -1,0 +1,13 @@
+{application,eimp,
+             [{description,"Erlang/Elixir image converter"},
+              {vsn,"1.0.21"},
+              {modules,[eimp,eimp_app,eimp_limit,eimp_sup,eimp_worker]},
+              {registered,[]},
+              {applications,[kernel,stdlib,p1_utils]},
+              {mod,{eimp_app,[]}},
+              {env,[]},
+              {files,["src/","include/","c_src/eimp.c","rebar.config",
+                      "rebar.config.script","configure","vars.config.in",
+                      "README.md","LICENSE.txt"]},
+              {licenses,["Apache 2.0"]},
+              {links,[{"Github","https://github.com/processone/eimp"}]}]}.

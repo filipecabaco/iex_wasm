@@ -1,0 +1,19 @@
+\ Preprocessor @IFDEF and @IFNDEF - Copyright 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ NOTE: although it is perfectly fine to use these macros in order to
+\ skip a few lines, skipping longer sections may trigger "internal errors",
+\ because the preprocessor runs out of stack space.
+
+:macro _skipall >#> >>> @then @until @drop _skipall ;
+:macro _ifdef @ifnot _skipall @drop ;
+:macro _ifndef @if _skipall @drop ;
+:macro @then ;
+:macro @ifdef >#> @exist _ifdef @drop ;
+:macro @ifndef >#> @exist _ifndef @drop ;
+
+\ @ifdef undefined
+\   This will not be printed
+\ @then
+\ But this will

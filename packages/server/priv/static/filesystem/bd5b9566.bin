@@ -1,0 +1,53 @@
+\ Numerical integration
+\ Taken from http://rosettacode.org 
+\ 4tH version 2012, Hans Bezemer
+
+\ Write functions to calculate the definite integral of a function (f(x))
+\ using rectangular (left, right, and midpoint), trapezium, and Simpson's
+\ methods. Your functions should take in the upper and lower bounds (a and b)
+\ and the number of approximations to make in that range (n). Assume that
+\ your example already has a function that gives values for f(x).
+
+include lib/fp4.4th
+include lib/fsinfcos.4th
+include 4pp/lib/float.4pp              \ preprocessor floating point support
+
+fvariable step
+
+defer method ( fn F: x -- fn[x] )
+
+: left                      execute ;
+: right  step f@         f+ execute ;
+: mid    step f@ f% 2 f/ f+ execute ;
+: trap
+  dup fdup  left
+      fswap right f+ f% 2 f/ ;
+: simpson
+  dup fdup  left
+  dup fover mid f% 4 f* f+
+      fswap right f+ f% 6 f/ ;
+
+: set-step ( n F: a b -- n F: a )
+  fover f- dup 0 d>f f/ step f! ;
+ 
+: integrate ( xt n F: a b -- F: sigma )
+  set-step
+  f% 0
+  0 do
+    dup fover method f+
+    fswap step f@ f+ fswap
+  loop
+  drop fnip
+  step f@ f* ;
+ \ testing similar to the D example
+: test is method 4 f% -1 f% 2 integrate f. cr ;
+
+: fn1  fsincos f+ ;
+: fn2  fdup f* f% 4 f* f% 1 f+ f% 2 fswap f/ ;
+
+7 set-precision
+' fn2  ' left    test   \ 2.456897
+' fn2  ' right   test   \ 2.245132
+' fn2  ' mid     test   \ 2.496091
+' fn2  ' trap    test   \ 2.351014
+' fn2  ' simpson test   \ 2.447732

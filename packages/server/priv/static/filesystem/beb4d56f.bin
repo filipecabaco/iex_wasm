@@ -1,0 +1,10 @@
+\ Preprocessor floating point macros - Copyright 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro _s>f @if @over _#_ S>F ;
+:macro _f% @dup @cell _s>f @else ` S" ` @over |#| >>> " |#| S>FLOAT ;
+:macro f% >#> _f% @drop @drop ;
+:macro fvariable FLOAT ARRAY ;
+:macro ffield: FLOAT +FIELD ;
+:macro fconstant fvariable >#> _#_ LATEST F! DOES> F@ ` ;` ;

@@ -1,0 +1,90 @@
+\ FOOS coffeecup example - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Inspired by: Bill Venners - JavaWorld, February 1998
+
+include lib/exceptn.4th
+include 4pp/lib/foos.4pp
+
+s" Illegal argument" exception value IllegalArgumentExcept
+s" Invalid object"   exception value InvalidObjectExcept
+s" Invalid cup size" exception value InvalidCupSize
+
+ 0  enum SHORT                         \ the different cupsizes
+    enum TALL
+constant GRANDE
+
+237 constant MAX_SHORT_ML              \ contents of each cupsize
+355 constant MAX_TALL_ML
+473 constant MAX_GRANDE_ML
+
+:class CoffeeCup
+   extends Object
+     field:   sizeValid                \ is the cup a valid cup
+     field:   size                     \ the size of the cup
+     field:   innerCoffee              \ how much coffee it contains
+     virtual: setSize                  \ setting the cup size
+     virtual: Refilling                \ refilling the cup
+     virtual: Ordering                 \ ordering the cup
+     virtual: Sipping                  \ sipping from the cup
+     virtual: Spilling                 \ spilling the entire cup
+     method:  getMaxAmount             \ convert size to max. content
+   end-extends
+                                       \ convert size to max. content
+   :method getMaxAmount                ( size -- max. contents)
+     case
+       SHORT  of MAX_SHORT_ML  endof
+       TALL   of MAX_TALL_ML   endof
+       GRANDE of MAX_GRANDE_ML endof
+       IllegalArgumentExcept throw
+     endcase
+   ;method
+                                       \ set the size of the cup
+   :virtual setSize                    ( size --)
+     dup SHORT <> over TALL <> and over GRANDE <> and
+     if InvalidCupSize throw then
+                                       \ throw if an invalid cup
+     true this -> sizeValid ! this -> size !
+   ;method                             \ set the size
+
+   :virtual Ordering                   ( size startingAmount --)
+     over 0< if IllegalArgumentExcept throw then
+     over this -> getMaxAmount over <
+     if IllegalArgumentExcept throw then
+                                       \ throw if it can't fit
+     this -> innerCoffee !             \ set the content
+     this => setSize                   \ set the cup size
+   ;method
+                                       \ add more coffee to the cup
+   :virtual Refilling                  ( amount -- spillAmount)
+     this -> sizeValid @ 0= if InvalidObjectExcept throw then
+                                       \ throw if an invalid size
+     this -> innerCoffee +!            \ add the coffee
+     this -> size @ this -> getMaxAmount
+                                       \ check the size
+     this -> innerCoffee @ swap 2dup >
+     if tuck - swap this -> innerCoffee ! else 2drop 0 then
+   ;method                             \ check the spill
+
+   :virtual Sipping                    ( sipSize -- sipSize')
+     this -> innerCoffee @ 2dup > if swap then drop
+     dup negate this -> innerCoffee +!
+   ;method                             \ sip from the coffee
+                                       \ empty the entire cup
+   :virtual Spilling                   ( --)
+     0 this -> innerCoffee dup @ >r ! r>
+   ;method
+
+   private{ sizeValid size innerCoffee setSize getMaxAmount }
+;class
+
+static CoffeeCup MyCoffee
+
+SHORT 200 MyCoffee => Ordering
+90 MyCoffee => Refilling  . ." ml spilled" cr
+50 MyCoffee => Sipping    . ." ml sipped"  cr
+25 MyCoffee => Refilling  . ." ml spilled" cr
+300 MyCoffee => Sipping   . ." ml sipped"  cr
+225 MyCoffee => Refilling . ." ml spilled" cr
+MyCoffee => Spilling      . ." ml spilled" cr

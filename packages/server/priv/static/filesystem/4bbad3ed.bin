@@ -1,0 +1,12 @@
+\ Preprocessor closures - Copyright 2012, 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ WARNING! Incompatible with FOOS.4PP
+
+: (~~@exec) dup @ execute ;
+:macro (.mangle) ~~ |#| ; :macro sizeof >#> (.mangle) ; :macro this r@ ;
+:macro :: : >#> @dup _#_ ; :macro { >r ; :macro } r> drop ;
+:macro end-vars end-struct (.mangle) ; :macro var: field: ;
+:macro set >#> @dup (.mangle) array >#> _#_ latest _#_ does> (~~@exec) ` ;` ;
+:macro {: [: { ; :macro ;} } ;] this ! ; :macro vars struct 1+ ;

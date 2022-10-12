@@ -1,0 +1,29 @@
+\ 4tH library - WEEKEND - Copyright 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ After this algorithm: https://stackoverflow.com/questions/8784248/
+\ Believed to be in the public domain
+
+\ NOTE: this routine does NOT take holidays into account
+
+[UNDEFINED] weekend [IF]
+[UNDEFINED] jday    [IF] include lib/time.4th [THEN]
+                                       \ calculate #weekend days - julian date
+: jweekend                             ( jd1 jd2 -- n)
+  over 7 mod 5 swap - >r               \ R: lbegin
+  swap - 1+ 7 /mod 2* over 0>          \ ipart lnum f
+  if over r@ swap - 0< if 1+ over r@ - 1 <> r@ -1 <> and if 1+ then then then
+  nip rdrop
+;  
+
+: (>2jday) jday >r jday r> ;           \ calculate #weekend days between dates
+: weekend (>2jday) jweekend ;          ( d1 m1 y1 d2 m2 y2 -- n)
+: jworkday over over jweekend >r swap - 1+ r> - ;
+: workday (>2jday) jworkday ;          ( d1 m1 y1 d2 m2 y2 -- n)
+
+[DEFINED] 4TH# [IF] hide (>2jday) [THEN]
+[THEN]
+
+\ 28 8 2021 13 9 2021 weekend .
+\ 28 8 2021 13 9 2021 workday .

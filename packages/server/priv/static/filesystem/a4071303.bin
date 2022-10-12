@@ -1,0 +1,128 @@
+( Knuth's recommended Subtractive RNG from _The Stanford GraphBase_ )
+( Standard Forth CORE EXT with NOT and | )
+
+[UNDEFINED] random [IF]
+[UNDEFINED] um/mod [IF] include lib/mixed.4th [THEN]
+
+: MOD-DIFF - [hex] 7FFFFFFF [decimal] and ;
+
+56 array (A)
+
+variable *GB-FPTR
+
+: GB-FLIP-CYCLE                        ( -- +random )
+  (A) cell+ 32 cells (A) +             ( ii jj)
+
+  begin
+    over >R
+    over @ over @ MOD-DIFF
+    R> !
+    >R cell+ R>    cell+
+    DUP  55 cells (A) + U>
+  until
+
+  drop                                 ( ii)
+  (A) cell+                            ( ii jj)
+
+  begin
+    over >R
+    over @ over @ MOD-DIFF
+    R> !
+    >R cell+ R>    cell+
+    OVER  55 cells (A) + U>
+  until 2drop
+
+  54 cells (A) + *GB-FPTR !
+  55 cells (A) + @                     ( +random)
+;
+
+: GB-INIT-RAND                         ( seed -- )
+  -1 (A) !
+  0 MOD-DIFF
+  dup 55 cells (A) + !
+  dup  1                               ( seed prev next)
+
+  21 >R begin
+    dup r@ cells (A) + !
+    MOD-DIFF                           ( seed next)
+    >R                                 ( seed)
+    dup 1 and if
+      2/
+      [hex] 40000000 [decimal] +
+    else
+      2/
+    then
+    R>                                 ( seed next)
+    over MOD-DIFF
+    r@ cells (A) + @ swap              ( seed prev next)
+    r@  21 +  55 MOD  r@ - r> + dup >r 0= 
+  until rdrop 2drop drop
+
+  GB-FLIP-CYCLE drop
+  GB-FLIP-CYCLE drop
+  GB-FLIP-CYCLE drop
+  GB-FLIP-CYCLE drop
+  GB-FLIP-CYCLE drop
+;
+
+: GB-NEXT-RAND                         ( -- +random )
+  *GB-FPTR @ @                         ( +random)
+  dup 0< if
+    drop GB-FLIP-CYCLE	
+  else
+    -1 cells *GB-FPTR +! 
+  then
+;
+
+: GB-UNIF-RAND                         ( +range -- +random )
+  >R                                   ( --)
+  [hex] 7FFFFFFF [decimal] 1+          ( t)
+  dup 0 R@ UM/MOD drop -
+
+  begin
+    GB-NEXT-RAND                       ( t +random)
+    2dup U> 0=
+  while
+    drop                               ( t)
+  repeat                               ( t +random)
+
+  nip                                  ( +random)
+  0 R> UM/MOD drop
+;
+
+[DEFINED] test-rng [IF]
+: nonce
+  -314159 GB-INIT-RAND    GB-NEXT-RAND
+  119318998 <> abort" Failure on the first try. "
+
+  133 0 do    GB-NEXT-RAND drop    loop
+
+  [hex] 55555555 [decimal] GB-UNIF-RAND
+  748103812 <> abort" Failure on the second try. "
+; nonce depth .
+[THEN]
+
+\ With One's Complement arithmetic, try
+\ : MOD-DIFF - dup 0< if    [hex] 40000000 + 40000000 [decimal] +    then ;
+
+( For This Forth, alias to friendlier names. )
+
+aka GB-INIT-RAND SET-RANDOM
+aka GB-NEXT-RAND RANDOM
+aka GB-UNIF-RAND GET-RANDOM
+
+( End of GB-FLIP Module. )
+
+: URANDOM RANDOM dup 2* xor ;
+: RANDOMIZE TIME SET-RANDOM ;
+
+[DEFINED] 4TH# [IF]
+  hide MOD-DIFF
+  hide (A)
+  hide *GB-FPTR
+  hide GB-FLIP-CYCLE
+  hide GB-INIT-RAND
+  hide GB-NEXT-RAND
+  hide GB-UNIF-RAND
+[THEN]
+[THEN]

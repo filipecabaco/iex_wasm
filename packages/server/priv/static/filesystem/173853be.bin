@@ -1,0 +1,44 @@
+\ Preprocessor FOOS Dice roller - Copyright 2019, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th
+include lib/choose.4th
+include 4pp/lib/foos.4pp
+
+:class Randomizer                      \ this is a randomizer object
+  extends Object
+    method: nextInt                    \ it just returns a number
+  end-extends
+
+  :method nextInt choose ;method
+;class
+
+:class DiceRoller                      \ now create a dice roller
+  extends Object
+    field: dice                        \ number of sides on the dice
+    field: roll                        \ result of the roll
+    field: rand                        \ child object Randomizer
+    method: Roller
+  end-extends
+
+  :new
+    this -> dice !                     \ save sides on the dice
+    new Randomizer this -> rand !      \ connect a randomizer
+  ;method
+
+  :method roller                       \ create the roller
+    this -> dice @ this -> rand @ -> nextInt 1+ dup this -> roll ! . cr
+  ;method
+                                       \ destructor
+  :delete this -> rand @ delete ;method
+
+  private{ dice roll rand }            \ only the Roller is public
+;class
+
+                                       \ #main#
+argn 2 < abort" Usage: foosdice number"
+." You rolled a "                      \ abort if no number is given
+1 args number new DiceRoller value MyApp  \ make a new diceroller
+MyApp -> Roller                        \ roll the dice
+MyApp delete                           \ delete the darn thing

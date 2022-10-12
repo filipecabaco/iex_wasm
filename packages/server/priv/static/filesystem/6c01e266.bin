@@ -1,0 +1,5 @@
+\ Preprocessor S\" macro - Copyright 2013 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+:macro s\" $#$ " ` S" ` |#| >>> " |#| S>ANS ;

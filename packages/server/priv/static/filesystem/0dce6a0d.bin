@@ -1,0 +1,70 @@
+\ LANGUAGE    : ANS Forth with extensions
+\ PROJECT     : Forth Environments
+\ DESCRIPTION : From Donald E. Knuth's Chapter 1.4.2 in 'Fundamental
+\             :  Algorithms' 2nd Ed.
+\ CATEGORY    : Contrived Coroutine example
+\ AUTHOR      : Marcel Hendrix
+\ LAST CHANGE : October 5, 2013, Marcel Hendrix
+
+\ Translate one code in another.
+\ Input code is a sequence of alphameric characters terminated by a period,
+\ e.g.,
+
+\     A2B5E3426FGOZYW3210PQ69R.          (1)
+
+\ Blanks are ignored. Input is understood as follows, left to right:
+\ If the next character is a digit (i.e., 0, 1, ..,9), say n, it indicates
+\ (n+1) repetitions of the following character, whether the following
+\ character is a  digit or not. A nondigit simply denotes itself. The output
+\ of the program is to consist of a sequence indicated in this manner and
+\ separated into groups of three characters each (where the last group may
+\ have less than three characters). For example, (1) should be translated by
+\ our program into
+
+\     ABB  BEE  EEE  E44  446  66F  GZY  W22  220  OPQ  999  999  999  R.
+
+\ The output consists of a maximum of 16 groups per line.
+
+include lib/range.4th
+include 4pp/lib/yield.4pp
+
+0 VALUE #out
+0 VALUE mychar
+
+CHAR . CONSTANT '.'
+
+PAD VALUE ^input
+
+: ?CR   ( --)
+        #out 79 > IF CR 0 TO #out THEN ;
+
+: GETCHAR ( -- )
+        BEGIN  ^input C@ 1 +TO ^input
+               DUP BL =
+        WHILE  DROP
+        REPEAT TO mychar ;
+
+: OUTS  ( -- )
+        BEGIN
+           ?CR
+           YIELD  mychar '.' <> WHILE mychar EMIT
+           YIELD  mychar '.' <> WHILE mychar EMIT
+           YIELD  mychar '.' <> WHILE mychar EMIT
+           2 SPACES 5 +TO #out
+        REPEAT ;
+
+: INS   ( -- )
+        OUTS
+        BEGIN  GETCHAR  mychar '.' <>
+        WHILE  mychar [char] A [char] Z 1+ WITHIN
+               IF YIELD
+               ELSE  mychar [char] 0 - 1+ GETCHAR  0 ?DO 2R> YIELD 2>R LOOP
+               THEN
+        REPEAT '.' EMIT ;
+
+: TEST
+  S" A2B5E3426  FG0ZYW3210PQ89R  ." PAD PLACE
+  INS CR
+;
+
+TEST

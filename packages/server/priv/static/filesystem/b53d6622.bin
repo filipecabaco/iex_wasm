@@ -1,0 +1,11 @@
+\ 4tH library - FP configuration 5 - Copyright 2021, 2022 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ High precision, ANS 200x compatible
+[UNDEFINED] float [IF]
+  include lib/ansfloat.4th
+  include lib/tofloat.4th
+  include lib/sfpout.4th
+[THEN]
+

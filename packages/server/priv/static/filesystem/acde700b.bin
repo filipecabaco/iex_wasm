@@ -1,0 +1,5 @@
+;; generated automatically.  DO NOT EDIT
+#!no-fold-case
+(define-module gauche.threads (use gauche.record) (export gauche-thread-type current-thread thread? make-thread thread-name thread-specific-set! thread-specific thread-state thread-start! thread-try-start! thread-yield! thread-sleep! thread-join! thread-terminate! thread-stop! thread-cont! mutex? make-mutex mutex-name mutex-state mutex-specific-set! mutex-specific with-locking-mutex mutex-lock! mutex-unlock! mutex-locker mutex-unlocker condition-variable? make-condition-variable condition-variable-name condition-variable-specific condition-variable-specific-set! condition-variable-signal! condition-variable-broadcast! join-timeout-exception? abandoned-mutex-exception? terminated-thread-exception? uncaught-exception? uncaught-exception-reason atom atom? atom-ref atomic atomic-update! make-semaphore semaphore? semaphore-acquire! semaphore-release! make-latch latch? latch-dec! latch-clear! latch-await make-barrier barrier? barrier-reset! barrier-await barrier-broken?))
+(select-module gauche.threads)
+(dynamic-load "gauche--threads")

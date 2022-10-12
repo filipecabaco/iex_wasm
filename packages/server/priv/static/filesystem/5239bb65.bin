@@ -1,0 +1,35 @@
+\ Preprocessor FOOS demo - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+\ Translation of:
+\ http://en.wikipedia.org/wiki/Polymorphism_in_object-oriented_programming
+
+include 4pp/lib/foos.4pp
+
+:class Animal
+   extends Object
+     virtual: Talk
+   end-extends
+;class
+
+:class Dog
+   extends Animal
+   end-extends
+
+   :virtual Talk ." Woof" cr ;method
+;class
+
+:class Cat
+   extends Animal
+   end-extends
+
+   :virtual Talk ." Meow" cr ;method
+;class
+
+static Cat MyCat
+static Dog MyDog
+
+MyCat => Talk
+MyDog => Talk
+

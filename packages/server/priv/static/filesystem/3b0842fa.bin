@@ -1,0 +1,76 @@
+\ Lunar Lander by Diomidis Spinellis, Chipmunk Basic version
+\ I know it stinks as a game, but see it as a relic from old times.
+\ Ingemar Ragnemalm, PhD
+\ Image processing, Mac shareware games
+\ E-mail address: ingemar@isy.liu.se or ingemar@lysator.liu.se
+\ 4tH 4pp-version Copyright 2020 Hans Bezemer
+
+include lib/ansfacil.4th
+include lib/enter.4th
+
+variable f                             \ amount of fuel
+variable g                             \ gravity
+variable u                             \ units per boost
+variable h                             \ height in m
+variable v                             \ velocity in m/s
+
+: ready                                ( --)
+  ." Ready for detachment" cr
+  ." -- COUNTDOWN --" cr
+  0 10 do i . sync 500 ms -1 +loop cr
+  ." You have left the spacecraft." cr
+  ." Try to land with velocity less than 5 m/sec." cr cr
+;
+
+: meter                                ( --)
+  ." Meter readings" cr 
+  ." --------------" cr
+  ." Fuel (gal): " f ? cr
+  let h,|0=|;                          \ height = 0?
+  if ." Landing v" else ." V" then
+  ." elocity (m/sec): " v ? cr
+  ." Height (m): " h ? cr cr
+;
+
+: boost                                ( --)
+  let f,|0>|; if                       \ fuel > 0?
+    begin
+      ." How much fuel will you use? " enter
+      dup 0< dup if
+        nip ." No cheating please! Fuel must be >= 0." cr
+      else                             \ NIP removes the entry
+        drop f @ over < dup            \ DROP removes previous flag
+        if nip ." Sorry, you have not got that much fuel!" cr then
+      then 0=                          \ NIP removes the entry
+    until cr
+  else 0
+  then let u=;
+;
+
+: calculate                            ( -- flag)
+  let f = f - u;
+  let h = h - v;
+  let v = (((v + g) * 10) - (u * 2)) / 10;
+  let h,|0> 0=|;                       \ height < 1?
+;
+
+: report                               ( --)
+  let v,|4 >|; if ." You have crashed."
+  else ." Congratulations! This was a very good landing."
+  then cr cr
+;
+
+: lander
+  begin
+    ready                              \ G-force, velocity, height, fuel
+    let g=2; let v=70; let h=1000; let f=500;
+    begin
+      meter boost calculate
+    until
+    let h = max (h,0); meter report
+    ." Do you want to play again? (0 = no, 1 = yes) " enter
+    0= dup abort" Have a nice day." cr
+  until
+;
+
+lander

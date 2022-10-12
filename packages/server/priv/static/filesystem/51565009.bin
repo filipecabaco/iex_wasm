@@ -1,0 +1,81 @@
+\ Preprocessor FOOS demo - Copyright 2012, 2021 J.L. Bezemer
+\ You can redistribute this file and/or modify it under
+\ the terms of the GNU General Public License
+
+include lib/memcell.4th                \ for ALLOCATE
+include lib/dstringt.4th               \ for DS.PLACE
+\ include lib/anstools.4th
+include 4pp/lib/foos.4pp
+
+:class two-light                       \ create a two light traffic light
+   extends Object
+     field:   Red                      \ red color string
+     field:   Green                    \ green color string
+     field:   State                    \ state of the traffic light
+     field:   #lights                  \ number of lights
+     field:   Description              \ description of lights
+     method:  Show                     \ show the current state
+     method:  Configure                \ configure a traffic light
+     virtual: Switch                   \ change to the next state
+   end-extends
+
+   :method Configure                   ( a1 a2 --)
+     over 1+ - this -> #lights ! cell+ this -> Description !
+     0 this -> State !                 \ set initial state
+   ;method
+
+   :new                                \ set the colors
+     s" Red"   this -> Red   dup ds.init ds.place
+     s" Green" this -> Green dup ds.init ds.place
+                                       \ we need a table of descriptions
+     here ['] Green , ['] Red , here this -> Configure
+   ;method                             \ now configure it
+
+   :method Show                        \ show the current color
+     cells this -> Description @ + @c this + ds.count type cr
+   ;method                             \ note we use the string offset
+
+   :virtual Switch
+     this -> State dup @ dup           \ get the current state
+     this -> Show 1+                   \ show it, go to next state
+     this -> #lights @ mod swap !      \ and set it
+   ;method                             \ assign it to the Switch method
+                                       \ free the green and red light
+   :delete this -> Green ds.free this -> Red ds.free ;method
+                                       \ we can declare all these private
+   private{ State #lights Description Show }
+;class
+
+:class three-light                     \ create a three light traffic light
+   extends two-light                   \ based on the two light traffic light
+     field: Yellow                     \ add the color Yellow
+   end-extends
+
+   :new                                \ set additional color
+     s" Yellow" this -> Yellow dup ds.init ds.place
+                                       \ we need a new table of descriptions
+     here ['] Green , ['] Yellow , ['] Red , here this -> Configure
+   ;method
+                                       \ destroy the yellow color
+   :delete this -> Yellow ds.free ;method
+;class
+
+instance two-light DontWalk            \ define a pedestrian light
+
+." A pedestrian traffic light:" cr cr
+DontWalk => Switch                     \ go to the next state four times
+DontWalk => Switch
+DontWalk => Switch
+DontWalk => Switch
+
+DontWalk delete cr                     \ now destroy it
+
+instance three-light TrafficLight      \ define a normal light
+
+." A normal traffic light:" cr cr
+TrafficLight => Switch                 \ go to the next state four times
+TrafficLight => Switch
+TrafficLight => Switch
+TrafficLight => Switch
+
+TrafficLight delete cr                 \ now destroy it

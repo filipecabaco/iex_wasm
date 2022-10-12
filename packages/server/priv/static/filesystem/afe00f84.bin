@@ -1,0 +1,13 @@
+\ My answer to: https://www.youtube.com/watch?v=1BVXQ64wI00&t
+\ Five minutes, worked first time. Eat that.
+
+include lib/choose.4th
+include lib/yesorno.4th
+
+: CoinFlippingGame               ( a1 n1 a2 n2 --)
+  2 choose unless 2swap then 2 choose if s" heads" else s" tails" then
+  2swap type ."  won with a flip of " type cr 2drop ;
+
+: main begin s" Mark" s" Tom" CoinFlippingGame s" Play again" yes/no? 0= until ;
+
+main
