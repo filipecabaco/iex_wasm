@@ -1,18 +1,30 @@
 <script>
-    window.onload = () => {
+  window.onload = () => {
+    fetch("./system/filesystem.json")
+    .then(resp => resp.json())
+    .then(({fsroot}) => {
+      console.log(fsroot)
+      const bz_image_bin = fsroot.find( ([v]) => v == "boot" )[6].find(([v]) => v == "vmlinuz-5.19.0-2-686")[6]
       const baseOptions = {
         wasm_path: "./lib/v86.wasm",
         memory_size: 512 * 1024 * 1024,
         screen_container: document.getElementById("screen_container"),
         autostart: true,
-        hda:{ url: "./rom_images/debian.img" },
+        filesystem: {
+          basefs: "./system/filesystem.json",
+          baseurl: "./system/filesystem/",
+          },
+        cmdline: "rw init=/bin/systemd root=host9p console=ttyS0 spectre_v2=off pti=off",
         bios: { url: "./bios/seabios.bin" },
         vga_bios: { url: "./bios/vgabios.bin" },
+        initial_state: {url: "./system/state.bin"},
+        disable_speaker: true
       };
       new V86Starter(baseOptions);
-    };
-  </script>
+    })
+    }
+</script>
 <div id="screen_container">
     <div></div>
     <canvas></canvas>
-  </div>
+</div>

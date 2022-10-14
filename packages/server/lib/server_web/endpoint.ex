@@ -20,7 +20,7 @@ defmodule ServerWeb.Endpoint do
     at: "/",
     from: :server,
     gzip: false,
-    only: ~w(assets bios rom_images filesystem lib state favicon.ico robots.txt)
+    only: ~w(assets bios system lib favicon.ico robots.txt)
   )
 
   # Code reloading can be explicitly enabled under the
