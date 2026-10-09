@@ -12,14 +12,15 @@ IMAGE = "{{config_root}}/packages/image-builder"
 
 [tasks.deps]
 description = "Install the browser runtime (v86, xterm.js)"
-dir = "{{config_root}}/packages/web"
-run = "npm ci --no-audit --no-fund"
+run = "npm ci --prefix packages/web --no-audit --no-fund"
 sources = ["packages/web/package.json", "packages/web/package-lock.json"]
 outputs = ["packages/web/node_modules/.package-lock.json"]
 
 [tasks.site]
 description = "Assemble the static page and browser runtime into dist/"
 depends = ["deps"]
+# bash features below; mise's default `sh` is dash on Ubuntu
+shell = "bash -c"
 run = '''
 set -euo pipefail
 mkdir -p "$DIST"/{v86,xterm,bios}
@@ -37,6 +38,8 @@ touch "$DIST/.nojekyll"
 
 [tasks.rootfs]
 description = "Build the i386 Alpine + Elixir guest and convert it to v86's 9p format"
+# bash features below; mise's default `sh` is dash on Ubuntu
+shell = "bash -c"
 run = '''
 set -euo pipefail
 docker build --platform linux/386 --tag iex-wasm-rootfs "$IMAGE"
