@@ -308,9 +308,10 @@ dark overrides only the tokens.
 - **Follow the visual viewport.** The full-screen panel and the run page size themselves to
   `visualViewport` (`--vvh`, `--vvt`), so the on-screen keyboard shrinks the terminal instead of
   covering the prompt.
-- **Never fewer than 90 columns.** The console replay was recorded at 90; narrower screens pan the
-  terminal sideways (scrollbar hidden) and the pan follows the cursor. Terminal type drops to 13px
-  under 640px.
+- **The terminal fits the screen.** It is sized to the screen before the restored output is
+  written, so that output wraps at the visitor's width, and the guest is told the size, so what
+  the app prints next wraps too and full-screen apps redraw. Startup banners stay unboxed with
+  short lines for the same reason. Terminal type drops to 13px under 640px.
 - **The key bar.** On coarse pointers, a dark bar under the terminal carries the keys phone
   keyboards lack: esc, tab, a sticky ctrl (signal colour while armed), ^C, and arrows (drawn SVG
   chevrons, sent in the cursor mode the app asked for). Keys act on pointerdown and never take focus.

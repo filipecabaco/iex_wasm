@@ -19,13 +19,13 @@ _examples = [
     "inspect(str.split)",
     "{'nested': {'data': [1, 2, 3], 'pretty': True}}",
 ]
-console.print(Panel.fit(
-    Text.from_markup(
-        "[bold]Python + Rich[/]: CPython 3.14 on 32-bit Linux, emulated in this tab.\n\nTry:\n"
-        + "\n".join(f"  [cyan]{escape(e)}[/]" for e in _examples),
-        # show the examples' :sparkles: as typed, not as an emoji
-        emoji=False,
-    ),
-    border_style="blue",
-))
+# Plain lines rather than a panel: the banner is replayed on whatever screen opens the run, and
+# short unboxed lines wrap cleanly on a phone where a box would break apart
+console.print(Text.from_markup(
+    "\n[bold]Python + Rich[/]: CPython 3.14 on 32-bit Linux,\nemulated in this tab. Try:\n\n"
+    + "\n".join(f"  [cyan]{escape(e)}[/]" for e in _examples)
+    + "\n",
+    # show the examples' :sparkles: as typed, not as an emoji
+    emoji=False,
+), soft_wrap=True)
 del _examples

@@ -35,12 +35,9 @@
     #status[data-state="ready"]::before { background: #d6300c; animation: live 2s ease-in-out infinite; }
     @keyframes live { 50% { opacity: .35; } }
     @media (prefers-reduced-motion: reduce) { #status[data-state="ready"]::before { animation: none; } }
-    /* Never narrower than the 90 columns the snapshot was recorded at: a narrow screen pans
-       sideways (following the cursor) rather than wrapping the replayed output into wreckage */
-    #terminal { flex: 1; min-height: 0; padding: 4px; overflow: auto hidden; scrollbar-width: none;
-      overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-    #terminal::-webkit-scrollbar { display: none; }
-    #terminal .xterm { width: max-content; }
+    /* The terminal is as wide as the screen: the guest is told its size, so what the app prints
+       from here wraps to it, and full-screen apps redraw for it */
+    #terminal { flex: 1; min-height: 0; padding: 4px; overflow: hidden; }
 
     /* The keys a phone keyboard lacks, for touch screens only. Pressing one never takes focus
        from the terminal, so the keyboard stays up */
@@ -189,35 +186,24 @@
         for (const [k, v] of Object.entries({ autocapitalize: "off", autocorrect: "off", autocomplete: "off", spellcheck: "false" })) field.setAttribute(k, v);
         field.setAttribute("enterkeyhint", "send");
       }
-      const replay = await screen;
-      if (replay) term.write(new Uint8Array(replay));
-
-      // Size the terminal to the window and tell the guest, so the app wraps lines correctly
+      // Size the terminal to the screen before showing anything, so the replayed screen wraps at
+      // the width the visitor actually has, then tell the guest: what the app prints from here
+      // wraps to it, and full-screen apps redraw for it
       if (matchMedia("(max-width: 640px)").matches) term.options.fontSize = 13;
       const fit = new FitAddon.FitAddon();
       term.loadAddon(fit);
-      const box = document.getElementById("terminal");
       const resize = () => {
-        const size = fit.proposeDimensions();
-        if (!size || !Number.isFinite(size.cols)) return;
-        const cols = Math.max(MIN_COLS, size.cols);
-        if (cols !== term.cols || size.rows !== term.rows) term.resize(cols, size.rows);
+        fit.fit();
         // v86 0.5.462 forwards this pair as-is into Linux's resize message, which is
         // rows-first, so pass rows first for the guest to see the right size
         emulator.bus.send("virtio-console0-resize", [term.rows, term.cols]);
       };
+      fit.fit();
+      const replay = await screen;
+      if (replay) term.write(new Uint8Array(replay));
       window.addEventListener("resize", resize);
       viewport?.addEventListener("resize", resize);
       resize();
-
-      // When the terminal is wider than the screen, keep the cursor in view as you type
-      term.onCursorMove(() => {
-        if (box.scrollWidth <= box.clientWidth) return;
-        const cell = box.querySelector(".xterm-screen").offsetWidth / term.cols;
-        const x = term.buffer.active.cursorX * cell;
-        if (x < box.scrollLeft + cell * 2) box.scrollLeft = Math.max(0, x - box.clientWidth / 3);
-        else if (x > box.scrollLeft + box.clientWidth - cell * 3) box.scrollLeft = x - box.clientWidth * 2 / 3;
-      });
 
       queueInput(term);
       keyBar(term);
@@ -258,8 +244,6 @@
     // v86 (0.5.462) drops console input when the guest has no receive buffer queued, which loses
     // keystrokes when typing fast or pasting. Queue input here and only send it when one is free.
     const encoder = new TextEncoder();
-    // build-state.mjs sizes the console to 90x30 for the snapshot, so the replay is 90 wide
-    const MIN_COLS = 90;
     let pending = [];
     let rx = null;
 

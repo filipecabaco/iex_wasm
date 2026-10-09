@@ -109,8 +109,16 @@ func (m model) View() tea.View {
 	if !m.running {
 		state = "paused"
 	}
-	fmt.Fprintf(&b, "%s %s\n", title.Render("Game of Life"),
-		faint.Render(fmt.Sprintf("Go + Bubble Tea · generation %d · population %d · %s", m.gen, population, state)))
+	// On a narrow screen (a phone), the header and help shorten rather than run off the edge
+	width := 0
+	if len(m.cells) > 0 {
+		width = len(m.cells[0])
+	}
+	status := fmt.Sprintf("Go + Bubble Tea · generation %d · population %d · %s", m.gen, population, state)
+	if width < len("Game of Life ")+len([]rune(status)) {
+		status = fmt.Sprintf("gen %d · pop %d · %s", m.gen, population, state)
+	}
+	fmt.Fprintf(&b, "%s %s\n", title.Render("Game of Life"), faint.Render(status))
 
 	for y, row := range m.cells {
 		for x, c := range row {
@@ -125,7 +133,11 @@ func (m model) View() tea.View {
 		}
 		b.WriteByte('\n')
 	}
-	b.WriteString(faint.Render("space pause · arrows + enter draw · r random · g glider gun · c clear · +/- speed · q quit"))
+	help := "space pause · arrows + enter draw · r random · g glider gun · c clear · +/- speed · q quit"
+	if width < len([]rune(help)) {
+		help = "space pause · g gun · r random · q quit"
+	}
+	b.WriteString(faint.Render(help))
 
 	v := tea.NewView(b.String())
 	v.AltScreen = true
