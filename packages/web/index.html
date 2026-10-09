@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IEx in browser</title>
+  <link rel="stylesheet" href="xterm/xterm.css">
+  <style>
+    html, body { height: 100%; margin: 0; background: #000; color: #aaa; font: 14px monospace; }
+    body { display: flex; flex-direction: column; }
+    #status { padding: 8px; }
+    #terminal { flex: 1; min-height: 0; padding: 4px; }
+  </style>
+  <script src="xterm/xterm.js"></script>
+  <script src="xterm/addon-fit.js"></script>
+  <script src="v86/libv86.js"></script>
+</head>
+<body>
+  <div id="status">Loading VM&hellip;</div>
+  <div id="terminal"></div>
+  <script>
+    const status = document.getElementById("status");
+
+    // Everything below must match packages/image-builder/build-state.mjs:
+    // the snapshot is only valid for the same RAM size and devices
+    const emulator = new V86({
+      wasm_path: "v86/v86.wasm",
+      memory_size: 512 * 1024 * 1024,
+      vga_memory_size: 8 * 1024 * 1024,
+      bios: { url: "bios/seabios.bin" },
+      vga_bios: { url: "bios/vgabios.bin" },
+      filesystem: {
+        basefs: "system/filesystem.json",
+        baseurl: "system/filesystem/",
+      },
+      initial_state: { url: "system/state.bin.zst" },
+      // IEx runs on the virtio console (hvc0), rendered with xterm.js
+      virtio_console: {
+        type: "xtermjs",
+        container: document.getElementById("terminal"),
+        xterm_lib: Terminal,
+      },
+      disable_speaker: true,
+      autostart: true,
+    });
+
+    emulator.add_listener("download-progress", (e) => {
+      if (e.file_name.endsWith("state.bin.zst") && e.lengthComputable) {
+        status.textContent = `Loading VM… ${Math.round((e.loaded / e.total) * 100)}%`;
+      }
+    });
+
+    emulator.add_listener("emulator-started", () => {
+      status.hidden = true;
+
+      // Size the terminal to the window and tell the guest, so IEx wraps lines correctly
+      const term = emulator.virtio_console_adapter.term;
+      const fit = new FitAddon.FitAddon();
+      term.loadAddon(fit);
+      const resize = () => {
+        fit.fit();
+        emulator.bus.send("virtio-console0-resize", [term.cols, term.rows]);
+      };
+      window.addEventListener("resize", resize);
+      resize();
+
+      queueInput(term);
+      // IEx printed its prompt before the snapshot; Ctrl+L makes it redraw one
+      sendInput(new Uint8Array([0x0c]));
+      term.focus();
+    });
+
+    // v86 (0.5.462) drops console input when the guest has no receive buffer queued, which loses
+    // keystrokes when typing fast or pasting. Queue input here and only send it when one is free.
+    const encoder = new TextEncoder();
+    let pending = [];
+    let rx = null;
+
+    function queueInput(term) {
+      rx = emulator.v86?.cpu?.devices?.virtio_console?.virtio?.queues?.[0];
+      if (!rx) return; // internals moved in a newer v86: keep its default (lossy) input
+      emulator.virtio_console_adapter.on_data_disposable.dispose();
+      term.onData((data) => sendInput(encoder.encode(data)));
+    }
+
+    function sendInput(bytes) {
+      // One guest buffer per send; keep chunks small so each fits
+      for (let i = 0; i < bytes.length; i += 64) pending.push(bytes.subarray(i, i + 64));
+      pump();
+    }
+
+    function pump() {
+      while (pending.length && (!rx || rx.has_request())) {
+        emulator.bus.send("virtio-console0-input-bytes", pending.shift());
+      }
+      if (pending.length) setTimeout(pump, 5);
+    }
+  </script>
+</body>
+</html>

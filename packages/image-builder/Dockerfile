@@ -1,43 +1,32 @@
-FROM i386/debian:sid-slim
+# v86 emulates a 32-bit x86 CPU, so the guest must be i386.
+# Based on upstream v86's tools/docker/alpine. Alpine still ships current Elixir/OTP and a small
+# `virt` kernel for x86, and boots with OpenRC, which is much faster under emulation than systemd.
+FROM i386/alpine:3.24.2
 
-ENV DEBIAN_FRONTEND noninteractive
+RUN apk add --no-cache openrc alpine-base agetty alpine-conf linux-virt linux-firmware-none elixir erlang28
 
-RUN apt update && \
-    apt --yes --no-install-recommends install \
-    linux-image-686 grub2 systemd \
-    libterm-readline-perl-perl \
-    gcc libc6-dev \
-    unzip bzip2 xz-utils \
-    libc-l10n locales \
-    && \
-    touch /root/.Xdefaults && \
-    echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
-    locale-gen \
-    chsh -s /bin/bash && \
-    echo "root:root" | chpasswd && \
-    echo "iex" > "/root/.bashrc" && \
-    mkdir -p /etc/systemd/system/serial-getty@ttyS0.service.d/ && \
-    systemctl enable serial-getty@ttyS0.service && \
-    rm /lib/systemd/system/getty.target.wants/getty-static.service && \
-    rm /etc/motd /etc/issue && \
-    systemctl disable systemd-timesyncd.service && \
-    systemctl disable apt-daily.timer && \
-    systemctl disable apt-daily-upgrade.timer && \
-    systemctl disable dhcpcd.service && \
-    echo "tmpfs /tmp tmpfs nodev,nosuid 0 0" >> /etc/fstab
-RUN apt --yes install elixir
-COPY getty-noclear.conf getty-override.conf /etc/systemd/system/getty@tty1.service.d/
-COPY getty-autologin-serial.conf /etc/systemd/system/serial-getty@ttyS0.service.d/
-COPY logind.conf /etc/systemd/logind.conf
-COPY boot-9p /etc/initramfs-tools/scripts/boot-9p
+# No VGA gettys: the browser talks to IEx over the virtio console (hvc0), and the build script
+# drives a root shell on the serial port (ttyS0)
+RUN sed -i '/^tty[0-9]/d' /etc/inittab && \
+    echo 'ttyS0::respawn:/sbin/agetty --autologin root -s ttyS0 115200 vt100' >> /etc/inittab && \
+    echo 'hvc0::respawn:/sbin/agetty --autologin root --noclear hvc0 xterm-256color' >> /etc/inittab && \
+    echo "root:" | chpasswd && \
+    # /etc/hostname is managed by Docker during the build, so set it the OpenRC way
+    echo 'hostname="iex"' > /etc/conf.d/hostname
 
-# this needs to be commented out in order to boot from hdd
-RUN printf '%s\n' 9p 9pnet 9pnet_virtio virtio virtio_ring virtio_pci | tee -a /etc/initramfs-tools/modules && \
-    echo 'BOOT=boot-9p' | tee -a /etc/initramfs-tools/initramfs.conf && \
-    update-initramfs -u
+# Login shells on the virtio console go straight into IEx; exiting IEx respawns a fresh one
+RUN printf '%s\n' \
+    'export LANG=C.UTF-8' \
+    'if [ "$(tty)" = /dev/hvc0 ]; then clear; exec iex; fi' \
+    > /root/.profile
 
-RUN apt-get --yes clean && \
-    rm -r /var/lib/apt/lists/* && \
-    rm -r /usr/share/doc/* && \
-    rm -r /usr/share/man/* && \
-    rm /var/log/*.log /var/log/lastlog /var/log/wtmp /var/log/apt/*.log /var/log/apt/*.xz
+# https://wiki.alpinelinux.org/wiki/Alpine_Linux_in_a_chroot#Preparing_init_services
+RUN for i in devfs dmesg mdev hwdrivers; do rc-update add $i sysinit; done && \
+    for i in modules sysctl hostname bootmisc; do rc-update add $i boot; done && \
+    rc-update add killprocs shutdown
+
+# initramfs that can mount the root filesystem over 9p (the v86 host filesystem)
+RUN mkinitfs -F "base virtio 9p" $(cat /usr/share/kernel/virt/kernel.release)
+
+# Everything removed here is bytes the browser never has to download
+RUN rm -rf /usr/share/doc /usr/share/man /var/cache/apk/* /lib/firmware/*
