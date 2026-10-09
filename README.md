@@ -5,7 +5,7 @@ image on real Linux inside [v86](https://github.com/copy/v86), an x86 emulator c
 WebAssembly, snapshots it once your app is ready, and writes a folder of static files. Visitors
 get your program running in their tab in about a second, with no server behind it.
 
-**[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir + SQLite, Python + Rich, TypeScript + Zod,
+**[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir + Postgres, Python + Rich, TypeScript + Zod,
 Go + Bubble Tea, Rust + clap, Java + Gson, and curl + jq (plain Alpine tools, online through your browser), each a small
 project in [`examples/`](examples) running in the browser.
 
@@ -109,7 +109,7 @@ bytes). What the demos show:
 
 | Demo | Boot | First commands | Never read | What dominates |
 |------|-----:|---------------:|-----------:|----------------|
-| Elixir + SQLite | 13.8 MB | 0 | 19.7 MB | a release boots in embedded mode: every module loads at startup |
+| Elixir + Postgres | 24.7 MB | 0 | 23.9 MB | a release in embedded mode loads every module at startup, and Postgres reads its catalog as it starts |
 | Python + Rich | 8.5 MB | 0.1 MB | 36.9 MB | the startup file imports Rich, so its modules are boot reads |
 | TypeScript + Zod | 25.8 MB | 4.1 MB | 22.2 MB | the `node` binary, then tsx/esbuild and Zod's modules on first use |
 | Go + Bubble Tea | 5.4 MB | 0 | 18.1 MB | one static binary, read at boot |
@@ -175,3 +175,6 @@ Built on [v86](https://github.com/copy/v86) by Fabian Hemmer and contributors, w
 the heavy lifting. The idea and early setup came from
 [snaplet/postgres-wasm](https://github.com/snaplet/postgres-wasm) and
 [iximiuz/docker-to-linux](https://github.com/iximiuz/docker-to-linux).
+
+For agents, the site serves a plain-text summary of the CLI at
+[filipecabaco.github.io/snowglobe/llms.txt](https://filipecabaco.github.io/snowglobe/llms.txt).

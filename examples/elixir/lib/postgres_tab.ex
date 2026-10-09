@@ -1,20 +1,23 @@
-defmodule SqliteTab do
+defmodule PostgresTab do
   @moduledoc """
-  A SQLite database inside this browser tab, through Ecto and the exqlite NIF: C code compiled
-  for 32-bit Linux, running on an emulated x86 CPU.
+  A PostgreSQL server inside this browser tab, reached through Ecto and Postgrex: Alpine's own
+  postgres binary for 32-bit Linux, running on an emulated x86 CPU next to this BEAM.
 
   The `modules` table holds every module loaded in this BEAM, with its application, function
   count, exports and size.
   """
 
-  alias SqliteTab.Repo
+  alias PostgresTab.Repo
 
   @doc "Runs any SQL statement and prints the result as a table."
   def sql(statement, params \\ []) do
     %{columns: columns, rows: rows, num_rows: count} = Repo.query!(statement, params)
-    # Statements like INSERT or CREATE return no columns and no rows, only a count
+    # Statements like INSERT or CREATE return no columns and no rows, only a count; SHOW returns a
+    # row but no count
     if columns not in [nil, []] and is_list(rows), do: IO.puts(table(columns, rows))
+    count = if is_list(rows) and rows != [], do: length(rows), else: count || 0
     IO.puts(IO.ANSI.faint() <> "#{count} row(s)" <> IO.ANSI.reset())
+    IEx.dont_display_result()
   end
 
   defp table(columns, rows) do

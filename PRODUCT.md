@@ -35,7 +35,7 @@ shell, not a subset runtime: the real program built from a Dockerfile.
 
 - Demos open in their own browser windows; the index page presents them and the runs.
 - Each demo build emits measured data: `warm-report.json` (files read by phase) and the snapshot.
-- Demos: Elixir + SQLite (Ecto/exqlite), Python + Rich, TypeScript + Zod (tsx), Go + Bubble Tea
+- Demos: Elixir + Postgres (Ecto/Postgrex, PostgreSQL 18 in the guest), Python + Rich, TypeScript + Zod (tsx), Go + Bubble Tea
   (Game of Life), Rust + clap (jtab), Java + Gson (jshell, OpenJDK 11), curl + jq (a shell, network on).
 - Repository: https://github.com/filipecabaco/snowglobe. Site: https://filipecabaco.github.io/snowglobe/
 

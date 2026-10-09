@@ -1,15 +1,15 @@
-defmodule SqliteTab.Seed do
+defmodule PostgresTab.Seed do
   @moduledoc false
 
   # Fills the database with the runtime itself: every module loaded in this BEAM, the application
   # it belongs to, and how big it is. Real data, collected inside the browser tab.
 
-  alias SqliteTab.Repo
+  alias PostgresTab.Repo
 
   def run do
     Repo.query!("""
     CREATE TABLE IF NOT EXISTS modules (
-      name TEXT PRIMARY KEY, app TEXT, functions INTEGER, exports INTEGER, bytes INTEGER
+      name text PRIMARY KEY, app text, functions integer, exports integer, bytes bigint
     )
     """)
 
@@ -31,7 +31,7 @@ defmodule SqliteTab.Seed do
     end
     |> Enum.chunk_every(200)
     |> Enum.each(
-      &Repo.insert_all(SqliteTab.ModuleRow, &1, on_conflict: :replace_all, conflict_target: :name)
+      &Repo.insert_all(PostgresTab.ModuleRow, &1, on_conflict: :replace_all, conflict_target: :name)
     )
   end
 end

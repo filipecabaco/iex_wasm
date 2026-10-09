@@ -1,8 +1,13 @@
 import Config
 
-config :sqlite_tab, ecto_repos: [SqliteTab.Repo]
+config :postgres_tab, ecto_repos: [PostgresTab.Repo]
 
-# /tmp is RAM inside the guest, so the database is part of the snapshot every visitor restores
-config :sqlite_tab, SqliteTab.Repo, database: "/tmp/beam.db", pool_size: 1
+# Postgres listens on a Unix socket only: a guest without networking has no loopback interface.
+# It runs from the guest's memory, so the database is part of the snapshot every visitor restores
+config :postgres_tab, PostgresTab.Repo,
+  socket_dir: "/run/postgresql",
+  username: "postgres",
+  database: "postgres",
+  pool_size: 2
 
 config :logger, level: :warning

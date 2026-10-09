@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!-- The share image for the demo page (site/og.png, 1200x630, referenced by og:image and
+     twitter:image). Regenerate after edits: open this file at a 1200x630 viewport with
+     deviceScaleFactor 2, capture it, and downscale to 1200x630 (sips -z 630 1200 site/og.png) for
+     crisp text at the size every platform expects. The terminal lines are real output recorded
+     by the demo builds (dist/*/transcript.json). -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>snowglobe share image</title>
+<style>
+  @font-face { font-family: "Switzer"; src: url("../site/fonts/Switzer-Variable.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "Fragment Mono"; src: url("../site/fonts/FragmentMono-Regular.woff2") format("woff2"); }
+  :root { --ink: #0d0d0d; --ink-2: #5a5a57; --rule: #dedede; --panel: #0b0b0c; --panel-ink: #e9e9e4; --signal: #d6300c;
+    --sans: "Switzer", sans-serif; --mono: "Fragment Mono", monospace; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body { background: #fff; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased;
+    padding: 52px 64px 56px; box-sizing: border-box; display: grid; grid-template-rows: auto 1fr; }
+
+  .top { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 22px; border-bottom: 1.5px solid var(--ink); }
+  .mark { font-weight: 650; font-size: 30px; letter-spacing: -.02em; }
+  .mark i { display: inline-block; width: .5em; height: .5em; border-radius: 50%; background: var(--signal); margin-left: .12em; vertical-align: .04em; }
+  .url { font: 400 17px var(--mono); color: var(--ink-2); }
+
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 452px; gap: 48px; align-items: center; padding-top: 8px; }
+  h1 { font-size: 76px; line-height: .95; letter-spacing: -.035em; font-weight: 620; margin: 0 0 24px; }
+  p { font-size: 23px; line-height: 1.4; color: var(--ink-2); margin: 0; max-width: 24em; }
+  p b { color: var(--ink); font-weight: 550; }
+
+  .panel { background: var(--panel); color: var(--panel-ink); border-radius: 8px; padding: 46px 26px 26px; position: relative;
+    font: 400 15.5px/1.5 var(--mono); white-space: pre; }
+  .panel .label { position: absolute; top: 14px; right: 18px; font-size: 13px; color: #8d8d88; }
+  .prompt { color: #8d8d88; }
+  .key { color: #7aa2f7; }
+  .str { color: #9ece6a; }
+  .dim { color: #8d8d88; }
+
+</style>
+</head>
+<body>
+  <div class="top">
+    <span class="mark">snowglobe<i></i></span>
+    <span class="url">filipecabaco.github.io/snowglobe</span>
+  </div>
+  <div class="main">
+    <div>
+      <h1>Real programs, sandboxed in your browser.</h1>
+      <p>Docker images as static sites: <b>Linux on an x86 CPU emulated in WebAssembly</b>, restored from a snapshot. No server.</p>
+    </div>
+    <div class="panel"><span class="label">recorded at build</span><span class="prompt">iex(1)&gt;</span> sql "SHOW server_version"
+server_version
+──────────────
+18.6
+
+<span class="prompt">~ $</span> curl -sS https://api.github.com/zen
+Anything added dilutes everything else.
+
+<span class="prompt">~ $</span> curl -sS …/repos/copy/v86 | jq …
+{
+  <span class="key">"name"</span>: <span class="str">"copy/v86"</span>,
+  <span class="key">"language"</span>: <span class="str">"JavaScript"</span>
+}</div>
+  </div>
+</body>
+</html>

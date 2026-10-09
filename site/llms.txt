@@ -1,0 +1,50 @@
+# snowglobe
+
+> snowglobe is a Go CLI that turns a Docker image into a static website that runs it in the
+> browser: real Linux on an x86 CPU emulated in WebAssembly (v86), restored from a snapshot taken
+> once the app was ready. The output is a folder of static files (GitHub Pages works); no server
+> runs the program. Guests must be 32-bit Alpine images (FROM i386/alpine). Docker is the only
+> requirement.
+
+Live demos: https://filipecabaco.github.io/snowglobe/ (Elixir + Postgres, Python + Rich,
+TypeScript + Zod, Go + Bubble Tea, Rust + clap, Java + Gson, curl + jq).
+Source and README: https://github.com/filipecabaco/snowglobe
+
+## Commands
+
+- `snowglobe build <dir with a Dockerfile | image ref> [flags]` builds the site into `--out` (default `dist`).
+- `snowglobe serve [dir] [--port N]` previews a built site on localhost.
+- `snowglobe pool <dir>` makes every site under a directory share one content-addressed blob store.
+- `snowglobe version`
+
+## Build flags (and the image labels they override)
+
+- `--cmd CMD`: the program to run (default: the image's ENTRYPOINT + CMD). Drops the image's ready and exercise labels.
+- `--ready TEXT` / `snowglobe.ready`: snapshot once this text appears on the console (default: after 5 s of quiet).
+- `--title TEXT` / `snowglobe.title`: the page title.
+- `--memory MB` / `snowglobe.memory`: guest RAM (default 512).
+- `--exercise CMD` (repeatable) / `snowglobe.exercise` (JSON array): commands typed after the snapshot; the files they read are preloaded.
+- `--warm REGEX` / `snowglobe.warm`: extra guest paths to preload.
+- `--network fetch` / `snowglobe.network`: give the guest a network (default `none`).
+
+Example Dockerfile labels:
+
+    LABEL snowglobe.title="My app" snowglobe.ready="iex(1)> " snowglobe.memory="640" \
+          snowglobe.network="fetch" snowglobe.exercise='["h Enum.map"]'
+
+## Networking (`--network fetch`)
+
+Every request leaves as the visitor's own browser request; there is no proxy server.
+
+- HTTP (port 80): v86's fetch backend turns each request into fetch().
+- HTTPS (port 443): the page terminates TLS 1.3 itself (https-bridge.js) with a per-build CA that
+  only the guest trusts, then replays the request with fetch("https://...").
+- WebSockets (ws://, wss://): the guest's upgrade opens a browser WebSocket; frames pass through.
+- Limits: CORS applies (servers without it answer 502), no raw TCP or UDP.
+
+## What a built site contains
+
+- `index.html`: the page that restores the snapshot (`?embed` hides the status strip).
+- `system/state.bin.zst`: the snapshot; `system/filesystem.json` + blobs: the root filesystem over 9p.
+- `system/warm.pack`: files preloaded in one request; `warm-report.json` explains what went in.
+- `run.json`: measured facts of the build; `transcript.json`: the exercise commands and their output.

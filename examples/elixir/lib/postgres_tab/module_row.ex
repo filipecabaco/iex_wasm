@@ -1,4 +1,4 @@
-defmodule SqliteTab.ModuleRow do
+defmodule PostgresTab.ModuleRow do
   @moduledoc "One row per module loaded in this BEAM, filled in at startup."
   use Ecto.Schema
 
