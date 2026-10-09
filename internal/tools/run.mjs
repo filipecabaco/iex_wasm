@@ -60,6 +60,19 @@ const emulator = new V86({
   screen_dummy: true,
 });
 
+// A request the guest is waiting on is activity too: the console is quiet while it's in flight
+let inFlight = 0;
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (...args) => {
+  inFlight++;
+  try {
+    return await realFetch(...args);
+  } finally {
+    inFlight--;
+    lastActivity = Date.now();
+  }
+};
+
 // HTTPS and WebSockets go through the same bridge the page uses
 if (run.network === "fetch" && fs.existsSync(path.join(site, "https-bridge.js"))) {
   vm.runInThisContext(fs.readFileSync(path.join(site, "https-bridge.js"), "utf8"));
@@ -115,7 +128,7 @@ const resize = (rows, cols) => rows && cols && emulator.bus.send("virtio-console
 async function quiet() {
   const since = Date.now();
   await typing;
-  while (Date.now() - lastActivity < QUIET_MS && Date.now() - since < COMMAND_CAP_MS) await sleep(100);
+  while ((inFlight > 0 || Date.now() - lastActivity < QUIET_MS) && Date.now() - since < COMMAND_CAP_MS) await sleep(100);
 }
 
 // Terminal queries (cursor position, device attributes) have no terminal to answer them when the

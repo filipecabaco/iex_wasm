@@ -18,10 +18,14 @@ Source and README: https://github.com/filipecabaco/snowglobe
 - `snowglobe pwa <site> [--name N] [--short-name N]` makes a built site an installable Progressive
   Web App: manifest, icons, and a service worker that keeps it working offline once it has run.
   Run it after `pool`. Every demo on the live site is installable.
+- `snowglobe pack <site> [-o site.tar.gz]` writes a site as one self-contained tarball (.tar.gz or
+  .tar.zst, pooled blobs included) to publish on a CDN.
 - `snowglobe run [site] [--name N] [--detach]` restores a built site headlessly in a sandboxed
   container (unprivileged, read-only, memory-capped, offline unless built with a network). In a
   terminal it is an interactive session (ctrl-] quits); with stdin piped, each line is typed in as a
-  command and the output printed as plain text.
+  command and the output printed as plain text. The site can be a directory, a tarball, a tarball
+  URL, or a deployed site's URL (e.g. https://filipecabaco.github.io/snowglobe/python/): it is
+  fetched into a local cache first and revalidated on later runs.
 - `snowglobe exec <name> <command>` types one command into a detached instance and prints only what
   it printed (plain text when piped): the way for scripts and agents to drive a REPL.
 - `snowglobe attach <name>` joins a detached instance (ctrl-] detaches); `snowglobe ps` lists them;

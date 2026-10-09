@@ -124,6 +124,17 @@ $ snowglobe ps
 $ snowglobe stop pg
 ```
 
+A site doesn't have to be local. `snowglobe run` also takes a deployed site's URL (any static
+host or CDN: it mirrors what a run needs into a cache, the warm pack in one request) or a tarball,
+local or by URL, made with `snowglobe pack`. Downloads happen on the host and are revalidated
+(ETag or Last-Modified), so the second run starts from the cache and the sandbox stays offline:
+
+```console
+$ snowglobe run https://filipecabaco.github.io/snowglobe/python/
+$ snowglobe pack dist/elixir -o elixir.tar.gz      # one self-contained file, pooled blobs included
+$ snowglobe run https://cdn.example.com/elixir.tar.gz
+```
+
 Piped stdin is typed in one line at a time, each waiting until the app goes quiet. `exec` prints
 only what the command printed (no echo, no prompt) and plain text when its output isn't a
 terminal, which suits scripts and agents. Each instance starts fresh from the snapshot.

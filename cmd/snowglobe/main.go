@@ -7,11 +7,14 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/filipecabaco/snowglobe/internal/build"
 	"github.com/filipecabaco/snowglobe/internal/instance"
+	"github.com/filipecabaco/snowglobe/internal/pack"
 	"github.com/filipecabaco/snowglobe/internal/pool"
 	"github.com/filipecabaco/snowglobe/internal/pwa"
+	"github.com/filipecabaco/snowglobe/internal/remote"
 	"github.com/filipecabaco/snowglobe/internal/serve"
 )
 
@@ -28,9 +31,14 @@ Usage:
   snowglobe pwa <dir> [--name N] [--short-name N]   make a built site an installable app that works
                                                      offline once it has run (manifest, icons,
                                                      service worker)
-  snowglobe run [dir] [--name N] [--detach]          run a built site in a sandboxed container:
+  snowglobe pack <dir> [-o site.tar.gz]              pack a built site into one tarball (.tar.gz,
+                                                     .tar.zst) to publish on a CDN
+  snowglobe run [dir | url] [--name N] [--detach]    run a built site in a sandboxed container:
                                                      a session in a terminal; with stdin piped,
-                                                     each line is typed in as a command
+                                                     each line is typed in as a command. The site
+                                                     can be a directory, a tarball, a tarball URL
+                                                     or a deployed site's URL (fetched and cached
+                                                     first; the sandbox stays offline)
   snowglobe exec <name> <command>                    type a command into a running instance and
                                                      print what it printed
   snowglobe attach <name>                            join a running instance (ctrl-] detaches)
@@ -78,6 +86,8 @@ func main() {
 		err = runPWA(os.Args[2:])
 	case "run":
 		err = runRun(os.Args[2:])
+	case "pack":
+		err = runPack(os.Args[2:])
 	case "exec":
 		if len(os.Args) < 4 {
 			err = fmt.Errorf("exec takes an instance name and a command")
@@ -181,6 +191,30 @@ func runPWA(args []string) error {
 	return nil
 }
 
+func runPack(args []string) error {
+	fs := flag.NewFlagSet("pack", flag.ContinueOnError)
+	out := fs.String("o", "", "")
+	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+
+	positional, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(positional) != 1 {
+		return fmt.Errorf("pack takes one built site directory")
+	}
+	site := positional[0]
+	if *out == "" {
+		*out = filepath.Base(filepath.Clean(site)) + ".tar.gz"
+	}
+	n, err := pack.Run(site, *out)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s: %.1f MB. Publish it anywhere and run it with: snowglobe run <its URL>\n", *out, float64(n)/(1<<20))
+	return nil
+}
+
 func runRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	o := instance.Options{Site: "dist"}
@@ -194,6 +228,17 @@ func runRun(args []string) error {
 	}
 	if len(positional) > 0 {
 		o.Site = positional[0]
+	}
+	// A URL or a tarball is fetched or unpacked into the cache first, then run like a directory
+	switch {
+	case remote.IsURL(o.Site):
+		if o.Site, err = remote.Fetch(o.Site); err != nil {
+			return err
+		}
+	case remote.IsTarball(o.Site):
+		if o.Site, err = remote.Unpack(o.Site); err != nil {
+			return err
+		}
 	}
 	return instance.Run(o, version)
 }
