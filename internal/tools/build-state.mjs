@@ -40,7 +40,9 @@ if (!systemDir) {
 
 const TIMEOUT_MS = 20 * 60 * 1000;
 const QUIET_MS = 5000;
-// An exercise command is done once its output has been quiet this long (or after the cap)
+// An exercise command is done once the guest has neither printed nor read a file for this long
+// (or after the cap). Output alone isn't enough: a runtime can go quiet while it compiles and
+// loads modules, and reads still in flight would be credited to the next command
 const EXERCISE_QUIET_MS = 2500;
 const EXERCISE_CAP_MS = 3 * 60 * 1000;
 // Must match memory_size in the page: the snapshot is only valid for the same RAM size
@@ -74,6 +76,7 @@ const emulator = new V86({
 // restore (the snapshot is taken with the page cache dropped), and while exercising they are
 // exactly what a visitor's first commands would fetch
 const reads = { boot: new Set(), exercise: {} };
+let lastActivity = Date.now();
 let readPhase = reads.boot;
 // fs9p only exists once v86's wasm has loaded; the guest starts running after this event
 emulator.add_listener("emulator-loaded", () => {
@@ -86,6 +89,7 @@ emulator.add_listener("emulator-loaded", () => {
   const load = storage.load_from_server.bind(storage);
   storage.load_from_server = (name, size) => {
     readPhase.add(name);
+    lastActivity = Date.now();
     return load(name, size);
   };
 });
@@ -125,10 +129,9 @@ emulator.add_listener("serial0-output-byte", (byte) => {
 
 let console0 = Buffer.alloc(0);
 let quietTimer = null;
-let lastOutput = Date.now();
 emulator.add_listener("virtio-console0-output-bytes", (bytes) => {
   console0 = Buffer.concat([console0, Buffer.from(bytes)]);
-  lastOutput = Date.now();
+  lastActivity = Date.now();
   if (appReady) return;
 
   if (options.ready) {
@@ -188,8 +191,8 @@ async function exercise() {
       emulator.bus.send("virtio-console0-input-bytes", encoder.encode(chunk));
     }
 
-    lastOutput = Date.now();
-    while (Date.now() - lastOutput < EXERCISE_QUIET_MS && Date.now() - started < EXERCISE_CAP_MS) {
+    lastActivity = Date.now();
+    while (Date.now() - lastActivity < EXERCISE_QUIET_MS && Date.now() - started < EXERCISE_CAP_MS) {
       await sleep(250);
     }
     process.stderr.write(` (${readPhase.size} files, ${((Date.now() - started) / 1000).toFixed(1)}s)`);
