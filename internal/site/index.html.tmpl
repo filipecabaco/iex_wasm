@@ -20,6 +20,11 @@
     @keyframes live { 50% { opacity: .35; } }
     @media (prefers-reduced-motion: reduce) { #status[data-state="ready"]::before { animation: none; } }
     #terminal { flex: 1; min-height: 0; padding: 4px; }
+    @media (prefers-color-scheme: dark) {
+      #strip { background: #0d0d0c; color: #ecece8; border-bottom-color: #2b2b29; }
+      #strip .facts { color: #a2a29c; }
+      #status[data-state="ready"]::before { background: #ff5a2e; }
+    }
     /* ?embed: the page hosting this run already says what it is */
     .embed #strip { display: none; }
   </style>

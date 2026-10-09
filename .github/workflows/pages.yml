@@ -27,6 +27,17 @@ jobs:
       - name: Test
         run: mise run test
 
+      # Anonymous Docker Hub pulls from shared runners hit its rate limit (429); pull through
+      # Google's public mirror instead
+      - name: Use a Docker Hub mirror
+        run: |
+          config=/etc/docker/daemon.json
+          [ -s "$config" ] || echo '{}' | sudo tee "$config" > /dev/null
+          sudo jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' "$config" | sudo tee "$config.new" > /dev/null
+          sudo mv "$config.new" "$config"
+          sudo systemctl restart docker
+          docker info --format '{{.RegistryConfig.Mirrors}}'
+
       # The i386 guest image builds natively on amd64 runners, no emulation needed
       - name: Build site
         run: mise run build

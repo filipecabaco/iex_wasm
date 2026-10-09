@@ -275,3 +275,28 @@ A run opened in its own window (`internal/site/index.html.tmpl`) shows a one-lin
 - **Don't** introduce retro, CRT or nostalgic terminal styling, or a dark dev-tool page theme.
 - **Don't** use uppercase tracked labels. Labels are sentence-case 13px Graphite.
 - **Don't** swap Fragment Mono back to Geist Mono, which was replaced as an overused face.
+
+## Dark Mode
+
+The page follows the visitor's system theme by default, and a text toggle in the masthead
+("Dark" / "Light") pins the other one, remembered in `localStorage` and applied before first paint.
+Dark is the same system inverted, not a separate world: every colour is a token on `:root`, and
+dark overrides only the tokens.
+
+| Token | Light | Dark |
+|-------|-------|------|
+| `--bg` (page ground) | #ffffff | #0d0d0c |
+| `--ink` | #0d0d0d | #ecece8 |
+| `--ink-2` (secondary text) | #5a5a57 | #a2a29c |
+| `--rule` | #dedede | #2b2b29 |
+| `--soft` (code blocks) | #f3f3f0 | #171716 |
+| `--panel` (terminals) | #0b0b0c | #050505, edged by a 1px `--panel-edge` (#2b2b29) |
+| `--signal` | #d6300c | #ff5a2e |
+| `--on-signal` (run button text) | #ffffff | #0b0b0c |
+| `--restoring` dot | #c48a1e | #e0a640 |
+
+- The terminals stay the darkest surface in both themes; in dark they gain a hairline edge so
+  they still read as panels against the near-black ground.
+- The signal brightens in dark to keep its contrast against the ground, and the run button flips
+  to dark text on it.
+- The run window's strip follows the system theme through `prefers-color-scheme`.
