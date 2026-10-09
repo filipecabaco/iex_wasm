@@ -1,0 +1,6 @@
+\set QUIET 1
+-- Results stay on the screen instead of opening a pager
+\pset pager off
+\pset null '∅'
+\set PROMPT1 '%/=# '
+\unset QUIET

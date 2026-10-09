@@ -21,7 +21,7 @@ People who might package their own project with snowglobe are secondary; the rep
 
 snowglobe is a Go CLI that packages a Docker image (32-bit Alpine) into a static website that runs
 it in the browser: real Linux on an x86 CPU emulated in WebAssembly (v86), restored from a
-snapshot taken once the app was ready. The demo page showcases seven such runs, one per language plus a shell of ordinary tools,
+snapshot taken once the app was ready. The demo page showcases nine such runs, one per language plus a shell of ordinary tools,
 each a small project with a real dependency.
 
 ## Positioning
@@ -35,7 +35,7 @@ shell, not a subset runtime: the real program built from a Dockerfile.
 
 - Demos open in their own browser windows; the index page presents them and the runs.
 - Each demo build emits measured data: `warm-report.json` (files read by phase) and the snapshot.
-- Demos: Elixir + Postgres (Ecto/Postgrex, PostgreSQL 18 in the guest), Python + Rich, TypeScript + Zod (tsx), Go + Bubble Tea
+- Demos: Elixir IEx (plain IEx from Alpine packages), PostgreSQL (psql against a Postgres 18 server), Elixir + Postgres (Ecto/Postgrex, PostgreSQL 18 in the guest), Python + Rich, TypeScript + Zod (tsx), Go + Bubble Tea
   (Game of Life), Rust + clap (jtab), Java + Gson (jshell, OpenJDK 11), curl + jq (a shell, network on).
 - Repository: https://github.com/filipecabaco/snowglobe. Site: https://filipecabaco.github.io/snowglobe/
 
@@ -55,7 +55,7 @@ The repo's voice is candid ("this is an experiment"); claims stay honest.
 
 ## Evidence on Hand
 
-- The seven live demos, and per-demo measurements produced by the build (`warm-report.json`, run
+- The nine live demos, and per-demo measurements produced by the build (`warm-report.json`, run
   metadata). No users, testimonials, stars, adopters or benchmarks against other tools exist; never
   fabricate them.
 

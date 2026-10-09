@@ -5,7 +5,7 @@ image on real Linux inside [v86](https://github.com/copy/v86), an x86 emulator c
 WebAssembly, snapshots it once your app is ready, and writes a folder of static files. Visitors
 get your program running in their tab in about a second, with no server behind it.
 
-**[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir + Postgres, Python + Rich, TypeScript + Zod,
+**[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir IEx, PostgreSQL, Elixir + Postgres, Python + Rich, TypeScript + Zod,
 Go + Bubble Tea, Rust + clap, Java + Gson, and curl + jq (plain Alpine tools, online through your browser), each a small
 project in [`examples/`](examples) running in the browser.
 
@@ -220,7 +220,7 @@ flowchart LR
 ```sh
 mise install       # Go, pinned in mise.toml
 mise run test
-mise run build     # build all seven examples into dist/ (a few minutes)
+mise run build     # build all nine examples into dist/ (a few minutes)
 mise run serve
 ```
 

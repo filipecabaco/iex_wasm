@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="snowglobe">
   <meta property="og:title" content="snowglobe: real programs, sandboxed in your browser">
-  <meta property="og:description" content="Docker images as static sites: Linux on an x86 CPU emulated in WebAssembly, restored from a snapshot. Seven live runs, from Elixir + Postgres to curl + jq. No server.">
+  <meta property="og:description" content="Docker images as static sites: Linux on an x86 CPU emulated in WebAssembly, restored from a snapshot. Nine live runs, from Elixir + Postgres to curl + jq. No server.">
   <meta property="og:url" content="https://filipecabaco.github.io/snowglobe/">
   <meta property="og:image" content="https://filipecabaco.github.io/snowglobe/og.png">
   <meta property="og:image:width" content="1200">
@@ -18,10 +18,10 @@
   <meta property="og:image:alt" content="snowglobe: real programs, sandboxed in your browser, with a terminal showing Postgres, curl and jq output recorded at build">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="snowglobe: real programs, sandboxed in your browser">
-  <meta name="twitter:description" content="Docker images as static sites: Linux on an emulated x86 CPU in WebAssembly. Seven live runs. No server.">
+  <meta name="twitter:description" content="Docker images as static sites: Linux on an emulated x86 CPU in WebAssembly. Nine live runs. No server.">
   <meta name="twitter:image" content="https://filipecabaco.github.io/snowglobe/og.png">
   <meta name="twitter:image:alt" content="snowglobe: real programs, sandboxed in your browser">
-  <meta name="description" content="Seven sandboxed runs in your browser: real programs on Linux, emulated in WebAssembly, packaged from Dockerfiles by snowglobe.">
+  <meta name="description" content="Nine sandboxed runs in your browser: real programs on Linux, emulated in WebAssembly, packaged from Dockerfiles by snowglobe.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d0d0d'/%3E%3Ccircle cx='8' cy='8' r='3.2' fill='%23d6300c'/%3E%3C/svg%3E">
   <link rel="preload" href="fonts/Switzer-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="xterm/xterm.css">
@@ -507,6 +507,8 @@ $ snowglobe exec py 'sum(range(10))'
   <script src="xterm/xterm.js" defer></script>
   <script type="module">
     const demos = [
+      { dir: "iex", name: "Elixir IEx", stack: "Just IEx, from Alpine's Elixir and Erlang packages: processes, tasks and docs, in a tab.", show: [0, 2, 3, 4] },
+      { dir: "postgres", name: "PostgreSQL", stack: "A Postgres 18 server from Alpine's packages, with psql attached and a small planets table to query.", show: [0, 1, 2, 3] },
       { dir: "elixir", name: "Elixir + Postgres", stack: "A Mix release with Ecto and Postgrex, talking to a PostgreSQL 18 server running in the same tab.", show: [0, 1, 2, 3] },
       { dir: "python", name: "Python + Rich", stack: "CPython 3.14 with Rich rendering tables, syntax and tracebacks.", show: [0, 1, 2, 6] },
       { dir: "typescript", name: "TypeScript + Zod", stack: "Node 24 and tsx, with Zod validating live HTTPS responses; fetch() and WebSockets go out through your browser.", show: [0, 1, 6, 7, 8] },
