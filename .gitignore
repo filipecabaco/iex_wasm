@@ -8,3 +8,6 @@
 # Editor and language-server state
 .expert/
 .elixir_ls/
+
+# Impeccable review captures (regenerated per review)
+/.impeccable/review/

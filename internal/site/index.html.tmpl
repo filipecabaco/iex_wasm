@@ -6,17 +6,33 @@
   <title>{{.Title}}</title>
   <link rel="stylesheet" href="xterm/xterm.css">
   <style>
-    html, body { height: 100%; margin: 0; background: #000; color: #aaa; font: 14px monospace; }
-    body { display: flex; flex-direction: column; }
-    #status { padding: 8px; }
+    html, body { height: 100%; margin: 0; background: #000; }
+    body { display: flex; flex-direction: column; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    /* The strip: what this window is, and that it's a sandbox */
+    #strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1.25rem; padding: .45rem .75rem;
+      background: #fff; color: #0d0d0d; border-bottom: 1px solid #0d0d0d; }
+    #strip .name { font-weight: 700; }
+    #strip .facts { color: #5a5a57; }
+    #status { margin-left: auto; font-variant-numeric: tabular-nums; }
+    #status::before { content: ""; display: inline-block; width: .55em; height: .55em; margin-right: .45em;
+      border-radius: 50%; background: #c48a1e; vertical-align: .05em; }
+    #status[data-state="ready"]::before { background: #d6300c; animation: live 2s ease-in-out infinite; }
+    @keyframes live { 50% { opacity: .35; } }
+    @media (prefers-reduced-motion: reduce) { #status[data-state="ready"]::before { animation: none; } }
     #terminal { flex: 1; min-height: 0; padding: 4px; }
+    /* ?embed: the page hosting this run already says what it is */
+    .embed #strip { display: none; }
   </style>
   <script src="xterm/xterm.js"></script>
   <script src="xterm/addon-fit.js"></script>
   <script src="v86/libv86.js"></script>
 </head>
 <body>
-  <div id="status">Loading VM&hellip;</div>
+  <header id="strip">
+    <span class="name">{{.Title}}</span>
+    <span class="facts">sandboxed in this tab · no server · no network</span>
+    <span id="status" role="status" data-state="loading">loading 0%</span>
+  </header>
   <div id="terminal"></div>
   <script>
     const status = document.getElementById("status");
@@ -44,9 +60,41 @@
       autostart: true,
     });
 
+    const embedded = new URLSearchParams(location.search).has("embed");
+    if (embedded) document.documentElement.classList.add("embed");
+
+    // Tell any snowglobe page on this origin (an index of several runs) what this window is doing
+    const run = {
+      embedded,
+      id: crypto.randomUUID?.() ?? String(Math.random()).slice(2),
+      title: document.title,
+      path: location.pathname,
+      state: "loading",
+      progress: 0,
+      openedAt: Date.now(),
+      readyAt: null,
+    };
+    const runs = "BroadcastChannel" in window ? new BroadcastChannel("snowglobe-runs") : null;
+    const announce = () => runs?.postMessage({ type: "run", run, at: Date.now() });
+    runs?.addEventListener("message", ({ data }) => {
+      if (data?.type === "hello") announce();
+      if (data?.type === "close" && data.id === run.id) window.close();
+    });
+    setInterval(announce, 2000);
+    addEventListener("pagehide", () => runs?.postMessage({ type: "run", run: { ...run, state: "closed" }, at: Date.now() }));
+    announce();
+
+    const setStatus = (state, text) => {
+      run.state = state;
+      status.dataset.state = state;
+      status.textContent = text;
+      announce();
+    };
+
     emulator.add_listener("download-progress", (e) => {
       if (e.file_name.endsWith("state.bin.zst") && e.lengthComputable) {
-        status.textContent = `Loading VM… ${Math.round((e.loaded / e.total) * 100)}%`;
+        run.progress = Math.round((e.loaded / e.total) * 100);
+        setStatus("loading", `loading ${run.progress}%`);
       }
     });
 
@@ -54,7 +102,8 @@
     const screen = fetch("system/console.bin").then((r) => (r.ok ? r.arrayBuffer() : null));
 
     emulator.add_listener("emulator-started", async () => {
-      status.hidden = true;
+      run.readyAt = Date.now();
+      setStatus("ready", "running");
 
       const term = emulator.virtio_console_adapter.term;
       const replay = await screen;

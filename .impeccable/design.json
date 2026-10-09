@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-09T00:00:00Z",
+  "title": "Design System: snowglobe",
+  "extensions": {
+    "colorMeta": {
+      "signal": { "role": "primary", "displayName": "Signal Vermilion", "canonical": "#d6300c", "tonalRamp": ["oklch(15% 0.06 35)", "oklch(25% 0.1 35)", "oklch(35% 0.14 35)", "oklch(45% 0.18 35)", "oklch(57% 0.2 35)", "oklch(72% 0.14 35)", "oklch(85% 0.07 35)", "oklch(95% 0.025 35)"] },
+      "signal-tint": { "role": "primary", "displayName": "Signal Blush", "canonical": "#ffd9cd" },
+      "ink": { "role": "neutral", "displayName": "Press Black", "canonical": "#0d0d0d", "tonalRamp": ["oklch(15% 0 0)", "oklch(25% 0 0)", "oklch(35% 0 0)", "oklch(45% 0 0)", "oklch(60% 0 0)", "oklch(75% 0 0)", "oklch(85% 0 0)", "oklch(95% 0 0)"] },
+      "ink-2": { "role": "neutral", "displayName": "Graphite", "canonical": "#5a5a57", "tonalRamp": ["oklch(15% 0.004 100)", "oklch(25% 0.004 100)", "oklch(35% 0.004 100)", "oklch(45% 0.005 100)", "oklch(60% 0.005 100)", "oklch(75% 0.005 100)", "oklch(85% 0.004 100)", "oklch(95% 0.004 100)"] },
+      "rule": { "role": "neutral", "displayName": "Hairline Grey", "canonical": "#dedede" },
+      "spent": { "role": "neutral", "displayName": "Spent Grey", "canonical": "#c9c9c5" },
+      "soft": { "role": "neutral", "displayName": "Bone", "canonical": "#f3f3f0" },
+      "paper": { "role": "neutral", "displayName": "Paper", "canonical": "#ffffff" },
+      "panel": { "role": "neutral", "displayName": "Panel Black", "canonical": "#0b0b0c" },
+      "panel-ink": { "role": "neutral", "displayName": "Panel Ink", "canonical": "#e9e9e4" },
+      "panel-dim": { "role": "neutral", "displayName": "Panel Dim", "canonical": "#8d8d88" },
+      "pending": { "role": "tertiary", "displayName": "Restoring Amber", "canonical": "#c48a1e", "tonalRamp": ["oklch(15% 0.04 75)", "oklch(25% 0.07 75)", "oklch(35% 0.09 75)", "oklch(45% 0.11 75)", "oklch(66% 0.13 75)", "oklch(78% 0.1 75)", "oklch(88% 0.06 75)", "oklch(96% 0.02 75)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Hero headline only; balanced wrap, max 26ch." },
+      "headline": { "displayName": "Headline", "purpose": "Section heads; max 14ch." },
+      "run-title": { "displayName": "Run title", "purpose": "Each run's name above its panel." },
+      "figure": { "displayName": "Figure", "purpose": "Measured values in spec rows; unit at 15px/400 Graphite beside it." },
+      "title": { "displayName": "Title", "purpose": "CLI step names; ledger heading is a 20px sibling." },
+      "lede": { "displayName": "Lede", "purpose": "Hero paragraph, max 36em." },
+      "body": { "displayName": "Body", "purpose": "Running text, 16px under 720px, max 38-40em." },
+      "label": { "displayName": "Label", "purpose": "Spec labels and table heads; sentence case, Graphite." },
+      "button": { "displayName": "Button", "purpose": "Pill control text." },
+      "mono": { "displayName": "Mono (Fragment Mono)", "purpose": "Code blocks, flags; inline code at .86em. Replaced Geist Mono from the surface brief." },
+      "terminal": { "displayName": "Terminal", "purpose": "xterm transcripts; line-height 1 so box drawing joins." }
+    },
+    "shadows": [
+      { "name": "sheet-lift", "value": "0 -12px 32px -18px rgb(0 0 0 / .25)", "purpose": "Mobile ledger bottom sheet only." },
+      { "name": "live-pulse", "value": "0 0 0 7px rgb(214 48 12 / 0) (animated from 0 0 0 0 rgb(214 48 12 / .5))", "purpose": "Pulse ring on a running ledger dot; state, not elevation." }
+    ],
+    "motion": [
+      { "name": "ease-out-soft", "value": "cubic-bezier(.2,.8,.2,1)", "purpose": "All state transitions, ledger entry, view transitions." },
+      { "name": "button-colour", "value": "200ms", "purpose": "Button fill/text colour change." },
+      { "name": "panel-power-on", "value": "500ms; from opacity 0, blur(10px)", "purpose": "View Transition when Run here swaps transcript for the live machine." },
+      { "name": "ledger-enter", "value": "500ms; from opacity 0, translateY(-6px)", "purpose": "New ledger row." },
+      { "name": "live-pulse", "value": "2s infinite", "purpose": "Running dot halo." },
+      { "name": "reduced-motion", "value": "none", "purpose": "All of the above disabled under prefers-reduced-motion." }
+    ],
+    "breakpoints": [
+      { "name": "single-column", "value": "1080px" },
+      { "name": "phone", "value": "720px" },
+      { "name": "max-width", "value": "1440px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Run Button",
+      "kind": "button",
+      "refersTo": "button-run",
+      "description": "The one filled signal pill per run; becomes ink when pressed (Stop).",
+      "html": "<button class=\"ds-btn ds-btn-run\" type=\"button\">Run here</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 999px; font: 550 15px/1 Switzer, ui-sans-serif, system-ui, sans-serif; cursor: pointer; white-space: nowrap; border: 1px solid #0d0d0d; background: transparent; color: #0d0d0d; transition: background-color .2s cubic-bezier(.2,.8,.2,1), color .2s cubic-bezier(.2,.8,.2,1), border-color .2s; } .ds-btn-run { background: #d6300c; border-color: #d6300c; color: #fff; } .ds-btn-run:hover, .ds-btn-run[aria-pressed=\"true\"] { background: #0d0d0d; border-color: #0d0d0d; } .ds-btn:focus-visible { outline: 2px solid #d6300c; outline-offset: 3px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary pill: New window, See all six runs.",
+      "html": "<a class=\"ds-btn-outline\" href=\"#\">New window <svg viewBox=\"0 0 14 14\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" aria-hidden=\"true\"><path d=\"M5.5 2.5h-3v9h9v-3M8 2.5h3.5V6M11.5 2.5 6.5 7.5\"/></svg></a>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 999px; font: 550 15px/1 Switzer, ui-sans-serif, system-ui, sans-serif; text-decoration: none; white-space: nowrap; border: 1px solid #0d0d0d; background: transparent; color: #0d0d0d; transition: background-color .2s cubic-bezier(.2,.8,.2,1), color .2s cubic-bezier(.2,.8,.2,1); } .ds-btn-outline:hover { background: #0d0d0d; color: #fff; } .ds-btn-outline:focus-visible { outline: 2px solid #d6300c; outline-offset: 3px; }"
+    },
+    {
+      "name": "Terminal Panel",
+      "kind": "custom",
+      "refersTo": "terminal-panel",
+      "description": "Black inset panel holding the recorded transcript or the live machine in the same footprint.",
+      "html": "<div class=\"ds-panel\"><span class=\"ds-panel-label\">recorded at build</span><pre class=\"ds-panel-out\">iex(1)&gt; Repo.all(Language)\n[%Language{name: \"Elixir\", year: 2012}]\niex(2)&gt; </pre><div class=\"ds-panel-loading\">Restoring snapshot… 42%<span class=\"ds-bar\"><span style=\"width:42%\"></span></span></div></div>",
+      "css": ".ds-panel { position: relative; height: 260px; border-radius: 6px; background: #0b0b0c; overflow: hidden; } .ds-panel-label { position: absolute; top: 12px; right: 14px; font: 400 12px/1 'Fragment Mono', ui-monospace, monospace; color: #8d8d88; letter-spacing: .02em; } .ds-panel-out { margin: 0; padding: 40px 20px 18px; font: 400 12.5px/1 'Fragment Mono', ui-monospace, monospace; color: #e9e9e4; white-space: pre; } .ds-panel-loading { position: absolute; left: 20px; bottom: 18px; font: 400 13px/1 'Fragment Mono', ui-monospace, monospace; color: #e9e9e4; } .ds-bar { display: block; width: 180px; height: 2px; margin-top: 10px; background: #2a2a2a; } .ds-bar span { display: block; height: 100%; background: #d6300c; transition: width .3s; }"
+    },
+    {
+      "name": "Spec Row",
+      "kind": "custom",
+      "refersTo": "spec-figure",
+      "description": "Measured figures at headline scale, each cell opened by an ink rule.",
+      "html": "<dl class=\"ds-specs\"><div><dt>Snapshot to restore</dt><dd>13.3 <small>MB</small></dd></div><div><dt>Ready at build</dt><dd>20.2 <small>s</small></dd></div><div><dt>Preloaded</dt><dd>8.7 <small>MB</small></dd></div><div><dt>On demand</dt><dd>36.9 <small>MB</small></dd></div></dl>",
+      "css": ".ds-specs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 24px; margin: 0; font-family: Switzer, ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; color: #0d0d0d; } .ds-specs div { padding-top: 12px; border-top: 1px solid #0d0d0d; } .ds-specs dt { font-size: 13px; color: #5a5a57; } .ds-specs dd { margin: 6px 0 0; font-size: clamp(32px, 3.4vw, 48px); font-weight: 560; letter-spacing: -.035em; line-height: 1; } .ds-specs small { font-size: 15px; font-weight: 400; letter-spacing: 0; color: #5a5a57; }"
+    },
+    {
+      "name": "Ledger",
+      "kind": "nav",
+      "refersTo": "ledger-action",
+      "description": "Your runs: a ruled live list with status dots and underlined text actions.",
+      "html": "<div class=\"ds-ledger\"><div class=\"ds-ledger-head\"><h2>Your runs</h2><span>1 running</span></div><ol><li data-state=\"ready\"><span class=\"ds-dot\"></span><span class=\"ds-name\">Python + Rich <span class=\"ds-where\">· here</span></span><span class=\"ds-actions\"><button type=\"button\">Show</button><button type=\"button\">Stop</button></span><span class=\"ds-state\">Running · 01:24</span></li><li data-state=\"loading\"><span class=\"ds-dot\"></span><span class=\"ds-name\">Go + Bubble Tea <span class=\"ds-where\">· window</span></span><span class=\"ds-actions\"><button type=\"button\">Stop</button></span><span class=\"ds-state\">Restoring 38%</span></li><li data-state=\"closed\"><span class=\"ds-dot\"></span><span class=\"ds-name\">Rust + clap <span class=\"ds-where\">· window</span></span><span class=\"ds-actions\"></span><span class=\"ds-state\">Stopped · ran for 02:10</span></li></ol></div>",
+      "css": ".ds-ledger { padding-top: 14px; border-top: 1px solid #0d0d0d; font: 400 15px/1.55 Switzer, ui-sans-serif, system-ui, sans-serif; color: #0d0d0d; font-variant-numeric: tabular-nums; } .ds-ledger-head { display: flex; justify-content: space-between; align-items: baseline; } .ds-ledger-head h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.01em; } .ds-ledger-head span { color: #5a5a57; font-size: 14px; } .ds-ledger ol { list-style: none; margin: 10px 0 0; padding: 0; } .ds-ledger li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px; padding: 12px 0; border-bottom: 1px solid #dedede; } .ds-dot { width: 8px; height: 8px; border-radius: 50%; background: #c48a1e; margin-top: 7px; } .ds-ledger [data-state=\"ready\"] .ds-dot { background: #d6300c; animation: ds-live 2s cubic-bezier(.2,.8,.2,1) infinite; } .ds-ledger [data-state=\"closed\"] .ds-dot { background: #c9c9c5; } .ds-ledger [data-state=\"closed\"] { color: #5a5a57; } .ds-name { font-weight: 550; } .ds-where { color: #5a5a57; font-weight: 400; } .ds-state { grid-column: 2; color: #5a5a57; font-size: 14px; } .ds-actions { grid-column: 3; grid-row: 1 / span 2; display: flex; gap: 12px; align-self: center; } .ds-actions button { font: 500 14px/1 Switzer, ui-sans-serif, system-ui, sans-serif; background: none; border: 0; padding: 4px 0; color: #0d0d0d; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; } .ds-actions button:hover { color: #d6300c; } .ds-actions button:focus-visible { outline: 2px solid #d6300c; outline-offset: 3px; border-radius: 2px; } @keyframes ds-live { 0% { box-shadow: 0 0 0 0 rgb(214 48 12 / .5); } 70% { box-shadow: 0 0 0 7px rgb(214 48 12 / 0); } 100% { box-shadow: 0 0 0 0 rgb(214 48 12 / 0); } } @media (prefers-reduced-motion: reduce) { .ds-ledger [data-state=\"ready\"] .ds-dot { animation: none; } }"
+    },
+    {
+      "name": "Code Block",
+      "kind": "card",
+      "refersTo": "code-block",
+      "description": "Static CLI code on Bone; never wraps, dimmed comments.",
+      "html": "<pre class=\"ds-pre\"><span class=\"ds-dim\"># preview at http://localhost:8000</span>\n$ snowglobe serve dist/python</pre>",
+      "css": ".ds-pre { margin: 0; padding: 18px 20px; background: #f3f3f0; border-radius: 6px; overflow-x: auto; font: 400 13.5px/1.6 'Fragment Mono', ui-monospace, monospace; color: #0d0d0d; white-space: pre; } .ds-dim { color: #5a5a57; }"
+    },
+    {
+      "name": "Masthead",
+      "kind": "nav",
+      "description": "Lowercase wordmark with a dot that lights signal only while a run is live; ink rule beneath.",
+      "html": "<header class=\"ds-top\"><a class=\"ds-mark\" href=\"#\">snowglobe<i></i></a><nav><a href=\"#\">Runs</a><a href=\"#\">Make your own</a><a href=\"#\">GitHub</a></nav></header>",
+      "css": ".ds-top { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 28px 0; border-bottom: 1px solid #0d0d0d; font-family: Switzer, ui-sans-serif, system-ui, sans-serif; color: #0d0d0d; } .ds-top a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 4px; } .ds-top a:hover { text-decoration-thickness: 2px; } .ds-top a:focus-visible { outline: 2px solid #d6300c; outline-offset: 3px; border-radius: 2px; } .ds-mark { font-weight: 650; font-size: 20px; letter-spacing: -.02em; text-decoration: none; } .ds-mark i { display: inline-block; width: .5em; height: .5em; border-radius: 50%; background: #0d0d0d; margin-left: .12em; vertical-align: .05em; transition: background-color .3s; } .ds-top.ds-live .ds-mark i { background: #d6300c; } .ds-top nav { display: flex; gap: 28px; font-size: 15px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Measured Spec Sheet",
+    "overview": "snowglobe's demo page is a modern Swiss spec sheet for six sandboxed machines. White paper, near-black ink, one signal orange-red. Switzer sits large and tight on a strict two-zone grid (an 8-column main column of runs, a 4-column rail holding the live \"Your runs\" ledger). The numbers the build measured, like snapshot size, ready time, preloaded and on-demand bytes, are set at headline scale. They are the decoration. Nothing else is.\n\nThe page is quiet until something runs. Each run's terminal is a crisp black inset panel. At rest it shows the transcript recorded at build time, and \"Run here\" swaps in the live machine in the same footprint. Signal colour appears only on the run control and on live state: the pulsing ledger dot, the restore progress bar, and the masthead dot, which lights up only while a run is live. Structure comes from hairlines. Full-ink 1px rules open each major block, and pale 1px rules divide rows.\n\nThe world rejects both the dark dev-tool landing page and any retro or nostalgic framing. There are no CRT effects, no ornament, no gradients beyond the transcript's bottom fade into the panel.",
+    "keyCharacteristics": [
+      "White page, near-black ink, one reserved signal colour",
+      "Neo-grotesk display set tight (negative tracking, sub-1 line-height), tabular numerals everywhere",
+      "Measured figures at headline scale in spec rows ruled from above",
+      "Black terminal panels as the only dark surfaces",
+      "Hairline rules instead of cards, boxes or shadows",
+      "Pill-shaped controls: one filled signal pill per run, all others outlined in ink"
+    ],
+    "rules": [
+      { "name": "The Live Signal Rule", "body": "Signal Vermilion means \"this runs\" or \"this is running\". It goes on the run control, live state and focus, and nowhere else. It is never used for headings, links or decoration. At rest, the masthead dot stays ink.", "section": "colors" },
+      { "name": "The One Dark Surface Rule", "body": "The terminal panel is the page's only dark surface. Static code is set on Bone, never on black, so dark always means a machine.", "section": "colors" },
+      { "name": "The Tabular Rule", "body": "font-variant-numeric: tabular-nums is set on the body. Every figure on the page lines up.", "section": "typography" },
+      { "name": "The Machine Voice Rule", "body": "Mono appears only where a machine speaks: commands, flags, labels and paths, transcripts and terminals. Prose and headings are always Switzer.", "section": "typography" },
+      { "name": "The Hairline Rule", "body": "Blocks open with a full-ink 1px top rule, and rows divide with 1px Hairline Grey. Use a rule wherever another system would reach for a card or a shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do reserve Signal Vermilion (#d6300c) for the run control, live state, progress and focus.",
+      "Do set every measured number in Switzer with tabular numerals, at Figure scale when it is the point of the block.",
+      "Do open blocks with a 1px ink rule and divide rows with 1px Hairline Grey (#dedede).",
+      "Do keep terminals as black 6px-radius panels and put recorded and live output in the same footprint.",
+      "Do use Fragment Mono only for commands, flags, paths, labels and terminals.",
+      "Do keep code and terminals at their recorded column width and let them scroll sideways on narrow screens.",
+      "Do honour prefers-reduced-motion. The ledger entry animation, live pulse and View Transitions all switch off."
+    ],
+    "donts": [
+      "Don't use signal for headings, links, decoration or emphasis in prose.",
+      "Don't put static code on a dark surface. Dark means a running machine.",
+      "Don't add card shadows, boxed cards, gradients or ornament. Depth is hairlines and the panel.",
+      "Don't introduce retro, CRT or nostalgic terminal styling, or a dark dev-tool page theme.",
+      "Don't use uppercase tracked labels. Labels are sentence-case 13px Graphite.",
+      "Don't swap Fragment Mono back to Geist Mono, which was replaced as an overused face."
+    ]
+  }
+}

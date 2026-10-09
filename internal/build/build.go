@@ -130,8 +130,65 @@ func Run(o Options, version string) error {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(filepath.Join(out, "warm-report.json"), data, 0o644)
+		if err := os.WriteFile(filepath.Join(out, "warm-report.json"), data, 0o644); err != nil {
+			return err
+		}
+		return writeRunInfo(out, o, s, fs, files, bytes, version)
 	})
+}
+
+// RunInfo is what a site says about itself: the measured facts of its build, for pages that
+// present several runs (snowglobe's own demo index reads it).
+type RunInfo struct {
+	Title         string    `json:"title"`
+	Source        string    `json:"source"`
+	Command       string    `json:"command"`
+	MemoryMB      int       `json:"memory_mb"`
+	BootSeconds   float64   `json:"boot_seconds"`
+	SnapshotBytes int64     `json:"snapshot_bytes"`
+	StateBytes    int64     `json:"state_bytes"`
+	WarmPackFiles int       `json:"warm_pack_files"`
+	WarmPackBytes int64     `json:"warm_pack_bytes"`
+	Files         int       `json:"files"`
+	BlobBytes     int64     `json:"blob_bytes"`
+	BuiltAt       time.Time `json:"built_at"`
+	Snowglobe     string    `json:"snowglobe"`
+	HasTranscript bool      `json:"has_transcript"`
+}
+
+// writeRunInfo writes run.json and moves the exercise transcript next to it
+func writeRunInfo(out string, o Options, s *Settings, fs *rootfs.Result, packFiles int, packBytes int64, version string) error {
+	system := filepath.Join(out, "system")
+	var meta struct {
+		BootSeconds   float64 `json:"bootSeconds"`
+		StateBytes    int64   `json:"stateBytes"`
+		SnapshotBytes int64   `json:"snapshotBytes"`
+	}
+	if data, err := os.ReadFile(filepath.Join(system, "run-meta.json")); err == nil {
+		json.Unmarshal(data, &meta)
+		os.Remove(filepath.Join(system, "run-meta.json"))
+	}
+
+	info := RunInfo{
+		Title: s.Title, Source: o.Source, Command: s.Command, MemoryMB: s.Memory,
+		BootSeconds: meta.BootSeconds, SnapshotBytes: meta.SnapshotBytes, StateBytes: meta.StateBytes,
+		WarmPackFiles: packFiles, WarmPackBytes: packBytes, Files: len(fs.Files),
+		BuiltAt: time.Now().UTC().Truncate(time.Second), Snowglobe: version,
+	}
+	for _, path := range fs.Blobs {
+		if st, err := os.Stat(path); err == nil {
+			info.BlobBytes += st.Size()
+		}
+	}
+	if err := os.Rename(filepath.Join(system, "transcript.json"), filepath.Join(out, "transcript.json")); err == nil {
+		info.HasTranscript = true
+	}
+
+	data, err := json.MarshalIndent(info, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(out, "run.json"), data, 0o644)
 }
 
 func blobSize(fs *rootfs.Result) func(string) int64 {

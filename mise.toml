@@ -14,7 +14,9 @@ for demo in $DEMOS; do
   ./snowglobe build "examples/$demo" --out "dist/$demo"
 done
 ./snowglobe pool dist
-cp site/index.html dist/
+# The index page, its font, and a copy of xterm.js it renders the recorded transcripts with
+cp -R site/. dist/
+cp -R dist/elixir/xterm dist/xterm
 '''
 
 [tasks.serve]

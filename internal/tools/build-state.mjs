@@ -81,8 +81,10 @@ let readPhase = reads.boot;
 // fs9p only exists once v86's wasm has loaded; the guest starts running after this event
 emulator.add_listener("emulator-loaded", () => {
   // Without this the console reports 0x0 until the page resizes it, and line editors that don't
-  // follow later resizes (Java's jshell) garble their input. v86 0.5.462 forwards [rows, cols]
-  emulator.bus.send("virtio-console0-resize", [36, 120]);
+  // follow later resizes (Java's jshell) garble their input. 90 columns fits an embedded panel or a
+  // small window, so screens drawn at startup (and replayed from the snapshot) don't wrap apart.
+  // v86 0.5.462 forwards [rows, cols]
+  emulator.bus.send("virtio-console0-resize", [30, 90]);
 
   const storage = emulator.fs9p?.storage;
   if (!storage?.load_from_server) return console.error("warning: can't record boot reads");
@@ -142,8 +144,10 @@ emulator.add_listener("virtio-console0-output-bytes", (bytes) => {
   }
 });
 
+let bootSeconds = 0;
 function markReady() {
   appReady = true;
+  bootSeconds = (Date.now() - bootStart) / 1000;
   console.error(`\nApp ready on hvc0 after ${(Date.now() - bootStart) / 1000}s`);
   maybeSave();
 }
@@ -163,6 +167,10 @@ async function save() {
     params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 },
   });
   fs.writeFileSync(OUTPUT_FILE, compressed);
+  fs.writeFileSync(
+    path.join(systemDir, "run-meta.json"),
+    JSON.stringify({ bootSeconds, stateBytes: state.byteLength, snapshotBytes: compressed.length }),
+  );
   fs.writeFileSync(path.join(systemDir, "console.bin"), withoutProgressReports(withoutQueries(screenSinceLastClear(console0))));
   console.error(`Saved ${OUTPUT_FILE} (${compressed.length >> 20} MB)`);
 
@@ -171,11 +179,15 @@ async function save() {
   const json = { boot: [...reads.boot], exercise: {} };
   for (const [command, names] of Object.entries(reads.exercise)) json.exercise[command] = [...names];
   fs.writeFileSync(path.join(systemDir, "reads.json"), JSON.stringify(json));
+  fs.writeFileSync(path.join(systemDir, "transcript.json"), JSON.stringify(transcript));
   stop(0);
 }
 
 // Type each command into the app as a visitor would, after the snapshot is safely written, and
 // record what it reads
+// What each exercise command printed, raw (ANSI included), so a site can show a real session
+const transcript = [];
+
 async function exercise() {
   const encoder = new TextEncoder();
   const rx = emulator.v86?.cpu?.devices?.virtio_console?.virtio?.queues?.[0];
@@ -183,6 +195,7 @@ async function exercise() {
   for (const command of options.exercise) {
     readPhase = reads.exercise[command] = new Set();
     const started = Date.now();
+    const outputFrom = console0.length;
     process.stderr.write(`\nExercising: ${command}`);
 
     // One guest receive buffer per message, like the page's input queue
@@ -196,6 +209,10 @@ async function exercise() {
       await sleep(250);
     }
     process.stderr.write(` (${readPhase.size} files, ${((Date.now() - started) / 1000).toFixed(1)}s)`);
+    transcript.push({
+      command,
+      output: console0.subarray(outputFrom).toString("utf8"),
+    });
   }
   if (options.exercise.length) process.stderr.write("\n");
 }
