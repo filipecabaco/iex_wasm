@@ -80,6 +80,8 @@
     a:hover { text-decoration-thickness: 2px; }
     :focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; border-radius: 2px; }
     code, pre, .mono { font-family: var(--mono); font-size: .86em; }
+    /* Long commands and URLs in running text break rather than widen the page */
+    p code, td code { overflow-wrap: anywhere; }
 
     .wrap { max-width: 1440px; margin: 0 auto; padding: 0 var(--pad); }
 
@@ -171,6 +173,9 @@
     table.options th { text-align: left; }
     table.options td:first-child, table.options td:nth-child(2) { font-family: var(--mono); font-size: 13.5px; text-align: left; }
     table.options td.wrap-cell { min-width: 24ch; }
+    table.commands td:nth-child(2) { font-family: var(--sans); font-size: inherit; }
+    .ref-title { margin: 56px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -.02em; }
+    .ref-title + .table-wrap table { margin-top: 12px; }
 
     footer { margin-top: clamp(80px, 10vw, 140px); padding: 28px 0 48px; border-top: 1px solid var(--ink); color: var(--ink-2); font-size: 15px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px 32px; }
 
@@ -404,8 +409,28 @@ $ snowglobe exec py 'sum(range(10))'
             </div>
           </div>
 
+          <h3 class="ref-title" id="commands">Commands</h3>
           <div class="table-wrap">
-            <table class="options">
+            <table class="options commands" aria-labelledby="commands">
+              <thead><tr><th scope="col">Command</th><th scope="col">Does</th></tr></thead>
+              <tbody>
+                <tr><td>build &lt;dir | image&gt;</td><td class="wrap-cell">package a Docker image (a directory with a Dockerfile, or an image) into a static site; the flags are below</td></tr>
+                <tr><td>serve [dir] [--port N]</td><td class="wrap-cell">preview a built site at localhost, port 8000 by default</td></tr>
+                <tr><td>pwa &lt;site&gt;</td><td class="wrap-cell">make it an installable app that works offline once it has run; <code>--name</code> and <code>--short-name</code> override the title</td></tr>
+                <tr><td>pool &lt;dir&gt;</td><td class="wrap-cell">let every site under a directory share one blob store, for hosting several together</td></tr>
+                <tr><td>pack &lt;site&gt; [-o file]</td><td class="wrap-cell">write a site as one tarball (.tar.gz or .tar.zst) to publish on a CDN</td></tr>
+                <tr><td>run [site | url]</td><td class="wrap-cell">run a site without a browser, in a sandboxed container: a session in a terminal, or piped lines typed in as commands. Takes a folder, a tarball, or a URL to either; <code>--detach --name N</code> keeps it running</td></tr>
+                <tr><td>exec &lt;name&gt; &lt;command&gt;</td><td class="wrap-cell">type a command into a running instance and print only its output</td></tr>
+                <tr><td>attach &lt;name&gt;</td><td class="wrap-cell">join a running instance's session; ctrl-] detaches and leaves it running</td></tr>
+                <tr><td>ps</td><td class="wrap-cell">list running instances</td></tr>
+                <tr><td>stop &lt;name&gt;</td><td class="wrap-cell">throw a running instance away</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="ref-title" id="build-flags">Build flags</h3>
+          <div class="table-wrap">
+            <table class="options" aria-labelledby="build-flags">
               <thead><tr><th scope="col">Flag</th><th scope="col">Label</th><th scope="col">Sets</th></tr></thead>
               <tbody>
                 <tr><td>--ready TEXT</td><td>snowglobe.ready</td><td class="wrap-cell">terminal output that means the program is ready to snapshot</td></tr>

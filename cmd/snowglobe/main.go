@@ -28,7 +28,7 @@ Usage:
   snowglobe serve [dir] [--port 8000]                preview a built site
   snowglobe pool <dir>                               let every site under dir share one blob
                                                      directory (for hosting several together)
-  snowglobe pwa <dir> [--name N] [--short-name N]   make a built site an installable app that works
+  snowglobe pwa <dir> [--name N] [--short-name N]     make a built site an installable app that works
                                                      offline once it has run (manifest, icons,
                                                      service worker)
   snowglobe pack <dir> [-o site.tar.gz]              pack a built site into one tarball (.tar.gz,
