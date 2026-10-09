@@ -17,8 +17,11 @@ RUN sed -i '/^tty[0-9]/d' /etc/inittab && \
     echo 'hostname="wasm"' > /etc/conf.d/hostname && \
     rm -f /etc/motd && touch /root/.hushlogin
 
-# Login shells on hvc0 hand over to the app; when it exits, agetty respawns it
-RUN echo '[ "$(tty)" = /dev/hvc0 ] && exec /usr/local/bin/wasm-console' > /etc/profile.d/zz-wasm-console.sh
+# Login shells on hvc0 hand over to the app; when it exits, agetty respawns it.
+# IEx caps docs and inspect output at 80 columns by default; follow the terminal instead, unless
+# the image brings its own .iex.exs
+RUN echo '[ "$(tty)" = /dev/hvc0 ] && exec /usr/local/bin/wasm-console' > /etc/profile.d/zz-wasm-console.sh && \
+    { [ -e /root/.iex.exs ] || echo 'IEx.configure(width: 1000)' > /root/.iex.exs; }
 COPY wasm-console /usr/local/bin/wasm-console
 
 # https://wiki.alpinelinux.org/wiki/Alpine_Linux_in_a_chroot#Preparing_init_services

@@ -1,7 +1,4 @@
 # Build output
 /dist/
 
-# Browser runtime installed by build.exs (npm ci)
-/packages/toolkit/web/node_modules/
-
 .elixir_ls

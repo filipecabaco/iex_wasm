@@ -1,0 +1,5 @@
+/_build/
+/deps/
+/priv/tools/node_modules/
+erl_crash.dump
+/tmp/

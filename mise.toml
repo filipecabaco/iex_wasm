@@ -1,14 +1,18 @@
 [tools]
-# tar2v86.exs needs OTP 28+ for the built-in :zstd module
 erlang = "29.1.1"
 elixir = "1.20.4-otp-29"
-# build-state.mjs needs Node >= 22.15 for zlib zstd
-node = "24.21.0"
 
 [tasks.build]
-description = "Build the IEx example into dist/"
-run = 'elixir packages/toolkit/build.exs examples/iex --title "IEx in the browser" --ready "iex(1)> "'
+description = "Build the playground example into dist/ with beam_box"
+dir = "{{config_root}}/examples/playground"
+run = "mix deps.get && mix beam_box.build --out ../../dist"
 
 [tasks.serve]
 description = "Serve dist/ locally at http://localhost:8000"
-run = "elixir packages/toolkit/serve.exs dist"
+dir = "{{config_root}}/examples/playground"
+run = "mix beam_box.serve --out ../../dist"
+
+[tasks.test]
+description = "Run beam_box's tests"
+dir = "{{config_root}}/packages/beam_box"
+run = "mix test"

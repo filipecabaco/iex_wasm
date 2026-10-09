@@ -101,7 +101,7 @@ defmodule Tar2V86 do
     unless File.exists?(path) do
       # write-then-rename so identical files compressed concurrently never interleave
       tmp = path <> ".#{System.unique_integer([:positive])}.tmp"
-      File.write!(tmp, :zstd.compress(data, %{compressionLevel: @zstd_level}))
+      File.write!(tmp, compress(data))
       File.rename!(tmp, path)
     end
 
@@ -111,6 +111,10 @@ defmodule Tar2V86 do
   end
 
   defp store_blob(entry, _blobs_dir), do: entry
+
+  # OTP 28's :zstd.compress/2 crashes on empty input; this is the frame OTP 29 produces for it
+  defp compress(""), do: <<40, 181, 47, 253, 32, 0, 1, 0, 0>>
+  defp compress(data), do: :zstd.compress(data, %{compressionLevel: @zstd_level})
 
   # Node layout: [name, size, mtime, mode, uid, gid, filename | symlink target | children]
   # `seen` maps short blob names to full hashes (collision check) and file paths to nodes (hard links)

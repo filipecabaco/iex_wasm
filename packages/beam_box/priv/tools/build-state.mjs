@@ -3,10 +3,10 @@
 // zstd-compressed snapshot so the browser restores straight into the running app instead of
 // booting Linux.
 //
-//   node build-state.mjs <v86 dir> <bios dir> <system dir> [options json]
+//   node build-state.mjs <v86 dir> <bios dir> <system dir> [--memory MB] [--ready TEXT]
 //
-// Options: {"memoryMb": 512, "ready": "iex(1)> "}. Without "ready", the app counts as ready once
-// its console output has been quiet for a few seconds.
+// --memory defaults to 512. Without --ready, the app counts as ready once its console output has
+// been quiet for a few seconds.
 //
 // Reads <system dir>/filesystem.json + filesystem/; writes <system dir>/state.bin.zst and
 // console.bin, the app's console output so far, which the page replays into the terminal.
@@ -18,18 +18,22 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { pathToFileURL } from "node:url";
+import { parseArgs } from "node:util";
 
-const [v86Dir, biosDir, systemDir, optionsJson = "{}"] = process.argv.slice(2);
+const { values: options, positionals } = parseArgs({
+  allowPositionals: true,
+  options: { memory: { type: "string", default: "512" }, ready: { type: "string" } },
+});
+const [v86Dir, biosDir, systemDir] = positionals;
 if (!systemDir) {
-  console.error("usage: node build-state.mjs <v86 dir> <bios dir> <system dir> [options json]");
+  console.error("usage: node build-state.mjs <v86 dir> <bios dir> <system dir> [--memory MB] [--ready TEXT]");
   process.exit(1);
 }
-const options = JSON.parse(optionsJson);
 
 const TIMEOUT_MS = 20 * 60 * 1000;
 const QUIET_MS = 5000;
 // Must match memory_size in the page: the snapshot is only valid for the same RAM size
-const MEMORY_SIZE = (options.memoryMb ?? 512) * 1024 * 1024;
+const MEMORY_SIZE = Number(options.memory) * 1024 * 1024;
 const OUTPUT_FILE = path.join(systemDir, "state.bin.zst");
 
 const { V86 } = await import(pathToFileURL(path.join(v86Dir, "libv86.mjs")).href);
@@ -123,7 +127,7 @@ async function save() {
     params: { [zlib.constants.ZSTD_c_compressionLevel]: 19 },
   });
   fs.writeFileSync(OUTPUT_FILE, compressed);
-  fs.writeFileSync(path.join(systemDir, "console.bin"), withoutQueries(screenSinceLastClear(console0)));
+  fs.writeFileSync(path.join(systemDir, "console.bin"), withoutProgressReports(withoutQueries(screenSinceLastClear(console0))));
   console.error(`Saved ${OUTPUT_FILE} (${compressed.length >> 20} MB)`);
   stop(0);
 }
@@ -143,6 +147,14 @@ function screenSinceLastClear(output) {
 // exists; replayed, xterm.js would answer them and the answer would reach the app as typed input
 function withoutQueries(output) {
   const text = output.toString("latin1").replace(/\x1b\[[0-9]*n|\x1b\[[>=]?[0-9]*c/g, "");
+  return Buffer.from(text, "latin1");
+}
+
+// On the slow emulated boot, an OTP "application started" progress report can slip out before
+// Elixir's Logger installs the filter that normally hides it. It's noise, so keep it off the
+// replayed screen (the release's own logging is untouched)
+function withoutProgressReports(output) {
+  const text = output.toString("latin1").replace(/=PROGRESS REPORT====[^]*?\r?\n\r?\n/g, "");
   return Buffer.from(text, "latin1");
 }
 
