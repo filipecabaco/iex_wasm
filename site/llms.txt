@@ -15,6 +15,9 @@ Source and README: https://github.com/filipecabaco/snowglobe
 - `snowglobe build <dir with a Dockerfile | image ref> [flags]` builds the site into `--out` (default `dist`).
 - `snowglobe serve [dir] [--port N]` previews a built site on localhost.
 - `snowglobe pool <dir>` makes every site under a directory share one content-addressed blob store.
+- `snowglobe pwa <site> [--name N] [--short-name N]` makes a built site an installable Progressive
+  Web App: manifest, icons, and a service worker that keeps it working offline once it has run.
+  Run it after `pool`. Every demo on the live site is installable.
 - `snowglobe run [site] [--name N] [--detach]` restores a built site headlessly in a sandboxed
   container (unprivileged, read-only, memory-capped, offline unless built with a network). In a
   terminal it is an interactive session (ctrl-] quits); with stdin piped, each line is typed in as a

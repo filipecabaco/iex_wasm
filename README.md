@@ -91,6 +91,14 @@ so the guest gets a 502 that says so), raw TCP and UDP go nowhere, and TLS is 1.
 X25519/P-256 and AES-128-GCM, which every current client offers. The TypeScript demo uses all of
 it: Zod validating a live GitHub API response, and a WebSocket echo.
 
+## Install it as an app
+
+`snowglobe pwa dist/python` makes a built site a Progressive Web App: a manifest and icons, and a
+service worker that caches the page, the emulator and every file the run fetched, so it installs
+to a home screen or dock and keeps working offline once it has run. Chromium shows an
+**Install app** button in the status strip; on iOS, use Share → Add to Home Screen. A new build
+gets a new cache. Run it after `snowglobe pool`; every demo on the live site is installable.
+
 ## Running a site headlessly
 
 A built site also runs without a browser, in a sandboxed container: the same snapshot, restored

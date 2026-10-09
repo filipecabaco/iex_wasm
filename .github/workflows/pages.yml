@@ -14,10 +14,29 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Each demo takes minutes to build (docker builds, then booting the guest to snapshot it), so they
+# build side by side, one job each, and `assemble` gathers them into the site. Locally, `mise run
+# build` does the same steps one after another.
 jobs:
-  build:
+  # DEMOS in mise.toml is the one list of demos; this hands it to the matrix below
+  setup:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 5
+    outputs:
+      demos: ${{ steps.demos.outputs.demos }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+        with:
+          install: false
+
+      - id: demos
+        run: echo "demos=$(mise env --json | jq -c '.DEMOS | split(" ")')" >> "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -26,6 +45,20 @@ jobs:
 
       - name: Test
         run: mise run test
+
+  demo:
+    needs: setup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        demo: ${{ fromJSON(needs.setup.outputs.demos) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs Go from mise.toml (cached between runs)
+      - uses: jdx/mise-action@v5
 
       # Anonymous Docker Hub pulls from shared runners hit its rate limit (429); pull through
       # Google's public mirror instead
@@ -39,8 +72,39 @@ jobs:
           docker info --format '{{.RegistryConfig.Mirrors}}'
 
       # The i386 guest image builds natively on amd64 runners, no emulation needed
-      - name: Build site
-        run: mise run build
+      - name: Build ${{ matrix.demo }}
+        env:
+          DEMO: ${{ matrix.demo }}
+        run: |
+          go build -o snowglobe ./cmd/snowglobe
+          ./snowglobe build "examples/$DEMO" --out "dist/$DEMO"
+
+      # Hidden files must come along: `snowglobe pool` looks for each build's .snowglobe marker
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.demo }}
+          path: dist/${{ matrix.demo }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  assemble:
+    needs: [test, demo]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs Go from mise.toml (cached between runs)
+      - uses: jdx/mise-action@v5
+
+      # The demo artifacts are the only ones in the run at this point; each lands in dist/<demo>
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+
+      - name: Assemble site
+        run: mise run assemble
 
       - uses: actions/configure-pages@v6
 
@@ -49,7 +113,7 @@ jobs:
           path: dist
 
   deploy:
-    needs: build
+    needs: assemble
     runs-on: ubuntu-24.04
     environment:
       name: github-pages

@@ -1,0 +1,46 @@
+  <!-- snowglobe:pwa -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="{{html .Theme}}">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="{{html .ShortName}}">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    #install { margin-left: .5rem; font: inherit; color: inherit; background: none; border: 1px solid currentColor;
+      border-radius: 999px; padding: .1rem .7rem; cursor: pointer; }
+    #strip:has(#install) { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+    @media (max-width: 640px) { #strip:has(#install) { grid-template-columns: minmax(0, 1fr) auto auto; } }
+    @media (display-mode: standalone) { #install { display: none; } }
+  </style>
+  <script>
+    // Works offline once it has run: see sw.js. On the first visit the page loads before the worker
+    // is in control, so hand it what was already fetched (mostly from the HTTP cache, not again)
+    if ("serviceWorker" in navigator) {
+      performance.setResourceTimingBufferSize?.(10000);
+      addEventListener("load", async () => {
+        try {
+          await navigator.serviceWorker.register("sw.js");
+          const { active } = await navigator.serviceWorker.ready;
+          const fetched = () => performance.getEntriesByType("resource").map((e) => e.name).filter((u) => u.startsWith(location.origin));
+          active.postMessage({ cache: fetched() });
+          // Files the guest reads before the worker takes over keep arriving for a while
+          setTimeout(() => active.postMessage({ cache: fetched() }), 30000);
+        } catch {}
+      });
+    }
+    // Where the browser offers installation (Chromium), put it in the status strip
+    addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      const status = document.getElementById("status");
+      if (!status || document.getElementById("install")) return;
+      const button = Object.assign(document.createElement("button"), { id: "install", type: "button", textContent: "Install app" });
+      button.addEventListener("click", async () => {
+        event.prompt();
+        await event.userChoice;
+        button.remove();
+      });
+      status.after(button);
+    });
+  </script>
+  <!-- /snowglobe:pwa -->

@@ -371,10 +371,13 @@ dist/python is ready to deploy.</pre>
             <div class="step">
               <h3>Ship</h3>
               <div>
-                <p>Preview it locally, then put the folder on any static host. Several runs on one host can share one
-                  blob store. This site is GitHub Pages, built by a workflow running the same commands.</p>
+                <p>Preview it locally, then put the folder on any static host. Make it an app people can install and
+                  run offline, and let several runs on one host share one blob store. This site is GitHub Pages, built
+                  by a workflow running the same commands; every run on it is installable.</p>
 <pre><span class="dim"># preview at http://localhost:8000</span>
 $ snowglobe serve dist/python
+<span class="dim"># installable, and offline once it has run</span>
+$ snowglobe pwa dist/python
 <span class="dim"># several runs on one host: share one blob store</span>
 $ snowglobe pool dist</pre>
               </div>

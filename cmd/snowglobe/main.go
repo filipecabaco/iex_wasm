@@ -11,6 +11,7 @@ import (
 	"github.com/filipecabaco/snowglobe/internal/build"
 	"github.com/filipecabaco/snowglobe/internal/instance"
 	"github.com/filipecabaco/snowglobe/internal/pool"
+	"github.com/filipecabaco/snowglobe/internal/pwa"
 	"github.com/filipecabaco/snowglobe/internal/serve"
 )
 
@@ -24,6 +25,9 @@ Usage:
   snowglobe serve [dir] [--port 8000]                preview a built site
   snowglobe pool <dir>                               let every site under dir share one blob
                                                      directory (for hosting several together)
+  snowglobe pwa <dir> [--name N] [--short-name N]   make a built site an installable app that works
+                                                     offline once it has run (manifest, icons,
+                                                     service worker)
   snowglobe run [dir] [--name N] [--detach]          run a built site in a sandboxed container:
                                                      a session in a terminal; with stdin piped,
                                                      each line is typed in as a command
@@ -70,6 +74,8 @@ func main() {
 		err = runServe(os.Args[2:])
 	case "pool":
 		err = runPool(os.Args[2:])
+	case "pwa":
+		err = runPWA(os.Args[2:])
 	case "run":
 		err = runRun(os.Args[2:])
 	case "exec":
@@ -151,6 +157,28 @@ func runServe(args []string) error {
 		dir = positional[0]
 	}
 	return serve.Run(dir, *port)
+}
+
+func runPWA(args []string) error {
+	fs := flag.NewFlagSet("pwa", flag.ContinueOnError)
+	o := pwa.Options{}
+	fs.StringVar(&o.Name, "name", "", "")
+	fs.StringVar(&o.ShortName, "short-name", "", "")
+	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+
+	positional, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(positional) != 1 {
+		return fmt.Errorf("pwa takes one built site directory")
+	}
+	o.Site = positional[0]
+	if err := pwa.Run(o); err != nil {
+		return err
+	}
+	fmt.Printf("%s is an installable app now: manifest.webmanifest, icons and sw.js added\n", o.Site)
+	return nil
 }
 
 func runRun(args []string) error {
