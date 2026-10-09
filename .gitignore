@@ -4,3 +4,7 @@
 
 # npm install of the tools image's runtime, when inspected locally
 /internal/tools/node_modules/
+
+# Editor and language-server state
+.expert/
+.elixir_ls/

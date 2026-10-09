@@ -1,7 +1,8 @@
 {
   "private": true,
-  "description": "TypeScript REPL for the snowglobe demo",
+  "description": "TypeScript + Zod REPL for the snowglobe demo",
   "dependencies": {
-    "tsx": "4.23.13"
+    "tsx": "4.23.13",
+    "zod": "4.6.5"
   }
 }

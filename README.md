@@ -5,7 +5,8 @@ image on real Linux inside [v86](https://github.com/copy/v86), an x86 emulator c
 WebAssembly, snapshots it once your app is ready, and writes a folder of static files. Visitors
 get your program running in their tab in about a second, with no server behind it.
 
-**[▶ Try the demos: Elixir, Python, TypeScript, Go, Rust and Java in the browser](https://filipecabaco.github.io/snowglobe/)**
+**[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir + SQLite, Python + Rich, TypeScript + Zod,
+Go + Bubble Tea, Rust + clap and Java + Gson, each a small project in [`examples/`](examples) running in the browser.
 
 [![Deploy to GitHub Pages](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml)
 
@@ -75,17 +76,18 @@ snowglobe fills it by **measuring**, not guessing:
 Each build prints a breakdown and writes `warm-report.json` (by phase and directory, in download
 bytes). What the six demos show:
 
-| Language | Boot | First commands | Never read | What dominates |
-|----------|-----:|---------------:|-----------:|----------------|
-| Elixir | 12.8 MB | 1.2 MB | 52.8 MB | stdlib/elixir bytecode loads lazily, module by module |
-| Python | 7.8 MB | 2.6 MB | 27.2 MB | imports: `import asyncio` alone reads 101 files |
-| TypeScript | 25.7 MB | 3.9 MB | 21.1 MB | the 15.5 MB `node` binary, then esbuild on the first command |
-| Go | 16.0 MB | 0 | 18.1 MB | one static binary with everything compiled in |
-| Rust | 4.0 MB | 6.9 MB | 18.1 MB | every tool is its own binary, read on first use |
-| Java | 38.9 MB | 0 | 91.1 MB | the JDK's 30 MB `lib/modules` image, opened at boot |
+| Demo | Boot | First commands | Never read | What dominates |
+|------|-----:|---------------:|-----------:|----------------|
+| Elixir + SQLite | 13.8 MB | 0 | 19.7 MB | a release boots in embedded mode: every module loads at startup |
+| Python + Rich | 8.5 MB | 0.1 MB | 36.9 MB | the startup file imports Rich, so its modules are boot reads |
+| TypeScript + Zod | 25.8 MB | 4.1 MB | 22.2 MB | the `node` binary, then tsx/esbuild and Zod's modules on first use |
+| Go + Bubble Tea | 5.4 MB | 0 | 18.1 MB | one static binary, read at boot |
+| Rust + clap | 4.0 MB | 0.5 MB | 18.1 MB | `jtab` is read on first use; the shell is all that boots |
+| Java + Gson | 39.2 MB | 0 | 91.1 MB | the JDK's 30 MB `lib/modules` image, opened at boot |
 
-Interpreted runtimes with many small files (Elixir, Python) need exercises to warm well; single
-binaries (Go, Java's module image) are fully captured by boot reads.
+Whatever a program loads lazily needs exercises to warm well (TypeScript's compile path, Zod,
+first-use tools); whatever it loads up front (a release in embedded mode, a startup file's imports,
+a single static binary, Java's module image) is captured by boot reads alone.
 
 ## Several sites, one host
 

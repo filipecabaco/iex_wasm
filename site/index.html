@@ -45,9 +45,9 @@
 <body>
 <main>
   <h1>snowglobe demos</h1>
-  <p>Six languages, each a Docker image packaged by <a href="https://github.com/filipecabaco/snowglobe">snowglobe</a>
-    into a static site. Every one is real Linux on an x86 CPU emulated in WebAssembly, restored from a snapshot
-    taken once its REPL was ready. Nothing runs on a server.</p>
+  <p>Six languages, each a small project with a real dependency, packaged from a Dockerfile by
+    <a href="https://github.com/filipecabaco/snowglobe">snowglobe</a> into a static site. Every one is real Linux on
+    an x86 CPU emulated in WebAssembly, restored from a snapshot taken once it was ready. Nothing runs on a server.</p>
 
   <div class="demos" id="demos"></div>
 
@@ -73,12 +73,12 @@
 </main>
 <script>
   const demos = [
-    { dir: "elixir", name: "Elixir", runs: "IEx, Erlang/OTP 28", cmd: 'Task.async(fn -> :crypto.hash(:sha256, "hi") end) |> Task.await()' },
-    { dir: "python", name: "Python", runs: "CPython 3.14 REPL", cmd: 'import sqlite3; sqlite3.connect(":memory:")' },
-    { dir: "typescript", name: "TypeScript", runs: "tsx on Node 24", cmd: 'const xs: number[] = [1, 2, 3]; xs.map((x) => x * 2)' },
-    { dir: "go", name: "Go", runs: "yaegi, a Go interpreter", cmd: 'fmt.Sprintf("%x", sha256.Sum256([]byte("hi")))' },
-    { dir: "rust", name: "Rust", runs: "ripgrep, fd, bat and crabsay", cmd: "crabsay hello from a tab" },
-    { dir: "java", name: "Java", runs: "jshell on OpenJDK 11", cmd: "xs.stream().map(x -> x * x).reduce(0, Integer::sum)" },
+    { dir: "elixir", name: "Elixir + SQLite", runs: "Ecto and the exqlite NIF, in a Mix release", cmd: 'sql "SELECT app, count(*) FROM modules GROUP BY app"' },
+    { dir: "python", name: "Python + Rich", runs: "CPython 3.14 with Rich rendering", cmd: "t = Table('language', 'year'); t.add_row('Python', '1991'); t" },
+    { dir: "typescript", name: "TypeScript + Zod", runs: "tsx on Node 24, schemas with Zod", cmd: 'User.safeParse({ name: "", email: "nope" })' },
+    { dir: "go", name: "Go + Bubble Tea", runs: "Game of Life, an interactive TUI", cmd: "space pause · arrows + enter draw · r random" },
+    { dir: "rust", name: "Rust + clap", runs: "jtab: JSON to tables with serde and comfy-table", cmd: "jtab data/languages.json --sort year -r" },
+    { dir: "java", name: "Java + Gson", runs: "jshell on OpenJDK 11 with Gson", cmd: 'gson.toJson(new Planet("Mars", 0.107, 2))' },
   ];
 
   const mb = (bytes) => (bytes / 1048576).toFixed(1) + " MB";
