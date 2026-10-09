@@ -1,0 +1,66 @@
+{
+  "base": "https://filipecabaco.github.io/snowglobe/",
+  "note": "One X player card per demo: assets/cards.exs writes site/x/<dir>/index.html and the poster sources from this. Poster lines are real output from each demo's recorded run; a line starting with ! is bold, the demo's prompt is dimmed.",
+  "cards": [
+    {
+      "dir": "elixir", "name": "Elixir + Postgres", "prompt": "iex(",
+      "about": "IEx and a PostgreSQL 18 server",
+      "lines": ["iex(1)> sql \"SHOW server_version\"", "!server_version", "──────────────", "18.6",
+        "iex(2)> sql \"SELECT app, count(*) FROM modules …\"", "!app      │ count", "─────────┼──────",
+        "elixir   │ 272", "kernel   │ 103", "ecto     │ 100", "postgrex │ 95"]
+    },
+    {
+      "dir": "python", "name": "Python + Rich", "prompt": ">>>",
+      "about": "CPython 3.14 with Rich",
+      "lines": [">>> print(\"[bold magenta]hello[/] from [green]Rich[/]\")", "!hello from Rich",
+        ">>> t = Table(\"language\", \"year\")", ">>> t.add_row(\"Python\", \"1991\"); t",
+        "┏━━━━━━━━━━┳━━━━━━┓", "┃ language ┃ year ┃", "┡━━━━━━━━━━╇━━━━━━┩", "│ Python   │ 1991 │", "└──────────┴──────┘"]
+    },
+    {
+      "dir": "typescript", "name": "TypeScript + Zod", "prompt": "> ",
+      "about": "Node 24 and tsx, with Zod",
+      "lines": ["> User.parse({ name: \"Ada\", email: \"ada@example.com\" })", "{ name: 'Ada', email: 'ada@example.com' }",
+        "> User.safeParse({ name: \"\", email: \"nope\" })", "...   .error?.issues.map((i) => i.message)", "[",
+        "  'Too small: expected string to have >=1 characters',", "  'Invalid email address'", "]",
+        "> Repo.parse(await (await fetch(…copy/v86)).json())", "{ full_name: 'copy/v86', … }"]
+    },
+    {
+      "dir": "go", "name": "Go + Bubble Tea", "prompt": "",
+      "about": "Conway's Game of Life, built with Bubble Tea",
+      "lines": ["!Game of Life  generation 0 · population 36", "",
+        "                        ●           ",
+        "                      ● ●           ",
+        "            ●●      ●●            ●●",
+        "           ●   ●    ●●            ●●",
+        "●●        ●     ●   ●●              ",
+        "●●        ●   ● ●●    ● ●           ",
+        "          ●     ●       ●           ",
+        "           ●   ●                    ",
+        "            ●●                      ", "",
+        "space pause · g glider gun · q quit"]
+    },
+    {
+      "dir": "rust", "name": "Rust + clap", "prompt": "~ $",
+      "about": "jtab, a CLI that renders JSON as tables",
+      "lines": ["~ $ jtab data/languages.json --where typing=static \\", "      --columns name,year --sort year -r",
+        "╭────────────┬──────╮", "│ name       ┆ year │", "╞════════════╪══════╡",
+        "│ Rust       ┆ 2015 │", "│ TypeScript ┆ 2012 │", "│ Go         ┆ 2009 │", "│ Java       ┆ 1995 │", "│ C          ┆ 1972 │", "╰────────────┴──────╯"]
+    },
+    {
+      "dir": "java", "name": "Java + Gson", "prompt": "jshell>",
+      "about": "jshell on OpenJDK 11, with Gson",
+      "lines": ["jshell> gson.toJson(new Planet(\"Mars\", 0.107, 2))",
+        "$1 ==> \"{\\n  \\\"name\\\": \\\"Mars\\\", …}\"",
+        "jshell> gson.fromJson(\"{\\\"name\\\": \\\"Jupiter\\\",", "   ...>   \\\"massEarths\\\": 317.8}\", Planet.class)",
+        "$2 ==> Jupiter (317.8 Earth masses, 0 moons)",
+        "jshell> JsonParser.parseString(\"{\\\"a\\\": [1, 2, 3]}\")", "   ...>   .getAsJsonObject().get(\"a\")", "$3 ==> [1,2,3]"]
+    },
+    {
+      "dir": "curl", "name": "curl + jq", "prompt": "~ $",
+      "about": "curl and jq, online through your browser",
+      "lines": ["~ $ curl -sS https://api.github.com/zen", "Anything added dilutes everything else.",
+        "~ $ curl -sS …/repos/copy/v86 | jq '{name, language}'", "{", "  \"name\": \"copy/v86\",", "  \"language\": \"JavaScript\"", "}",
+        "~ $ curl -sS …/users/copy/repos | jq -r '.[].name'", "v86", "wasicaml-demo", "kitty"]
+    }
+  ]
+}

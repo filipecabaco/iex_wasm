@@ -99,6 +99,16 @@ to a home screen or dock and keeps working offline once it has run. Chromium sho
 **Install app** button in the status strip; on iOS, use Share → Add to Home Screen. A new build
 gets a new cache. Run it after `snowglobe pool`; every demo on the live site is installable.
 
+## Share a run as a post
+
+Every demo has an X player card at `x/<demo>/` (e.g.
+[filipecabaco.github.io/snowglobe/x/elixir/](https://filipecabaco.github.io/snowglobe/x/elixir/)):
+shared on X, the post itself boots the run in a 480×480 frame, and the link opens the demo page.
+`elixir assets/cards.exs` writes the card pages and poster sources from `assets/cards.json`, where
+each poster's lines are real output from that run; capture each poster at 480×480 into
+`site/x/<demo>/poster.png`. X caches cards for about a week, so re-share with a new query string
+after changing one.
+
 ## Running a site headlessly
 
 A built site also runs without a browser, in a sandboxed container: the same snapshot, restored

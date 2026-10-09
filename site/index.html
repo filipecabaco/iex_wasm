@@ -527,7 +527,10 @@ $ snowglobe pool dist</pre>
         spec("Preloaded", mb(pre), "MB");
         spec("On demand", mb(cold), "MB");
         $(".command", node).append("Runs ", el("code", { textContent: demo.command || run.command.replaceAll("'", "") }),
-          ` · ${run.memory_mb} MB RAM · ${run.network === "fetch" ? "network through your browser" : "no network"} · no server`);
+          ` · ${run.memory_mb} MB RAM · ${run.network === "fetch" ? "network through your browser" : "no network"} · no server · `,
+          // Each run has an X player card at x/<dir>/: the post itself boots the run
+          el("a", { href: "https://x.com/intent/post?url=" + encodeURIComponent(new URL(`x/${demo.dir}/`, location.href).href),
+            target: "_blank", rel: "noopener", textContent: "Share on X" }));
         const labels = ["", "Snapshot", "Ready", "Preloaded", "On demand", "Files"];
         summaryRows.get(demo.dir).append(...[demo.name, mb(run.snapshot_bytes) + " MB", run.boot_seconds.toFixed(1) + " s",
           mb(pre) + " MB", mb(cold) + " MB", run.files.toLocaleString("en")].map((t, i) => {
