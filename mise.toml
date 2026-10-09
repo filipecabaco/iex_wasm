@@ -47,7 +47,13 @@ container=$(docker create --platform linux/386 iex-wasm-rootfs)
 trap 'docker rm "$container" >/dev/null; rm -f "$IMAGE/rootfs.tar"' EXIT
 docker export "$container" -o "$IMAGE/rootfs.tar"
 rm -rf "$DIST/system"
-elixir "$IMAGE/tar2v86.exs" "$IMAGE/rootfs.tar" "$DIST/system"
+# Preload what most IEx sessions touch: core Elixir and OTP apps (bytecode + NIFs) and the
+# shared libraries they link against
+warm='^/usr/lib/(elixir/lib/(elixir|iex|logger|eex|mix|ex_unit)|erlang/lib/(kernel|stdlib|compiler|erts|crypto|syntax_tools)-[^/]+)/(ebin|priv/lib)/'
+warm+='|^/lib/ld-musl[^/]*$|^/usr/lib/lib(crypto|ssl|z|ncursesw)\.so[^/]*$'
+# the VM binary itself is paged in lazily, plus what OpenSSL reads when :crypto loads
+warm+='|^/usr/lib/erlang/erts-[^/]+/bin/|^/etc/ssl/openssl\.cnf$|^/usr/lib/ossl-modules/'
+elixir "$IMAGE/tar2v86.exs" "$IMAGE/rootfs.tar" "$DIST/system" --warm "$warm"
 '''
 sources = ["packages/image-builder/Dockerfile", "packages/image-builder/tar2v86.exs"]
 outputs = ["dist/system/filesystem.json"]

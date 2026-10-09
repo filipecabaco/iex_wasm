@@ -4,11 +4,15 @@
 #
 #   <out>/filesystem.json                      tree metadata (fs2json format v3)
 #   <out>/filesystem/<sha256[0..10]>.bin.zst   zstd-compressed file contents, deduplicated
+#   <out>/warm.pack                            (with --warm) blobs the page preloads in one request
 #
 # Equivalent to v86's tools/fs2json.py + tools/copy-to-sha256.py --zstd, in one pass over the tar.
 # Needs OTP 28+ for the built-in :zstd module.
 #
-#   elixir tar2v86.exs rootfs.tar out_dir
+#   elixir tar2v86.exs rootfs.tar out_dir [--warm REGEX]
+#
+# warm.pack layout: <<index_size::32-little, index_json::binary, blobs::binary>>, where the index
+# is a JSON list of [blob_name, uncompressed_size, compressed_size] in blob order.
 
 defmodule Tar2V86 do
   import Bitwise
@@ -21,7 +25,14 @@ defmodule Tar2V86 do
   @s_iflnk 0o120000
   @zstd_level 19
 
-  def run([tar_path, out_dir]) do
+  def run(argv) do
+    case OptionParser.parse(argv, strict: [warm: :string]) do
+      {opts, [tar_path, out_dir], []} -> convert(tar_path, out_dir, opts[:warm])
+      _ -> usage()
+    end
+  end
+
+  defp convert(tar_path, out_dir, warm) do
     blobs_dir = Path.join(out_dir, "filesystem")
     File.mkdir_p!(blobs_dir)
 
@@ -50,10 +61,34 @@ defmodule Tar2V86 do
     IO.puts(
       "#{length(nodes)} entries, #{div(total_size, 1 <<< 20)} MB uncompressed -> #{out_dir}"
     )
+
+    if warm, do: write_warm_pack(nodes, Regex.compile!(warm), out_dir)
   end
 
-  def run(_) do
-    IO.puts(:stderr, "usage: elixir tar2v86.exs <rootfs.tar> <out_dir>")
+  # Bundle the blobs of matching files so the page can fetch them in one request instead of one
+  # blocking round trip per file the first time the guest opens it
+  defp write_warm_pack(nodes, regex, out_dir) do
+    blobs_dir = Path.join(out_dir, "filesystem")
+
+    entries =
+      for {path, [_, size, _, mode, _, _, filename]} <- nodes,
+          is_binary(filename) and (mode &&& 0o170000) == @s_ifreg,
+          Regex.match?(regex, "/" <> path),
+          uniq: true do
+        {filename, size, File.read!(Path.join(blobs_dir, filename))}
+      end
+
+    index = JSON.encode!(for {name, size, blob} <- entries, do: [name, size, byte_size(blob)])
+    blobs = for {_, _, blob} <- entries, do: blob
+
+    File.write!(Path.join(out_dir, "warm.pack"), [<<byte_size(index)::32-little>>, index | blobs])
+
+    compressed = blobs |> Enum.map(&byte_size/1) |> Enum.sum()
+    IO.puts("warm.pack: #{length(entries)} files, #{div(compressed, 1 <<< 20)} MB")
+  end
+
+  defp usage do
+    IO.puts(:stderr, "usage: elixir tar2v86.exs <rootfs.tar> <out_dir> [--warm REGEX]")
     System.halt(1)
   end
 

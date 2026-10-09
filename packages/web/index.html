@@ -70,7 +70,38 @@
       // IEx printed its prompt before the snapshot; Ctrl+L makes it redraw one
       sendInput(new Uint8Array([0x0c]));
       term.focus();
+
+      preloadWarmPack();
     });
+
+    // The guest's files are fetched one blocking request at a time the first time each is read.
+    // warm.pack bundles the core Elixir/OTP code so it arrives in a single background download
+    // and lands in v86's file cache before IEx asks for it.
+    async function preloadWarmPack() {
+      const storage = emulator.fs9p?.storage;
+      if (!storage?.cache || !storage.storage?.read) return; // v86 internals changed: skip
+
+      // v86 evicts a file from its cache whenever the guest closes it, so every reopen (BEAM
+      // reading docs, a new process loading a .so) goes back to the network. Blobs are immutable
+      // and the set the guest touches is small, so keep them for the whole session.
+      storage.uncache = () => {};
+
+      const response = await fetch("system/warm.pack");
+      if (!response.ok) return;
+      const pack = new Uint8Array(await response.arrayBuffer());
+      const indexSize = new DataView(pack.buffer).getUint32(0, true);
+      const index = JSON.parse(new TextDecoder().decode(pack.subarray(4, 4 + indexSize)));
+
+      let offset = 4 + indexSize;
+      for (const [name, size, length] of index) {
+        const blob = pack.subarray(offset, offset + length);
+        offset += length;
+        if (await storage.storage.read(name, 0, 0)) continue; // the guest already loaded it
+        await storage.cache(name, new Uint8Array(storage.zstd_decompress(size, blob)));
+        // Yield between files so typing stays responsive while the cache fills
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
 
     // v86 (0.5.462) drops console input when the guest has no receive buffer queued, which loses
     // keystrokes when typing fast or pasting. Queue input here and only send it when one is free.

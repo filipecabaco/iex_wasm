@@ -49,6 +49,10 @@ flowchart LR
    prompt, and saves the whole machine state: about 60 MB, or 14 MB with zstd.
 4. **The browser** loads v86 and restores the snapshot. When IEx touches a file it hasn't read
    yet, v86 fetches that blob over HTTP and the guest kernel sees it as a disk read.
+5. **The warm pack** avoids most of those fetches. Once the prompt is up, the page downloads
+   `warm.pack` in the background: one request carrying the code nearly every session touches
+   (Elixir, IEx, stdlib, kernel, crypto and the libraries they link). Commands like `h`, `Task`
+   or `:crypto` then load from memory instead of waiting on one network round trip per file.
 
 ## Run it locally
 
