@@ -351,6 +351,7 @@ LABEL snowglobe.title="Python + Rich in the browser" \
     command: 'python3'
     ready:   "&gt;&gt;&gt; "
     memory:  512 MB
+    network: none
 ==&gt; Add boot layer
 ==&gt; Convert to v86 filesystem
     5600 entries, 107 MB uncompressed, 4437 unique files
@@ -373,13 +374,32 @@ dist/python is ready to deploy.</pre>
               <div>
                 <p>Preview it locally, then put the folder on any static host. Make it an app people can install and
                   run offline, and let several runs on one host share one blob store. This site is GitHub Pages, built
-                  by a workflow running the same commands; every run on it is installable.</p>
+                  by a workflow running the same commands; every run on it is installable, and each one shares to X
+                  as a post that boots it.</p>
 <pre><span class="dim"># preview at http://localhost:8000</span>
 $ snowglobe serve dist/python
 <span class="dim"># installable, and offline once it has run</span>
 $ snowglobe pwa dist/python
 <span class="dim"># several runs on one host: share one blob store</span>
 $ snowglobe pool dist</pre>
+              </div>
+            </div>
+            <div class="step">
+              <h3>Run</h3>
+              <div>
+                <p>The same site runs without a browser, in a sandboxed container: a session in your terminal, lines piped
+                  in as commands, or a long-lived instance that scripts and agents drive with <code>exec</code>. It runs from
+                  a folder, from a site's URL (try <code>snowglobe run https://filipecabaco.github.io/snowglobe/python/</code>),
+                  or from one tarball on a CDN.</p>
+<pre><span class="dim"># a session in your terminal; ctrl-] quits</span>
+$ snowglobe run dist/python
+<span class="dim"># from where it's hosted: a site's URL, or one tarball</span>
+$ snowglobe pack dist/python -o python.tar.gz
+$ snowglobe run https://cdn.example.com/python.tar.gz
+<span class="dim"># one instance, driven command by command</span>
+$ snowglobe run dist/python --name py --detach
+$ snowglobe exec py 'sum(range(10))'
+45</pre>
               </div>
             </div>
           </div>
@@ -394,6 +414,7 @@ $ snowglobe pool dist</pre>
                 <tr><td>--memory MB</td><td>snowglobe.memory</td><td class="wrap-cell">guest RAM, 512 by default</td></tr>
                 <tr><td>--title TEXT</td><td>snowglobe.title</td><td class="wrap-cell">the page title</td></tr>
                 <tr><td>--warm REGEX</td><td>snowglobe.warm</td><td class="wrap-cell">extra guest paths to preload</td></tr>
+                <tr><td>--network fetch</td><td>snowglobe.network</td><td class="wrap-cell">give the guest a network: HTTP(S) and WebSockets leave as the visitor's own browser requests, so CORS applies; none by default</td></tr>
                 <tr><td>--out DIR</td><td></td><td class="wrap-cell">where the site is written, dist by default</td></tr>
               </tbody>
             </table>
