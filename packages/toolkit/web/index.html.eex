@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>IEx in browser</title>
+  <title><%= @title %></title>
   <link rel="stylesheet" href="xterm/xterm.css">
   <style>
     html, body { height: 100%; margin: 0; background: #000; color: #aaa; font: 14px monospace; }
@@ -21,11 +21,11 @@
   <script>
     const status = document.getElementById("status");
 
-    // Everything below must match packages/image-builder/build-state.mjs:
+    // Rendered by packages/toolkit/build.exs. Everything below must match build-state.mjs:
     // the snapshot is only valid for the same RAM size and devices
     const emulator = new V86({
       wasm_path: "v86/v86.wasm",
-      memory_size: 512 * 1024 * 1024,
+      memory_size: <%= @memory_mb %> * 1024 * 1024,
       vga_memory_size: 8 * 1024 * 1024,
       bios: { url: "bios/seabios.bin" },
       vga_bios: { url: "bios/vgabios.bin" },
@@ -34,7 +34,7 @@
         baseurl: "system/filesystem/",
       },
       initial_state: { url: "system/state.bin.zst" },
-      // IEx runs on the virtio console (hvc0), rendered with xterm.js
+      // The app runs on the virtio console (hvc0), rendered with xterm.js
       virtio_console: {
         type: "xtermjs",
         container: document.getElementById("terminal"),
@@ -50,11 +50,17 @@
       }
     });
 
-    emulator.add_listener("emulator-started", () => {
+    // The app's console output up to the snapshot, so the terminal shows what it printed
+    const screen = fetch("system/console.bin").then((r) => (r.ok ? r.arrayBuffer() : null));
+
+    emulator.add_listener("emulator-started", async () => {
       status.hidden = true;
 
-      // Size the terminal to the window and tell the guest, so IEx wraps lines correctly
       const term = emulator.virtio_console_adapter.term;
+      const replay = await screen;
+      if (replay) term.write(new Uint8Array(replay));
+
+      // Size the terminal to the window and tell the guest, so the app wraps lines correctly
       const fit = new FitAddon.FitAddon();
       term.loadAddon(fit);
       const resize = () => {
@@ -67,16 +73,14 @@
       resize();
 
       queueInput(term);
-      // IEx printed its prompt before the snapshot; Ctrl+L makes it redraw one
-      sendInput(new Uint8Array([0x0c]));
       term.focus();
 
       preloadWarmPack();
     });
 
     // The guest's files are fetched one blocking request at a time the first time each is read.
-    // warm.pack bundles the core Elixir/OTP code so it arrives in a single background download
-    // and lands in v86's file cache before IEx asks for it.
+    // warm.pack bundles the files the app is most likely to need so they arrive in a single
+    // background download and land in v86's file cache before the guest asks for them.
     async function preloadWarmPack() {
       const storage = emulator.fs9p?.storage;
       if (!storage?.cache || !storage.storage?.read) return; // v86 internals changed: skip

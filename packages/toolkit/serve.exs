@@ -12,9 +12,9 @@ Mix.install([
 defmodule Serve do
   use Plug.Builder
 
-  plug :index
-  plug Plug.Static, at: "/", from: {__MODULE__, :root, []}
-  plug :not_found
+  plug(:index)
+  plug(Plug.Static, at: "/", from: {__MODULE__, :root, []})
+  plug(:not_found)
 
   def root, do: :persistent_term.get({__MODULE__, :root})
 

@@ -5,70 +5,10 @@ elixir = "1.20.4-otp-29"
 # build-state.mjs needs Node >= 22.15 for zlib zstd
 node = "24.21.0"
 
-[env]
-DIST = "{{config_root}}/dist"
-WEB = "{{config_root}}/packages/web"
-IMAGE = "{{config_root}}/packages/image-builder"
-
-[tasks.deps]
-description = "Install the browser runtime (v86, xterm.js)"
-run = "npm ci --prefix packages/web --no-audit --no-fund"
-sources = ["packages/web/package.json", "packages/web/package-lock.json"]
-outputs = ["packages/web/node_modules/.package-lock.json"]
-
-[tasks.site]
-description = "Assemble the static page and browser runtime into dist/"
-depends = ["deps"]
-# bash features below; mise's default `sh` is dash on Ubuntu
-shell = "bash -c"
-run = '''
-set -euo pipefail
-mkdir -p "$DIST"/{v86,xterm,bios}
-cp "$WEB/index.html" "$DIST/"
-cp "$WEB"/node_modules/v86/build/{libv86.js,v86.wasm,v86-fallback.wasm} "$DIST/v86/"
-cp "$WEB"/node_modules/@xterm/xterm/lib/xterm.js "$WEB"/node_modules/@xterm/xterm/css/xterm.css \
-   "$WEB"/node_modules/@xterm/addon-fit/lib/addon-fit.js "$DIST/xterm/"
-# The BIOS isn't on npm; fetch it from the exact upstream commit the npm build was made from
-commit=$(node -p 'require(process.env.WEB + "/node_modules/v86/package.json").version.split("+g")[1]')
-for bios in seabios vgabios; do
-  curl -fsSL "https://raw.githubusercontent.com/copy/v86/$commit/bios/$bios.bin" -o "$DIST/bios/$bios.bin"
-done
-touch "$DIST/.nojekyll"
-'''
-
-[tasks.rootfs]
-description = "Build the i386 Alpine + Elixir guest and convert it to v86's 9p format"
-# bash features below; mise's default `sh` is dash on Ubuntu
-shell = "bash -c"
-run = '''
-set -euo pipefail
-docker build --platform linux/386 --tag iex-wasm-rootfs "$IMAGE"
-container=$(docker create --platform linux/386 iex-wasm-rootfs)
-trap 'docker rm "$container" >/dev/null; rm -f "$IMAGE/rootfs.tar"' EXIT
-docker export "$container" -o "$IMAGE/rootfs.tar"
-rm -rf "$DIST/system"
-# Preload what most IEx sessions touch: core Elixir and OTP apps (bytecode + NIFs) and the
-# shared libraries they link against
-warm='^/usr/lib/(elixir/lib/(elixir|iex|logger|eex|mix|ex_unit)|erlang/lib/(kernel|stdlib|compiler|erts|crypto|syntax_tools)-[^/]+)/(ebin|priv/lib)/'
-warm+='|^/lib/ld-musl[^/]*$|^/usr/lib/lib(crypto|ssl|z|ncursesw)\.so[^/]*$'
-# the VM binary itself is paged in lazily, plus what OpenSSL reads when :crypto loads
-warm+='|^/usr/lib/erlang/erts-[^/]+/bin/|^/etc/ssl/openssl\.cnf$|^/usr/lib/ossl-modules/'
-elixir "$IMAGE/tar2v86.exs" "$IMAGE/rootfs.tar" "$DIST/system" --warm "$warm"
-'''
-sources = ["packages/image-builder/Dockerfile", "packages/image-builder/tar2v86.exs"]
-outputs = ["dist/system/filesystem.json"]
-
-[tasks.state]
-description = "Boot the guest headless and snapshot it with IEx running"
-depends = ["deps", "site", "rootfs"]
-run = 'node "$IMAGE/build-state.mjs" "$WEB/node_modules/v86/build" "$DIST/bios" "$DIST/system"'
-sources = ["packages/image-builder/build-state.mjs", "dist/system/filesystem.json", "packages/web/package-lock.json"]
-outputs = ["dist/system/state.bin.zst"]
-
 [tasks.build]
-description = "Build the complete static site into dist/"
-depends = ["site", "state"]
+description = "Build the IEx example into dist/"
+run = 'elixir packages/toolkit/build.exs examples/iex --title "IEx in the browser" --ready "iex(1)> "'
 
 [tasks.serve]
 description = "Serve dist/ locally at http://localhost:8000"
-run = 'elixir "$WEB/serve.exs" "$DIST"'
+run = "elixir packages/toolkit/serve.exs dist"

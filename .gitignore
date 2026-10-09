@@ -1,10 +1,7 @@
-# Build output (mise run build)
+# Build output
 /dist/
 
-# Browser runtime installed by `mise run deps`
-/packages/web/node_modules/
-
-# Intermediate rootfs export
-/packages/image-builder/rootfs.tar
+# Browser runtime installed by build.exs (npm ci)
+/packages/toolkit/web/node_modules/
 
 .elixir_ls

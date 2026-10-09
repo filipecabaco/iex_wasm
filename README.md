@@ -60,41 +60,67 @@ You need [mise](https://mise.jdx.dev) and Docker.
 
 ```sh
 mise install       # Erlang, Elixir and Node, pinned in mise.toml
-mise run build     # build the guest, snapshot it, assemble dist/ (about a minute)
+mise run build     # build the IEx example into dist/ (about a minute)
 mise run serve     # http://localhost:8000
 ```
 
-`mise run build` skips any stage whose inputs haven't changed:
-
-| Task | What it does |
-|------|--------------|
-| `deps` | Installs v86 and xterm.js, pinned in `packages/web/package.json` |
-| `site` | Copies the page, v86, xterm.js and the matching v86 BIOS into `dist/` |
-| `rootfs` | Builds the guest image and converts it into `dist/system/` |
-| `state` | Boots the guest headless and saves `dist/system/state.bin.zst` |
-
 Every push to `main` runs the same build in GitHub Actions and deploys `dist/` to GitHub Pages.
 
-## Make it yours
+## Ship your own app
 
-- **Add packages to the guest** by editing `packages/image-builder/Dockerfile` (`apk add …`),
-  then run `mise run build`.
-- **Change the RAM size or devices** in `packages/web/index.html` and
-  `packages/image-builder/build-state.mjs` together. A snapshot only restores on the same machine
-  it was taken on.
+The toolkit turns any **i386 Alpine** Docker image into a deployable static site. Whatever the
+image runs (its `ENTRYPOINT`/`CMD`, with its `ENV` and `WORKDIR`) shows up in a terminal in the
+browser.
+
+```sh
+# from a directory with a Dockerfile
+elixir packages/toolkit/build.exs path/to/my_app --title "My app" --ready "iex(1)> "
+
+# or straight from a registry
+elixir packages/toolkit/build.exs i386/alpine:3.24.2 --out alpine-dist
+
+elixir packages/toolkit/serve.exs dist    # preview, then deploy dist/ anywhere static
+```
+
+A minimal app image (this repo's [`examples/iex/Dockerfile`](examples/iex/Dockerfile) is exactly
+this):
+
+```dockerfile
+FROM i386/alpine:3.24.2
+RUN apk add --no-cache elixir erlang28
+ENV LANG=C.UTF-8
+CMD ["iex"]
+```
+
+For a Mix project, build a release inside the image (`mix release`) and use `CMD
+["bin/my_app", "start_iex"]`. NIFs compile natively there because it's a real i386 Linux.
+
+| Option | Default | What it does |
+|--------|---------|--------------|
+| `--out DIR` | `dist` | Where the site is written |
+| `--title TEXT` | source name | Page title |
+| `--cmd CMD` | image `ENTRYPOINT` + `CMD` | Shell command to run on the terminal |
+| `--ready TEXT` | wait for 5 s of quiet | Terminal output that means the app is ready to snapshot |
+| `--memory MB` | `512` | Guest RAM |
+| `--warm REGEX` | core Elixir/OTP files | Files the page preloads in the background |
+
+The toolkit adds a boot layer on top of your image ([`boot.Dockerfile`](packages/toolkit/boot.Dockerfile):
+kernel, 9p initramfs, OpenRC, consoles), so your Dockerfile stays an ordinary app image. The
+image has to be 32-bit (`FROM i386/alpine`) because v86 emulates a 32-bit x86 CPU.
 
 ## Project layout
 
 ```
-packages/
-  image-builder/
-    Dockerfile        the guest: Alpine + Elixir + 9p boot
-    tar2v86.exs       rootfs tar → v86 9p filesystem (no dependencies, OTP 28+)
-    build-state.mjs   boots the guest headless and snapshots it
-  web/
-    index.html        the page: v86 + xterm.js
-    serve.exs         local static server
-mise.toml             toolchain and build tasks
+examples/
+  iex/Dockerfile        the app behind the live demo
+packages/toolkit/
+  build.exs             image → dist/: boot layer, filesystem, page, snapshot
+  boot.Dockerfile       kernel, 9p boot and consoles added on top of the app image
+  tar2v86.exs           rootfs tar → v86 9p filesystem + warm pack (no dependencies, OTP 28+)
+  build-state.mjs       boots the guest headless and snapshots it once the app is ready
+  serve.exs             local static server
+  web/index.html.eex    the page: v86 + xterm.js
+mise.toml               toolchain and tasks
 ```
 
 ## Credits

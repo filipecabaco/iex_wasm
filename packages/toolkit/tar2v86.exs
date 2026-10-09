@@ -105,7 +105,9 @@ defmodule Tar2V86 do
       File.rename!(tmp, path)
     end
 
-    entry |> Map.delete(:data) |> Map.merge(%{hash: hash, filename: filename, size: byte_size(data)})
+    entry
+    |> Map.delete(:data)
+    |> Map.merge(%{hash: hash, filename: filename, size: byte_size(data)})
   end
 
   defp store_blob(entry, _blobs_dir), do: entry
