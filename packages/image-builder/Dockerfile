@@ -18,7 +18,9 @@ RUN sed -i '/^tty[0-9]/d' /etc/inittab && \
 RUN printf '%s\n' \
     'export LANG=C.UTF-8' \
     'if [ "$(tty)" = /dev/hvc0 ]; then clear; exec iex; fi' \
-    > /root/.profile
+    > /root/.profile && \
+    # IEx caps docs and inspect output at 80 columns by default; follow the terminal instead
+    echo 'IEx.configure(width: 1000)' > /root/.iex.exs
 
 # https://wiki.alpinelinux.org/wiki/Alpine_Linux_in_a_chroot#Preparing_init_services
 RUN for i in devfs dmesg mdev hwdrivers; do rc-update add $i sysinit; done && \

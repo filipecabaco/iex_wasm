@@ -59,7 +59,9 @@
       term.loadAddon(fit);
       const resize = () => {
         fit.fit();
-        emulator.bus.send("virtio-console0-resize", [term.cols, term.rows]);
+        // v86 0.5.462 forwards this pair as-is into Linux's resize message, which is
+        // rows-first, so pass rows first for the guest to see the right size
+        emulator.bus.send("virtio-console0-resize", [term.rows, term.cols]);
       };
       window.addEventListener("resize", resize);
       resize();
