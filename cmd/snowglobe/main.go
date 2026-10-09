@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/filipecabaco/snowglobe/internal/build"
+	"github.com/filipecabaco/snowglobe/internal/instance"
 	"github.com/filipecabaco/snowglobe/internal/pool"
 	"github.com/filipecabaco/snowglobe/internal/serve"
 )
@@ -23,6 +24,14 @@ Usage:
   snowglobe serve [dir] [--port 8000]                preview a built site
   snowglobe pool <dir>                               let every site under dir share one blob
                                                      directory (for hosting several together)
+  snowglobe run [dir] [--name N] [--detach]          run a built site in a sandboxed container:
+                                                     a session in a terminal; with stdin piped,
+                                                     each line is typed in as a command
+  snowglobe exec <name> <command>                    type a command into a running instance and
+                                                     print what it printed
+  snowglobe attach <name>                            join a running instance (ctrl-] detaches)
+  snowglobe stop <name>                              throw a running instance away
+  snowglobe ps                                       list running instances
   snowglobe version
 
 Build flags:
@@ -61,6 +70,28 @@ func main() {
 		err = runServe(os.Args[2:])
 	case "pool":
 		err = runPool(os.Args[2:])
+	case "run":
+		err = runRun(os.Args[2:])
+	case "exec":
+		if len(os.Args) < 4 {
+			err = fmt.Errorf("exec takes an instance name and a command")
+		} else {
+			err = instance.Exec(os.Args[2], os.Args[3:])
+		}
+	case "attach":
+		if len(os.Args) != 3 {
+			err = fmt.Errorf("attach takes an instance name")
+		} else {
+			err = instance.Attach(os.Args[2])
+		}
+	case "stop":
+		if len(os.Args) != 3 {
+			err = fmt.Errorf("stop takes an instance name")
+		} else {
+			err = instance.Stop(os.Args[2])
+		}
+	case "ps":
+		err = instance.List()
 	case "version", "--version":
 		fmt.Println("snowglobe", version)
 	case "help", "-h", "--help":
@@ -120,6 +151,23 @@ func runServe(args []string) error {
 		dir = positional[0]
 	}
 	return serve.Run(dir, *port)
+}
+
+func runRun(args []string) error {
+	fs := flag.NewFlagSet("run", flag.ContinueOnError)
+	o := instance.Options{Site: "dist"}
+	fs.StringVar(&o.Name, "name", "", "")
+	fs.BoolVar(&o.Detach, "detach", false, "")
+	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+
+	positional, err := parse(fs, args)
+	if err != nil {
+		return err
+	}
+	if len(positional) > 0 {
+		o.Site = positional[0]
+	}
+	return instance.Run(o, version)
 }
 
 func runPool(args []string) error {

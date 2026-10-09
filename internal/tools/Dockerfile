@@ -25,6 +25,6 @@ RUN mkdir -p site/v86 site/xterm && \
        node_modules/@xterm/addon-fit/lib/addon-fit.js site/xterm/ && \
     chmod -R a+rX site
 
-COPY build-state.mjs ./
+COPY build-state.mjs run.mjs client.mjs ./
 
 ENV HOME=/tmp

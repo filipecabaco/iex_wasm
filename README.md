@@ -91,6 +91,35 @@ so the guest gets a 502 that says so), raw TCP and UDP go nowhere, and TLS is 1.
 X25519/P-256 and AES-128-GCM, which every current client offers. The TypeScript demo uses all of
 it: Zod validating a live GitHub API response, and a WebSocket echo.
 
+## Running a site headlessly
+
+A built site also runs without a browser, in a sandboxed container: the same snapshot, restored
+in v86 under Node, with its app console on your terminal. The guest is an emulated machine with no
+access to the host, and the container around it runs unprivileged, read-only, memory-capped and
+offline unless the site was built with `--network fetch`.
+
+```console
+$ snowglobe run dist/elixir                 # a session; ctrl-] quits
+$ printf 'Enum.sum(1..100)\n' | snowglobe run dist/elixir
+5050
+
+$ snowglobe run dist/elixir --name pg --detach
+$ snowglobe exec pg 'sql "CREATE TABLE notes (body text)"'
+$ snowglobe exec pg "sql \"INSERT INTO notes VALUES ('from snowglobe exec')\""
+$ snowglobe exec pg 'sql "SELECT * FROM notes"'
+body
+───────────────────
+from snowglobe exec
+1 row(s)
+$ snowglobe attach pg                       # join it; ctrl-] detaches, it keeps running
+$ snowglobe ps
+$ snowglobe stop pg
+```
+
+Piped stdin is typed in one line at a time, each waiting until the app goes quiet. `exec` prints
+only what the command printed (no echo, no prompt) and plain text when its output isn't a
+terminal, which suits scripts and agents. Each instance starts fresh from the snapshot.
+
 ## The warm cache
 
 The guest's files are fetched on demand: the first time the guest reads a file, it waits on one

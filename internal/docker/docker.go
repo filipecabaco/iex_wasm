@@ -19,6 +19,20 @@ func Run(args ...string) error {
 	return wrap(cmd.Run(), args)
 }
 
+// Attached runs docker connected to this process's stdin, stdout and stderr, for sessions.
+func Attached(args ...string) error {
+	cmd := exec.Command("docker", args...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return wrap(cmd.Run(), args)
+}
+
+// Quiet runs docker with its output on stderr, keeping stdout for the caller's own output.
+func Quiet(args ...string) error {
+	cmd := exec.Command("docker", args...)
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+	return wrap(cmd.Run(), args)
+}
+
 // Output runs docker and returns its trimmed stdout.
 func Output(args ...string) (string, error) {
 	var stderr bytes.Buffer

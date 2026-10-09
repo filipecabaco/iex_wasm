@@ -11,11 +11,14 @@ import (
 	"github.com/filipecabaco/snowglobe/internal/docker"
 )
 
-//go:embed Dockerfile package.json package-lock.json build-state.mjs
+//go:embed Dockerfile package.json package-lock.json build-state.mjs run.mjs client.mjs
 var context embed.FS
 
 // Image is a built tools image.
 type Image struct{ tag string }
+
+// Tag is the image reference, for running it directly.
+func (i *Image) Tag() string { return i.tag }
 
 // Build builds (or reuses from Docker's cache) the tools image for this snowglobe version.
 func Build(version string) (*Image, error) {
@@ -34,7 +37,8 @@ func Build(version string) (*Image, error) {
 	}
 
 	tag := "snowglobe-tools:" + version
-	if err := docker.Run("build", "--tag", tag, dir); err != nil {
+	// Quiet unless it fails: `snowglobe run` keeps stdout for the session
+	if _, err := docker.Output("build", "--quiet", "--tag", tag, dir); err != nil {
 		return nil, err
 	}
 	return &Image{tag: tag}, nil
