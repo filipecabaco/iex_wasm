@@ -300,3 +300,18 @@ dark overrides only the tokens.
 - The signal brightens in dark to keep its contrast against the ground, and the run button flips
   to dark text on it.
 - The run window's strip follows the system theme through `prefers-color-scheme`.
+
+## Mobile
+
+- **A live run takes the screen.** On phones (≤720px) "Run here" lifts the panel into a full-screen
+  machine under a 56px bar (run name with the live dot, Stop). The page behind it stops scrolling.
+- **Follow the visual viewport.** The full-screen panel and the run page size themselves to
+  `visualViewport` (`--vvh`, `--vvt`), so the on-screen keyboard shrinks the terminal instead of
+  covering the prompt.
+- **Never fewer than 90 columns.** The console replay was recorded at 90; narrower screens pan the
+  terminal sideways (scrollbar hidden) and the pan follows the cursor. Terminal type drops to 13px
+  under 640px.
+- **The key bar.** On coarse pointers, a dark bar under the terminal carries the keys phone
+  keyboards lack: esc, tab, a sticky ctrl (signal colour while armed), ^C, and arrows (drawn SVG
+  chevrons, sent in the cursor mode the app asked for). Keys act on pointerdown and never take focus.
+- **Touch targets.** Text links keep their look but get a 44px-tall hit area under `pointer: coarse`.

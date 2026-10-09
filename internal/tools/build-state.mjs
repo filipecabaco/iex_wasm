@@ -20,6 +20,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import zlib from "node:zlib";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
@@ -30,6 +31,7 @@ const { values: options, positionals } = parseArgs({
     memory: { type: "string", default: "512" },
     ready: { type: "string" },
     exercise: { type: "string", multiple: true, default: [] },
+    network: { type: "string", default: "none" },
   },
 });
 const [v86Dir, biosDir, systemDir] = positionals;
@@ -61,6 +63,8 @@ const emulator = new V86({
   bzimage_initrd_from_filesystem: true,
   // Must match the browser config: the snapshot includes this device
   virtio_console: true,
+  // Same for the NIC: with "fetch", the guest's HTTP requests become fetch() calls
+  ...(options.network === "fetch" ? { net_device: { type: "virtio", relay_url: "fetch" } } : {}),
   // init_on_free=on zeroes freed pages, which makes the snapshot compress far better
   cmdline:
     "rw root=host9p rootfstype=9p rootflags=trans=virtio,cache=loose modules=virtio_pci " +
@@ -71,6 +75,14 @@ const emulator = new V86({
   },
   screen_dummy: true,
 });
+
+// The page answers the guest's HTTPS with https-bridge.js; attach the same bridge here so exercise
+// commands can use the network exactly as a visitor's would
+if (options.network === "fetch") {
+  const site = path.dirname(systemDir);
+  vm.runInThisContext(fs.readFileSync(path.join(site, "https-bridge.js"), "utf8"));
+  globalThis.SnowglobeHTTPS.attach(emulator, JSON.parse(fs.readFileSync(path.join(systemDir, "tls.json"), "utf8")));
+}
 
 // Record every file the guest reads, by phase: while booting the app will want them again after a
 // restore (the snapshot is taken with the page cache dropped), and while exercising they are

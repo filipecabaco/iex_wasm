@@ -8,6 +8,13 @@ globalThis.User = z.object({
   email: z.email(),
   age: z.number().int().positive().optional(),
 });
+// For the network examples: the slice of a GitHub repo we care about
+globalThis.Repo = z.object({
+  full_name: z.string(),
+  description: z.string().nullable(),
+  stargazers_count: z.number().int(),
+  language: z.string().nullable(),
+});
 
 // tsx runs the REPL in a child process that loads this too; show the banner once
 if (!process.env.SNOWGLOBE_BANNER_SHOWN) {
@@ -22,5 +29,11 @@ if (!process.env.SNOWGLOBE_BANNER_SHOWN) {
     ${cyan("type Point = z.infer<typeof Point>")}
     ${cyan("const p: Point = Point.parse({ x: 1, y: 2 }); p")}
     ${cyan('z.array(z.coerce.number()).parse(["1", "2", "3"])')}
+
+  The network goes out through this tab: HTTPS and WebSockets, wherever CORS allows.
+
+    ${cyan('Repo.parse(await (await fetch("https://api.github.com/repos/copy/v86")).json())')}
+    ${cyan('const ws = new WebSocket("wss://echo.websocket.org"); ws.onmessage = (e) => console.log("<", e.data)')}
+    ${cyan('ws.send("hello from a sandboxed tab")')}
 `);
 }

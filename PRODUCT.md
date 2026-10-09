@@ -27,7 +27,8 @@ each a small project with a real dependency.
 ## Positioning
 
 Every demo is a sandboxed run in the visitor's own browser: a whole machine with no server behind
-it and no network inside it, that the visitor can break and close. Not a transpiler, not a remote
+it, whose only way out (when a run opts in) is the visitor's own browser requests, and that the
+visitor can break and close. Not a transpiler, not a remote
 shell, not a subset runtime: the real program built from a Dockerfile.
 
 ## Operating Context
@@ -43,7 +44,8 @@ shell, not a subset runtime: the real program built from a Dockerfile.
 - Everything runs emulated on 32-bit x86: much slower than native. Cold loads take seconds (a CDN
   cache miss right after a deploy can take ~15 s); commands take tens of milliseconds (Rust) to
   several seconds (Java snippets compile with javac).
-- No networking inside the guests; nothing is sent to a server.
+- Networking is opt-in per run (`--network fetch`): HTTP(S) and WebSockets leave as the visitor's own
+  browser requests (CORS applies); otherwise the guest has no network. No snowglobe server exists.
 - Guests must be i386 Alpine images; Java is limited to OpenJDK 11, the newest Alpine builds for x86.
 
 ## Brand Commitments

@@ -55,10 +55,40 @@ LABEL snowglobe.title="Python in the browser" \
 | `--memory MB` | `snowglobe.memory` | `512` |
 | `--exercise CMD` (repeatable) | `snowglobe.exercise` (JSON array) | none |
 | `--warm REGEX` | `snowglobe.warm` | none |
+| `--network fetch` | `snowglobe.network` | `none` |
 
 Labels let a Dockerfile describe itself; flags override them. `--cmd` swaps the program without
 touching the image, and drops the image's `ready` and `exercise` labels, which belonged to its
 own command.
+
+## Networking
+
+Guests have no network unless you ask for it. With `--network fetch` (or
+`LABEL snowglobe.network="fetch"`), the guest gets a virtio NIC and DHCP, and every request it
+makes leaves as the page's own browser request. There is still no server:
+
+- **HTTP** (port 80) goes through v86's fetch backend: each request becomes a `fetch()`.
+- **HTTPS** (port 443) is terminated in the page. `https-bridge.js` runs a small TLS 1.3 server on
+  WebCrypto, presents a certificate for the requested host signed by a CA made fresh for each
+  build, and replays the decrypted request with `fetch("https://…")`. The guest trusts that CA (the
+  system bundle, plus `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS` and Java's
+  `cacerts`); nothing else should, since its key ships with the site.
+- **WebSockets** (`wss://` and `ws://`): the guest's upgrade request opens a browser `WebSocket` to
+  the same URL, and frames are passed through both ways.
+
+```console
+/ # curl -sS https://api.github.com/zen
+Approachable is better than simple.
+/ # wscat -c wss://echo.websocket.org
+Connected (press CTRL+C to quit)
+> hello from wscat in a browser tab
+< hello from wscat in a browser tab
+```
+
+The browser's rules still apply: HTTP(S) only reaches servers that allow CORS (example.com doesn't,
+so the guest gets a 502 that says so), raw TCP and UDP go nowhere, and TLS is 1.3 with
+X25519/P-256 and AES-128-GCM, which every current client offers. The TypeScript demo uses all of
+it: Zod validating a live GitHub API response, and a WebSocket echo.
 
 ## The warm cache
 

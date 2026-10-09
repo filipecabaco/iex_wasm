@@ -33,12 +33,15 @@ Build flags:
   --title TEXT    page title (default: the source)
   --memory MB     guest RAM (default: 512)
   --warm REGEX    extra guest paths to preload, on top of what the guest read
+  --network NAME  none (default) or fetch: the guest's plain HTTP requests go out through the
+                  browser's fetch(), upgraded to HTTPS on HTTPS pages; servers must allow CORS
   --exercise CMD  a command to type into the app after the snapshot, recording the files it reads
                   so they're preloaded too; repeatable. A warm-report.json explains the result
 
 An image can carry its own settings as labels, which flags override:
   LABEL snowglobe.ready="iex(1)> " snowglobe.title="My app" snowglobe.memory="256" \
         snowglobe.exercise='["h Enum.map", "Task.async(fn -> 1 end)"]'
+  LABEL snowglobe.network="fetch"
 
 The image must be 32-bit Alpine (FROM i386/alpine): v86 emulates a 32-bit x86 CPU.
 Docker is the only requirement.
@@ -83,6 +86,7 @@ func runBuild(args []string) error {
 	fs.IntVar(&o.Memory, "memory", 0, "")
 	fs.StringVar(&o.Warm, "warm", "", "")
 	fs.Func("exercise", "", func(v string) error { o.Exercise = append(o.Exercise, v); return nil })
+	fs.StringVar(&o.Network, "network", "", "")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 
 	positional, err := parse(fs, args)

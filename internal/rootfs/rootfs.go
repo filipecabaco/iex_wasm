@@ -154,7 +154,9 @@ func readAndStore(tr *tar.Reader, blobsDir string) ([]*entry, error) {
 			}
 
 			p := normalize(h.Name)
-			if p == "" {
+			// docker export adds /.dockerenv; inside v86 it makes OpenRC think it runs in a
+			// container and skip services such as networking and hostname
+			if p == "" || p == ".dockerenv" {
 				continue
 			}
 

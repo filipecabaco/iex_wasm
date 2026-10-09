@@ -2,28 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>{{.Title}}</title>
   <link rel="stylesheet" href="xterm/xterm.css">
   <style>
-    html, body { height: 100%; margin: 0; background: #000; }
-    body { display: flex; flex-direction: column; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    html, body { height: 100%; margin: 0; background: #000; overscroll-behavior: none; }
+    /* Pinned to the visual viewport, so the on-screen keyboard shrinks the terminal instead of
+       covering its prompt (--vvh and --vvt follow window.visualViewport) */
+    body { position: fixed; left: 0; right: 0; top: var(--vvt, 0px); height: var(--vvh, 100%);
+      display: flex; flex-direction: column; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      padding: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px); box-sizing: border-box; }
     /* The strip: what this window is, and that it's a sandbox */
-    #strip { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1.25rem; padding: .45rem .75rem;
+    #strip { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: .25rem 1.25rem;
+      padding: calc(.45rem + env(safe-area-inset-top, 0px)) .75rem .45rem;
       background: #fff; color: #0d0d0d; border-bottom: 1px solid #0d0d0d; }
     #strip .name { font-weight: 700; }
-    #strip .facts { color: #5a5a57; }
-    #status { margin-left: auto; font-variant-numeric: tabular-nums; }
+    #strip .facts { color: #5a5a57; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #status { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* Narrow: name and status share the first line, the facts take the second */
+    @media (max-width: 640px) {
+      #strip { grid-template-columns: minmax(0, 1fr) auto; }
+      #strip .name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      #strip .facts { grid-row: 2; grid-column: 1 / -1; }
+    }
     #status::before { content: ""; display: inline-block; width: .55em; height: .55em; margin-right: .45em;
       border-radius: 50%; background: #c48a1e; vertical-align: .05em; }
     #status[data-state="ready"]::before { background: #d6300c; animation: live 2s ease-in-out infinite; }
     @keyframes live { 50% { opacity: .35; } }
     @media (prefers-reduced-motion: reduce) { #status[data-state="ready"]::before { animation: none; } }
-    #terminal { flex: 1; min-height: 0; padding: 4px; }
+    /* Never narrower than the 90 columns the snapshot was recorded at: a narrow screen pans
+       sideways (following the cursor) rather than wrapping the replayed output into wreckage */
+    #terminal { flex: 1; min-height: 0; padding: 4px; overflow: auto hidden; scrollbar-width: none;
+      overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+    #terminal::-webkit-scrollbar { display: none; }
+    #terminal .xterm { width: max-content; }
+
+    /* The keys a phone keyboard lacks, for touch screens only. Pressing one never takes focus
+       from the terminal, so the keyboard stays up */
+    #keys { display: none; gap: 5px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); overflow-x: auto;
+      background: #0b0b0c; border-top: 1px solid #2b2b29; scrollbar-width: none; }
+    #keys::-webkit-scrollbar { display: none; }
+    @media (pointer: coarse) { .running #keys { display: flex; } }
+    #keys button { flex: 1 1 0; min-width: 40px; max-width: 72px; height: 44px; padding: 0 6px; border-radius: 6px;
+      border: 1px solid #2b2b29; background: #161615; color: #e9e9e4; font-family: inherit; font-size: 14px; font-weight: 500; line-height: 1;
+      display: inline-flex; align-items: center; justify-content: center; touch-action: manipulation;
+      -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+    #keys button:active { background: #2b2b29; }
+    #keys button[aria-pressed="true"] { background: #d6300c; border-color: #d6300c; color: #fff; }
+    #keys svg { width: 16px; height: 16px; }
+    #keys .gap { flex: 0 1 12px; }
     @media (prefers-color-scheme: dark) {
       #strip { background: #0d0d0c; color: #ecece8; border-bottom-color: #2b2b29; }
       #strip .facts { color: #a2a29c; }
       #status[data-state="ready"]::before { background: #ff5a2e; }
+      #keys button[aria-pressed="true"] { background: #ff5a2e; border-color: #ff5a2e; color: #0b0b0c; }
     }
     /* ?embed: the page hosting this run already says what it is */
     .embed #strip { display: none; }
@@ -31,16 +63,42 @@
   <script src="xterm/xterm.js"></script>
   <script src="xterm/addon-fit.js"></script>
   <script src="v86/libv86.js"></script>
+  {{- if eq .Network "fetch"}}
+  <script src="https-bridge.js"></script>
+  {{- end}}
 </head>
 <body>
   <header id="strip">
     <span class="name">{{.Title}}</span>
-    <span class="facts">sandboxed in this tab · no server · no network</span>
+    <span class="facts">sandboxed in this tab · no server · {{if eq .Network "fetch"}}HTTP(S) through your browser{{else}}no network{{end}}</span>
     <span id="status" role="status" data-state="loading">loading 0%</span>
   </header>
   <div id="terminal"></div>
+  <div id="keys" role="toolbar" aria-label="Keys missing from touch keyboards">
+    <button type="button" data-send="esc">esc</button>
+    <button type="button" data-send="tab">tab</button>
+    <button type="button" data-ctrl aria-pressed="false">ctrl</button>
+    <button type="button" data-send="ctrl-c" aria-label="Control C">^C</button>
+    <span class="gap"></span>
+    <button type="button" data-send="left" aria-label="Left"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg></button>
+    <button type="button" data-send="up" aria-label="Up, previous in history"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 10 8 5.5l4.5 4.5"/></svg></button>
+    <button type="button" data-send="down" aria-label="Down, next in history"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 6 8 10.5 12.5 6"/></svg></button>
+    <button type="button" data-send="right" aria-label="Right"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg></button>
+  </div>
   <script>
     const status = document.getElementById("status");
+
+    // Follow the visual viewport: on phones it shrinks when the keyboard opens, while the layout
+    // viewport (and 100%) stays put behind it
+    const viewport = window.visualViewport;
+    function trackViewport() {
+      if (!viewport) return;
+      document.documentElement.style.setProperty("--vvh", viewport.height + "px");
+      document.documentElement.style.setProperty("--vvt", viewport.offsetTop + "px");
+    }
+    viewport?.addEventListener("resize", trackViewport);
+    viewport?.addEventListener("scroll", trackViewport);
+    trackViewport();
 
     // Rendered by snowglobe. Everything below must match build-state.mjs:
     // the snapshot is only valid for the same RAM size and devices
@@ -55,6 +113,10 @@
         baseurl: "system/filesystem/",
       },
       initial_state: { url: "system/state.bin.zst" },
+      {{- if eq .Network "fetch"}}
+      // The guest's HTTP requests become this page's fetch() calls; https-bridge.js does HTTPS
+      net_device: { type: "virtio", relay_url: "fetch" },
+      {{- end}}
       // The app runs on the virtio console (hvc0), rendered with xterm.js
       virtio_console: {
         type: "xtermjs",
@@ -64,6 +126,10 @@
       disable_speaker: true,
       autostart: true,
     });
+
+    {{- if eq .Network "fetch"}}
+    SnowglobeHTTPS.attach(emulator, "system/tls.json");
+    {{- end}}
 
     const embedded = new URLSearchParams(location.search).has("embed");
     if (embedded) document.documentElement.classList.add("embed");
@@ -109,24 +175,47 @@
     emulator.add_listener("emulator-started", async () => {
       run.readyAt = Date.now();
       setStatus("ready", "running");
+      document.documentElement.classList.add("running");
 
       const term = emulator.virtio_console_adapter.term;
+      // A terminal is not prose: no autocorrect, capitals or suggestions from touch keyboards
+      const field = term.textarea;
+      if (field) {
+        for (const [k, v] of Object.entries({ autocapitalize: "off", autocorrect: "off", autocomplete: "off", spellcheck: "false" })) field.setAttribute(k, v);
+        field.setAttribute("enterkeyhint", "send");
+      }
       const replay = await screen;
       if (replay) term.write(new Uint8Array(replay));
 
       // Size the terminal to the window and tell the guest, so the app wraps lines correctly
+      if (matchMedia("(max-width: 640px)").matches) term.options.fontSize = 13;
       const fit = new FitAddon.FitAddon();
       term.loadAddon(fit);
+      const box = document.getElementById("terminal");
       const resize = () => {
-        fit.fit();
+        const size = fit.proposeDimensions();
+        if (!size || !Number.isFinite(size.cols)) return;
+        const cols = Math.max(MIN_COLS, size.cols);
+        if (cols !== term.cols || size.rows !== term.rows) term.resize(cols, size.rows);
         // v86 0.5.462 forwards this pair as-is into Linux's resize message, which is
         // rows-first, so pass rows first for the guest to see the right size
         emulator.bus.send("virtio-console0-resize", [term.rows, term.cols]);
       };
       window.addEventListener("resize", resize);
+      viewport?.addEventListener("resize", resize);
       resize();
 
+      // When the terminal is wider than the screen, keep the cursor in view as you type
+      term.onCursorMove(() => {
+        if (box.scrollWidth <= box.clientWidth) return;
+        const cell = box.querySelector(".xterm-screen").offsetWidth / term.cols;
+        const x = term.buffer.active.cursorX * cell;
+        if (x < box.scrollLeft + cell * 2) box.scrollLeft = Math.max(0, x - box.clientWidth / 3);
+        else if (x > box.scrollLeft + box.clientWidth - cell * 3) box.scrollLeft = x - box.clientWidth * 2 / 3;
+      });
+
       queueInput(term);
+      keyBar(term);
       term.focus();
 
       preloadWarmPack();
@@ -164,6 +253,8 @@
     // v86 (0.5.462) drops console input when the guest has no receive buffer queued, which loses
     // keystrokes when typing fast or pasting. Queue input here and only send it when one is free.
     const encoder = new TextEncoder();
+    // build-state.mjs sizes the console to 90x30 for the snapshot, so the replay is 90 wide
+    const MIN_COLS = 90;
     let pending = [];
     let rx = null;
 
@@ -171,7 +262,40 @@
       rx = emulator.v86?.cpu?.devices?.virtio_console?.virtio?.queues?.[0];
       if (!rx) return; // internals moved in a newer v86: keep its default (lossy) input
       emulator.virtio_console_adapter.on_data_disposable.dispose();
-      term.onData((data) => sendInput(encoder.encode(data)));
+      term.onData((data) => sendInput(encoder.encode(withCtrl(data))));
+    }
+
+    // The touch key bar. ctrl is sticky: it applies to the next key typed on the keyboard
+    let ctrlArmed = false;
+    function keyBar(term) {
+      const ctrl = document.querySelector("#keys [data-ctrl]");
+      const arm = (on) => {
+        ctrlArmed = on;
+        ctrl.setAttribute("aria-pressed", String(on));
+      };
+      const arrow = (letter) => () => (term.modes.applicationCursorKeysMode ? "\x1bO" : "\x1b[") + letter;
+      const keys = {
+        esc: () => "\x1b", tab: () => "\t", "ctrl-c": () => "\x03",
+        up: arrow("A"), down: arrow("B"), right: arrow("C"), left: arrow("D"),
+      };
+      document.getElementById("keys").addEventListener("pointerdown", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        event.preventDefault(); // keep focus (and the keyboard) on the terminal
+        if (button.hasAttribute("data-ctrl")) return arm(!ctrlArmed);
+        sendInput(encoder.encode(keys[button.dataset.send]()));
+        arm(false);
+        term.focus();
+      });
+    }
+
+    // ctrl + a letter (or @[\]^_) is that character's control code
+    function withCtrl(data) {
+      if (!ctrlArmed || data.length !== 1) return data;
+      ctrlArmed = false;
+      document.querySelector("#keys [data-ctrl]")?.setAttribute("aria-pressed", "false");
+      const code = data.toUpperCase().charCodeAt(0);
+      return code >= 64 && code <= 95 ? String.fromCharCode(code - 64) : data;
     }
 
     function sendInput(bytes) {

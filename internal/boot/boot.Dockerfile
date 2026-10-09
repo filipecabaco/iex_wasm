@@ -27,6 +27,26 @@ RUN for i in devfs dmesg mdev hwdrivers; do rc-update add $i sysinit; done && \
     for i in modules sysctl hostname bootmisc; do rc-update add $i boot; done && \
     rc-update add killprocs shutdown
 
+# Networking, only when the site asks for it: DHCP on the virtio NIC, which v86's backend answers.
+# HTTPS is terminated by the page with certificates from a CA made for this build: trust it in the
+# system bundle and in the runtimes that keep their own (Node, Python's requests, Java).
+ARG NETWORK=none
+COPY snowglobe-ca.crt /usr/local/share/ca-certificates/snowglobe-sandbox.crt
+RUN if [ "$NETWORK" = none ]; then rm /usr/local/share/ca-certificates/snowglobe-sandbox.crt; else \
+      printf 'auto lo\niface lo inet loopback\n\nauto eth0\niface eth0 inet dhcp\n' > /etc/network/interfaces && \
+      rc-update add networking boot && \
+      mkdir -p /etc/ssl/certs && \
+      cat /usr/local/share/ca-certificates/snowglobe-sandbox.crt >> /etc/ssl/certs/ca-certificates.crt && \
+      { echo 'export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt'; \
+        echo 'export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt'; \
+        echo 'export NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/snowglobe-sandbox.crt'; \
+      } > /etc/profile.d/snowglobe-ca.sh && \
+      if command -v keytool >/dev/null; then \
+        keytool -importcert -noprompt -cacerts -storepass changeit -alias snowglobe-sandbox \
+          -file /usr/local/share/ca-certificates/snowglobe-sandbox.crt >/dev/null || true; \
+      fi; \
+    fi
+
 RUN mkinitfs -F "base virtio 9p" $(cat /usr/share/kernel/virt/kernel.release)
 
 # Everything removed here is bytes the browser never has to download

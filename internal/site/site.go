@@ -11,12 +11,16 @@ import (
 //go:embed index.html.tmpl
 var page string
 
+//go:embed https-bridge.js
+var httpsBridge []byte
+
 var tmpl = template.Must(template.New("index").Parse(page))
 
 // Page holds what varies between sites.
 type Page struct {
 	Title    string
-	MemoryMB int // must match the snapshot
+	MemoryMB int    // must match the snapshot
+	Network  string // "none" or a v86 network backend; must match the snapshot
 }
 
 // Render writes <out>/index.html and marks the site for GitHub Pages.
@@ -31,6 +35,11 @@ func Render(out string, p Page) error {
 	}
 	if err := os.WriteFile(filepath.Join(out, ".nojekyll"), nil, 0o644); err != nil {
 		return err
+	}
+	if p.Network == "fetch" {
+		if err := os.WriteFile(filepath.Join(out, "https-bridge.js"), httpsBridge, 0o644); err != nil {
+			return err
+		}
 	}
 	return f.Close()
 }

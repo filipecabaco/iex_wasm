@@ -16,6 +16,7 @@ import (
 	"github.com/filipecabaco/snowglobe/internal/boot"
 	"github.com/filipecabaco/snowglobe/internal/docker"
 	"github.com/filipecabaco/snowglobe/internal/rootfs"
+	"github.com/filipecabaco/snowglobe/internal/sandboxca"
 	"github.com/filipecabaco/snowglobe/internal/site"
 	"github.com/filipecabaco/snowglobe/internal/tools"
 )
@@ -38,6 +39,7 @@ type Options struct {
 	Memory   int
 	Warm     string
 	Exercise []string
+	Network  string
 }
 
 // Settings are the resolved values a build runs with.
@@ -48,6 +50,7 @@ type Settings struct {
 	Memory   int
 	Warm     *regexp.Regexp
 	Exercise []string
+	Network  string
 	Console  boot.Console
 }
 
@@ -80,9 +83,23 @@ func Run(o Options, version string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("    command: %s\n    ready:   %s\n    memory:  %d MB\n", s.Command, describeReady(s.Ready), s.Memory)
+	fmt.Printf("    command: %s\n    ready:   %s\n    memory:  %d MB\n    network: %s\n", s.Command, describeReady(s.Ready), s.Memory, s.Network)
 
-	if err := step("Add boot layer", func() error { return boot.Build(sourceTag, bootTag, s.Console) }); err != nil {
+	// With networking on, the page terminates the guest's HTTPS with certificates from a CA
+	// made for this build
+	var ca *sandboxca.CA
+	if s.Network != "none" {
+		if ca, err = sandboxca.New(); err != nil {
+			return err
+		}
+	}
+	if err := step("Add boot layer", func() error {
+		var caPEM []byte
+		if ca != nil {
+			caPEM = ca.CertPEM
+		}
+		return boot.Build(sourceTag, bootTag, s.Console, s.Network, caPEM)
+	}); err != nil {
 		return err
 	}
 
@@ -101,12 +118,17 @@ func Run(o Options, version string) error {
 		if err := t.CopySite(out); err != nil {
 			return err
 		}
-		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory})
+		if ca != nil {
+			if err := ca.WritePage(filepath.Join(out, "system", "tls.json")); err != nil {
+				return err
+			}
+		}
+		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network})
 	}); err != nil {
 		return err
 	}
 
-	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise) }); err != nil {
+	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise, s.Network) }); err != nil {
 		return err
 	}
 
@@ -144,6 +166,7 @@ type RunInfo struct {
 	Source        string    `json:"source"`
 	Command       string    `json:"command"`
 	MemoryMB      int       `json:"memory_mb"`
+	Network       string    `json:"network"`
 	BootSeconds   float64   `json:"boot_seconds"`
 	SnapshotBytes int64     `json:"snapshot_bytes"`
 	StateBytes    int64     `json:"state_bytes"`
@@ -170,7 +193,7 @@ func writeRunInfo(out string, o Options, s *Settings, fs *rootfs.Result, packFil
 	}
 
 	info := RunInfo{
-		Title: s.Title, Source: o.Source, Command: s.Command, MemoryMB: s.Memory,
+		Title: s.Title, Source: o.Source, Command: s.Command, MemoryMB: s.Memory, Network: s.Network,
 		BootSeconds: meta.BootSeconds, SnapshotBytes: meta.SnapshotBytes, StateBytes: meta.StateBytes,
 		WarmPackFiles: packFiles, WarmPackBytes: packBytes, Files: len(fs.Files),
 		BuiltAt: time.Now().UTC().Truncate(time.Second), Snowglobe: version,
@@ -268,6 +291,12 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 		} else {
 			s.Memory = 512
 		}
+	}
+
+	// Networking is opt-in: "fetch" turns the guest's HTTP requests into the browser's fetch()
+	s.Network = first(o.Network, label("network"), "none")
+	if s.Network != "none" && s.Network != "fetch" {
+		return nil, fmt.Errorf("network %q: use none or fetch", s.Network)
 	}
 
 	if w := first(o.Warm, label("warm")); w != "" {

@@ -82,3 +82,17 @@ func TestResolveExercise(t *testing.T) {
 		t.Error("a non-JSON exercise label should fail")
 	}
 }
+
+func TestResolveNetwork(t *testing.T) {
+	s, _ := Resolve(Options{}, image(nil, "sh"))
+	if s.Network != "none" {
+		t.Errorf("networking should be off by default: %q", s.Network)
+	}
+	s, _ = Resolve(Options{}, image(map[string]string{"snowglobe.network": "fetch"}, "sh"))
+	if s.Network != "fetch" {
+		t.Errorf("label: %q", s.Network)
+	}
+	if _, err := Resolve(Options{Network: "carrier-pigeon"}, image(nil, "sh")); err == nil {
+		t.Error("an unknown backend should fail")
+	}
+}

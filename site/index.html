@@ -116,6 +116,8 @@
     .panel .loading { position: absolute; z-index: 3; left: 20px; bottom: 18px; font: 400 13px/1 var(--mono); color: var(--panel-ink); }
     .panel .loading .bar { display: block; width: 180px; height: 2px; margin-top: 10px; background: #2a2a2a; }
     .panel .loading .bar span { display: block; height: 100%; width: 0; background: var(--signal); transition: width .3s; }
+    /* Only shown when a phone takes the live machine full screen */
+    .panel .live-bar { display: none; }
     /* Live: the Stop control and the ledger already say so; keep the terminal unobstructed */
     .run.playing .label { display: none; }
 
@@ -220,6 +222,26 @@
       .ledger:not(.open) .ledger-body { display: none; }
       .ledger .ledger-head { display: none; }
       body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
+      /* A live run takes the whole screen: a 380px box is no place to type, and the screen follows
+         the visual viewport so the keyboard pushes the terminal up instead of covering it */
+      .run.playing .panel { position: fixed; z-index: 30; left: 0; right: 0; top: var(--vvt, 0px); height: var(--vvh, 100dvh);
+        border-radius: 0; box-shadow: none; }
+      .run.playing .panel .label { display: none; }
+      .run.playing .panel .live-bar { display: flex; position: absolute; inset: 0 0 auto 0; z-index: 4; align-items: center;
+        justify-content: space-between; gap: 12px; height: 56px; padding: env(safe-area-inset-top, 0px) var(--pad) 0;
+        background: var(--panel); color: var(--panel-ink); border-bottom: 1px solid var(--panel-edge); box-sizing: content-box; }
+      .run.playing .panel .live-bar strong { font: 600 16px/1.2 var(--sans); min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .run.playing .panel .live-bar strong::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px;
+        border-radius: 50%; background: var(--signal); vertical-align: .08em; }
+      .run.playing .panel .live-bar .btn { height: 40px; border-color: var(--panel-ink); color: var(--panel-ink); }
+      .run.playing .panel iframe { top: calc(57px + env(safe-area-inset-top, 0px)); height: calc(100% - 57px - env(safe-area-inset-top, 0px)); }
+      .run.playing .panel .loading { bottom: auto; top: calc(80px + env(safe-area-inset-top, 0px)); }
+      html:has(.run.playing) { overflow: hidden; }
+    }
+    /* Touch: small text links keep their look but get a 44px tall target */
+    @media (pointer: coarse) {
+      .top nav a, .theme, footer a { display: inline-block; padding-block: 12px; margin-block: -12px; }
     }
     @media (prefers-reduced-motion: reduce) {
       .ledger li.enter, .ledger [data-state="ready"] .dot { animation: none; }
@@ -244,8 +266,8 @@
         <section class="hero">
           <h1>Real programs, sandboxed in your&nbsp;browser.</h1>
           <p class="lede">Each run below is a whole Linux machine, packaged from a Dockerfile and emulated
-            in WebAssembly right in this tab. No server runs it, no network reaches it, and closing it
-            throws the machine away.</p>
+            in WebAssembly right in this tab. No server runs it, its only way out is your browser's own
+            requests, and closing it throws the machine away.</p>
           <p class="aside-note">Run one here to type into it, or open it in a window of its own. It is an x86 CPU in
             emulation, so it is slower than native; every number and transcript below was measured and
             recorded when this site was built.</p>
@@ -426,7 +448,7 @@ $ snowglobe pool dist</pre>
     const demos = [
       { dir: "elixir", name: "Elixir + SQLite", stack: "A Mix release with Ecto and exqlite: SQLite's C, compiled for i386.", show: [0, 1, 2, 3] },
       { dir: "python", name: "Python + Rich", stack: "CPython 3.14 with Rich rendering tables, syntax and tracebacks.", show: [0, 1, 2, 6] },
-      { dir: "typescript", name: "TypeScript + Zod", stack: "Node 24 and tsx, with Zod schemas and their inferred types.", show: [0, 1, 2, 3, 4] },
+      { dir: "typescript", name: "TypeScript + Zod", stack: "Node 24 and tsx, with Zod validating live HTTPS responses; fetch() and WebSockets go out through your browser.", show: [0, 1, 6, 7, 8] },
       { dir: "go", name: "Go + Bubble Tea", stack: "An interactive Game of Life built with Bubble Tea and Lip Gloss.", show: "screen" },
       { dir: "rust", name: "Rust + clap", stack: "jtab, a CLI rendering JSON as tables: clap, serde_json, comfy-table.", show: [1, 2], command: "sh, with jtab on the PATH and sample data in ./data" },
       { dir: "java", name: "Java + Gson", stack: "jshell on OpenJDK 11 with Gson on the classpath.", show: [0, 1, 2, 3] },
@@ -484,7 +506,7 @@ $ snowglobe pool dist</pre>
         spec("Preloaded", mb(pre), "MB");
         spec("On demand", mb(cold), "MB");
         $(".command", node).append("Runs ", el("code", { textContent: demo.command || run.command.replaceAll("'", "") }),
-          ` · ${run.memory_mb} MB RAM · no network · no server`);
+          ` · ${run.memory_mb} MB RAM · ${run.network === "fetch" ? "network through your browser" : "no network"} · no server`);
         const labels = ["", "Snapshot", "Ready", "Preloaded", "On demand", "Files"];
         summaryRows.get(demo.dir).append(...[demo.name, mb(run.snapshot_bytes) + " MB", run.boot_seconds.toFixed(1) + " s",
           mb(pre) + " MB", mb(cold) + " MB", run.files.toLocaleString("en")].map((t, i) => {
@@ -560,11 +582,24 @@ $ snowglobe pool dist</pre>
 
     const transition = (update) => (document.startViewTransition && !reduceMotion ? document.startViewTransition(update) : update());
 
+    // A full-screen run on a phone is sized to the visual viewport, which the keyboard shrinks
+    const viewport = window.visualViewport;
+    const trackViewport = () => {
+      document.documentElement.style.setProperty("--vvh", viewport.height + "px");
+      document.documentElement.style.setProperty("--vvt", viewport.offsetTop + "px");
+    };
+    if (viewport) {
+      viewport.addEventListener("resize", trackViewport);
+      viewport.addEventListener("scroll", trackViewport);
+      trackViewport();
+    }
+
     function stopInline() {
       if (!playing) return;
       const { node, demo } = playing;
       $(".panel iframe", node)?.remove(); // unloading the frame throws the machine away
       $(".panel .loading", node)?.remove();
+      $(".panel .live-bar", node)?.remove();
       $(".transcript", node).hidden = false;
       const label = $(".label", node);
       label.textContent = label.dataset.recorded || "";
@@ -589,6 +624,9 @@ $ snowglobe pool dist</pre>
         $(".transcript", node).hidden = true;
         panel.style.viewTransitionName = "live-panel";
         panel.append(
+          el("div", { className: "live-bar" },
+            el("strong", { textContent: `${demo.name}, live` }),
+            el("button", { className: "btn", type: "button", textContent: "Stop", onclick: () => toggleInline(entry) })),
           el("div", { className: "loading", role: "status" }, el("span", { className: "text", textContent: "Restoring snapshot…" }), el("span", { className: "bar" }, el("span"))),
           el("iframe", { title: `${demo.name}, running live`, src: demo.dir + "/?embed", allow: "clipboard-write" }),
         );
