@@ -5,13 +5,14 @@ image on real Linux inside [v86](https://github.com/copy/v86), an x86 emulator c
 WebAssembly, snapshots it once your app is ready, and writes a folder of static files. Visitors
 get your program running in their tab in about a second, with no server behind it.
 
-**[▶ Try the live demo: IEx in the browser](https://filipecabaco.github.io/iex_wasm/)**
+**[▶ Try the demos: Elixir, Python, TypeScript, Go, Rust and Java in the browser](https://filipecabaco.github.io/snowglobe/)**
 
-[![Deploy to GitHub Pages](https://github.com/filipecabaco/iex_wasm/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/iex_wasm/actions/workflows/pages.yml)
+[![Deploy to GitHub Pages](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml)
 
 ```sh
 snowglobe build ./my-app          # a directory with a Dockerfile, or any image reference
 snowglobe serve dist              # preview at http://localhost:8000, then deploy dist/ anywhere
+snowglobe pool sites              # several sites under one host share a single blob store
 ```
 
 > [!NOTE]
@@ -24,20 +25,24 @@ snowglobe serve dist              # preview at http://localhost:8000, then deplo
 - **A 32-bit Alpine image** (`FROM i386/alpine`). v86 emulates a 32-bit x86 CPU, and Alpine is
   the distro snowglobe knows how to make bootable.
 
-Build it from source with Go 1.27+ (`go build ./cmd/snowglobe`), or run it in place with
-`go run ./cmd/snowglobe`.
+Install with Go 1.27+:
+
+```sh
+go install github.com/filipecabaco/snowglobe/cmd/snowglobe@latest
+```
 
 ## Your image, in a tab
 
 Whatever the image runs (its `ENTRYPOINT`/`CMD`, with its `ENV` and `WORKDIR`) appears in a
-terminal in the page. The live demo is this Dockerfile ([`examples/iex`](examples/iex/Dockerfile)):
+terminal in the page. The Python demo is this Dockerfile:
 
 ```dockerfile
 FROM i386/alpine:3.24.2
-RUN apk add --no-cache elixir erlang28
-ENV LANG=C.UTF-8
-CMD ["iex"]
-LABEL snowglobe.title="IEx in the browser" snowglobe.ready="iex(1)> "
+RUN apk add --no-cache python3
+CMD ["python3"]
+LABEL snowglobe.title="Python in the browser" \
+      snowglobe.ready=">>> " \
+      snowglobe.exercise='["import json, re, collections", "import asyncio; asyncio.run(asyncio.sleep(0))"]'
 ```
 
 | Flag | Label | Default |
@@ -47,10 +52,46 @@ LABEL snowglobe.title="IEx in the browser" snowglobe.ready="iex(1)> "
 | `--ready TEXT` | `snowglobe.ready` | snapshot once the terminal has been quiet for 5 s |
 | `--title TEXT` | `snowglobe.title` | the source |
 | `--memory MB` | `snowglobe.memory` | `512` |
-| `--warm REGEX` | `snowglobe.warm` | only what the guest read while booting |
+| `--exercise CMD` (repeatable) | `snowglobe.exercise` (JSON array) | none |
+| `--warm REGEX` | `snowglobe.warm` | none |
 
 Labels let a Dockerfile describe itself; flags override them. `--cmd` swaps the program without
-touching the image, and drops the image's `snowglobe.ready`, which belonged to its own command.
+touching the image, and drops the image's `ready` and `exercise` labels, which belonged to its
+own command.
+
+## The warm cache
+
+The guest's files are fetched on demand: the first time the guest reads a file, it waits on one
+HTTP request for it. To hide that, every site preloads a `warm.pack` in the background, and
+snowglobe fills it by **measuring**, not guessing:
+
+- **Boot reads:** every file the guest read while booting to the ready point. The snapshot is
+  taken with the page cache dropped, so the app reads these again after a restore.
+- **Exercise reads:** after the snapshot is saved, snowglobe types each `--exercise` command into
+  the app and records what it reads. The guest is then exactly where a visitor's tab starts, so
+  these are the files a visitor's first commands would otherwise wait for.
+- **Pattern:** anything matching `--warm`, for files no exercise touches.
+
+Each build prints a breakdown and writes `warm-report.json` (by phase and directory, in download
+bytes). What the six demos show:
+
+| Language | Boot | First commands | Never read | What dominates |
+|----------|-----:|---------------:|-----------:|----------------|
+| Elixir | 12.8 MB | 1.2 MB | 52.8 MB | stdlib/elixir bytecode loads lazily, module by module |
+| Python | 7.8 MB | 2.6 MB | 27.2 MB | imports: `import asyncio` alone reads 101 files |
+| TypeScript | 25.7 MB | 3.9 MB | 21.1 MB | the 15.5 MB `node` binary, then esbuild on the first command |
+| Go | 16.0 MB | 0 | 18.1 MB | one static binary with everything compiled in |
+| Rust | 4.0 MB | 6.9 MB | 18.1 MB | every tool is its own binary, read on first use |
+| Java | 38.9 MB | 0 | 91.1 MB | the JDK's 30 MB `lib/modules` image, opened at boot |
+
+Interpreted runtimes with many small files (Elixir, Python) need exercises to warm well; single
+binaries (Go, Java's module image) are fully captured by boot reads.
+
+## Several sites, one host
+
+`snowglobe pool <dir>` lets every site under a directory share one blob store. Blobs are named by
+content hash, so sites built on the same base (kernel, Alpine, the boot layer) share many: the six
+demos go from 715 MB to 544 MB, and a visitor's second demo reuses what their browser cached.
 
 ## How it works
 
@@ -68,16 +109,15 @@ flowchart LR
    JSON tree plus one zstd-compressed blob per unique file, fetched by the browser on demand.
 3. **Snapshot.** The guest boots headless in v86 until your app is ready, and the whole machine
    state is saved. Visitors restore it instead of booting Linux.
-4. **Warm pack.** Every file the guest read while booting (plus anything matching `--warm`) is
-   bundled into one `warm.pack` the page downloads in the background, so the first commands don't
-   wait on one network round trip per file.
+4. **Warm pack.** The files the guest read while booting and while being exercised are bundled
+   into one `warm.pack` the page downloads in the background (see above).
 
 ## Develop
 
 ```sh
 mise install       # Go, pinned in mise.toml
 mise run test
-mise run build     # build examples/iex into dist/ (about a minute)
+mise run build     # build all six examples into dist/ (a few minutes)
 mise run serve
 ```
 
@@ -90,7 +130,9 @@ internal/rootfs/      tar stream → v86 9p filesystem + warm pack
 internal/boot/        the boot layer added on top of your image
 internal/tools/       build container: Node + v86 + xterm.js (pinned) and the snapshot script
 internal/site/        the page
-examples/iex/         the live demo's Dockerfile
+internal/pool/        shared blob store for several sites
+examples/             one Dockerfile per demo language
+site/                 the demo index page
 ```
 
 ## Credits

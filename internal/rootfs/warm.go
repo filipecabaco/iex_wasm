@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,28 +13,44 @@ import (
 
 // WarmSelection decides which files go in the warm pack.
 type WarmSelection struct {
-	// Blob names the guest read while booting, as recorded by build-state.mjs
-	BootReads map[string]bool
+	// Blob names to include: what the guest read while booting and while being exercised
+	Reads map[string]bool
 	// Extra files to include by guest path
 	Match *regexp.Regexp
 }
 
-// ReadBootReads loads the list of blob names written by build-state.mjs.
-func ReadBootReads(file string) (map[string]bool, error) {
-	f, err := os.Open(file)
+// Reads is what build-state.mjs recorded: blob names read while booting, and while running each
+// exercise command after the snapshot was saved.
+type Reads struct {
+	Boot     []string            `json:"boot"`
+	Exercise map[string][]string `json:"exercise"`
+}
+
+// ReadReads loads reads.json written by build-state.mjs.
+func ReadReads(file string) (*Reads, error) {
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	var r Reads
+	if err := json.Unmarshal(data, &r); err != nil {
+		return nil, fmt.Errorf("%s: %w", file, err)
+	}
+	return &r, nil
+}
 
-	reads := map[string]bool{}
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		if name := strings.TrimSpace(scanner.Text()); name != "" {
-			reads[name] = true
+// All returns every blob read in any phase.
+func (r *Reads) All() map[string]bool {
+	all := map[string]bool{}
+	for _, name := range r.Boot {
+		all[name] = true
+	}
+	for _, names := range r.Exercise {
+		for _, name := range names {
+			all[name] = true
 		}
 	}
-	return reads, scanner.Err()
+	return all
 }
 
 // WriteWarmPack bundles the selected blobs into <outDir>/warm.pack so the page can fetch them in
@@ -54,7 +71,7 @@ func WriteWarmPack(res *Result, sel WarmSelection, outDir string) (files int, by
 		if strings.HasPrefix(f.Path, "/boot/") || seen[f.Blob] {
 			continue
 		}
-		if sel.BootReads[f.Blob] || (sel.Match != nil && sel.Match.MatchString(f.Path)) {
+		if sel.Reads[f.Blob] || (sel.Match != nil && sel.Match.MatchString(f.Path)) {
 			seen[f.Blob] = true
 			picked = append(picked, item{f.Blob, f.Size})
 		}

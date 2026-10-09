@@ -45,12 +45,17 @@ func (i *Image) CopySite(out string) error {
 	return i.run(out, "cp", "-R", "/tools/site/.", "/out/")
 }
 
-// Snapshot boots <out>/system in v86 and writes the state, console replay and boot reads there.
-func (i *Image) Snapshot(out string, memoryMB int, ready string) error {
+// Snapshot boots <out>/system in v86 and writes the state, console replay and reads.json there.
+//
+// After the snapshot it types each exercise command into the app and records what it reads.
+func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string) error {
 	args := []string{"node", "/tools/build-state.mjs", "/tools/node_modules/v86/build", "/out/bios", "/out/system",
 		"--memory", fmt.Sprint(memoryMB)}
 	if ready != "" {
 		args = append(args, "--ready", ready)
+	}
+	for _, e := range exercises {
+		args = append(args, "--exercise", e)
 	}
 	return i.run(out, args...)
 }

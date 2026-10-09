@@ -1,9 +1,21 @@
 [tools]
 go = "1.27.1"
 
+[env]
+DEMOS = "elixir python typescript go rust java"
+
 [tasks.build]
-description = "Build the IEx example into dist/ with snowglobe"
-run = "go run ./cmd/snowglobe build examples/iex --out dist"
+description = "Build every example into dist/<language>, pool their blobs, and add the index page"
+run = '''
+set -e
+go build -o snowglobe ./cmd/snowglobe
+rm -rf dist
+for demo in $DEMOS; do
+  ./snowglobe build "examples/$demo" --out "dist/$demo"
+done
+./snowglobe pool dist
+cp site/index.html dist/
+'''
 
 [tasks.serve]
 description = "Serve dist/ locally at http://localhost:8000"

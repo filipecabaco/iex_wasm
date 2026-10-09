@@ -64,3 +64,21 @@ func TestResolveErrors(t *testing.T) {
 		t.Error("a bad warm pattern should fail")
 	}
 }
+
+func TestResolveExercise(t *testing.T) {
+	labels := map[string]string{"snowglobe.exercise": `["h Enum.map", "1 + 1"]`}
+
+	s, _ := Resolve(Options{}, image(labels, "iex"))
+	if len(s.Exercise) != 2 || s.Exercise[0] != "h Enum.map" {
+		t.Errorf("label exercises: %+v", s.Exercise)
+	}
+
+	s, _ = Resolve(Options{Cmd: "erl"}, image(labels, "iex"))
+	if len(s.Exercise) != 0 {
+		t.Errorf("exercises belong to the image's own command: %+v", s.Exercise)
+	}
+
+	if _, err := Resolve(Options{}, image(map[string]string{"snowglobe.exercise": "h Enum"}, "iex")); err == nil {
+		t.Error("a non-JSON exercise label should fail")
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/filipecabaco/snowglobe/internal/build"
+	"github.com/filipecabaco/snowglobe/internal/pool"
 	"github.com/filipecabaco/snowglobe/internal/serve"
 )
 
@@ -20,6 +21,8 @@ const usage = `snowglobe packages a Docker image into a static website that runs
 Usage:
   snowglobe build <dockerfile dir | image> [flags]   build the site
   snowglobe serve [dir] [--port 8000]                preview a built site
+  snowglobe pool <dir>                               let every site under dir share one blob
+                                                     directory (for hosting several together)
   snowglobe version
 
 Build flags:
@@ -29,10 +32,13 @@ Build flags:
                   (default: once the terminal has been quiet for 5 seconds)
   --title TEXT    page title (default: the source)
   --memory MB     guest RAM (default: 512)
-  --warm REGEX    extra guest paths to preload, on top of what the guest read while booting
+  --warm REGEX    extra guest paths to preload, on top of what the guest read
+  --exercise CMD  a command to type into the app after the snapshot, recording the files it reads
+                  so they're preloaded too; repeatable. A warm-report.json explains the result
 
 An image can carry its own settings as labels, which flags override:
-  LABEL snowglobe.ready="iex(1)> " snowglobe.title="My app" snowglobe.memory="256"
+  LABEL snowglobe.ready="iex(1)> " snowglobe.title="My app" snowglobe.memory="256" \
+        snowglobe.exercise='["h Enum.map", "Task.async(fn -> 1 end)"]'
 
 The image must be 32-bit Alpine (FROM i386/alpine): v86 emulates a 32-bit x86 CPU.
 Docker is the only requirement.
@@ -50,6 +56,8 @@ func main() {
 		err = runBuild(os.Args[2:])
 	case "serve":
 		err = runServe(os.Args[2:])
+	case "pool":
+		err = runPool(os.Args[2:])
 	case "version", "--version":
 		fmt.Println("snowglobe", version)
 	case "help", "-h", "--help":
@@ -74,6 +82,7 @@ func runBuild(args []string) error {
 	fs.StringVar(&o.Title, "title", "", "")
 	fs.IntVar(&o.Memory, "memory", 0, "")
 	fs.StringVar(&o.Warm, "warm", "", "")
+	fs.Func("exercise", "", func(v string) error { o.Exercise = append(o.Exercise, v); return nil })
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 
 	positional, err := parse(fs, args)
@@ -107,6 +116,19 @@ func runServe(args []string) error {
 		dir = positional[0]
 	}
 	return serve.Run(dir, *port)
+}
+
+func runPool(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("pool takes one directory holding the sites to pool")
+	}
+	stats, err := pool.Run(args[0])
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Pooled %d sites: %d files, %d unique, %.0f MB saved\n",
+		stats.Sites, stats.Files, stats.Unique, float64(stats.Saved)/(1<<20))
+	return nil
 }
 
 // parse lets flags come before or after positional arguments; the flag package alone stops at

@@ -121,8 +121,8 @@ func TestWarmPack(t *testing.T) {
 
 	// /boot is never packed even when read; the pattern adds files that weren't read
 	sel := WarmSelection{
-		BootReads: map[string]bool{blobName("kernel"): true, blobName("hello\n"): true},
-		Match:     regexp.MustCompile(`file\.txt$`),
+		Reads: map[string]bool{blobName("kernel"): true, blobName("hello\n"): true},
+		Match: regexp.MustCompile(`file\.txt$`),
 	}
 	files, _, err := WriteWarmPack(res, sel, out)
 	if err != nil {
@@ -144,5 +144,31 @@ func TestWarmPack(t *testing.T) {
 	}
 	if index[0][0] != blobName("hello\n") || total != len(pack) {
 		t.Errorf("index %v doesn't describe a %d-byte pack", index, len(pack))
+	}
+}
+
+func TestReport(t *testing.T) {
+	out := t.TempDir()
+	res, err := Convert(bytes.NewReader(sampleTar(t)), out)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reads := &Reads{
+		Boot:     []string{blobName("kernel"), blobName("hello\n")},
+		Exercise: map[string][]string{"cat": {blobName("hello\n"), blobName("")}},
+	}
+	size := func(string) int64 { return 10 }
+	r := BuildReport(res, reads, []string{"cat"}, regexp.MustCompile(`file\.txt$`), size)
+
+	// /boot is excluded; a file counts in the first phase that read it
+	if r.Boot.Files != 1 || r.Boot.Groups[0].Dir != "/etc" {
+		t.Errorf("boot = %+v", r.Boot)
+	}
+	if e := r.Exercise["cat"]; e.Files != 1 || e.Bytes != 10 {
+		t.Errorf("exercise should only count the empty file it was first to read: %+v", e)
+	}
+	if r.Pattern.Files != 1 || r.Cold.Files != 0 {
+		t.Errorf("pattern = %+v, cold = %+v", r.Pattern, r.Cold)
 	}
 }

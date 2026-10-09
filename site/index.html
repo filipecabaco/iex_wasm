@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>snowglobe demos</title>
+  <style>
+    :root {
+      --ground: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
+      --boot: #58a6ff; --first: #3fb950; --pattern: #d29922; --cold: #484f58;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--ground); color: var(--text);
+      font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 64rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    h1 { font-size: 2.25rem; margin: 0 0 .5rem; letter-spacing: -.02em; }
+    h2 { font-size: 1.25rem; margin: 3rem 0 .75rem; }
+    p { color: var(--muted); max-width: 44rem; margin: 0 0 1rem; }
+    code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+    a { color: var(--boot); }
+
+    .demos { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); margin-top: 2rem; }
+    .demo { display: block; padding: 1.25rem; border: 1px solid var(--line); border-radius: .5rem;
+      background: var(--panel); color: inherit; text-decoration: none; transition: border-color .15s; }
+    .demo:hover, .demo:focus-visible { border-color: var(--boot); }
+    .demo h3 { margin: 0 0 .25rem; font-size: 1.1rem; }
+    .demo .runs { color: var(--muted); font-size: .9rem; margin: 0 0 .75rem; }
+    .demo code { display: block; color: var(--muted); font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .bar { display: flex; height: .75rem; border-radius: .25rem; overflow: hidden; background: var(--cold); margin: .75rem 0 .25rem; }
+    .bar span { display: block; height: 100%; }
+    .legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .8rem; color: var(--muted); margin: 1rem 0; }
+    .legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: .5rem .75rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 500; }
+    details { margin: .5rem 0; }
+    summary { cursor: pointer; color: var(--muted); }
+    .dirs td { font-size: .8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>snowglobe demos</h1>
+  <p>Six languages, each a Docker image packaged by <a href="https://github.com/filipecabaco/snowglobe">snowglobe</a>
+    into a static site. Every one is real Linux on an x86 CPU emulated in WebAssembly, restored from a snapshot
+    taken once its REPL was ready. Nothing runs on a server.</p>
+
+  <div class="demos" id="demos"></div>
+
+  <h2>What each language's warm cache holds</h2>
+  <p>The guest's files are fetched on demand, one request per file the first time it's read. To avoid that wait,
+    each demo preloads a <code>warm.pack</code> in the background. snowglobe fills it by measuring: the files
+    the guest read while booting, and the files each <code>snowglobe.exercise</code> command read when typed in
+    after the snapshot, which is exactly what a visitor's first commands would otherwise wait for. Sizes are
+    compressed download sizes.</p>
+  <div class="legend">
+    <span><i style="background:var(--boot)"></i>read while booting</span>
+    <span><i style="background:var(--first)"></i>first read by an exercise command</span>
+    <span><i style="background:var(--pattern)"></i>added by a <code>--warm</code> pattern</span>
+    <span><i style="background:var(--cold)"></i>never read (stays on demand)</span>
+  </div>
+  <div class="table-wrap">
+    <table id="warm">
+      <thead><tr><th>Language</th><th>Boot</th><th>First commands</th><th>Warm pack</th><th>Never read</th><th>Share preloaded</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div id="details"></div>
+</main>
+<script>
+  const demos = [
+    { dir: "elixir", name: "Elixir", runs: "IEx, Erlang/OTP 28", cmd: 'Task.async(fn -> :crypto.hash(:sha256, "hi") end) |> Task.await()' },
+    { dir: "python", name: "Python", runs: "CPython 3.14 REPL", cmd: 'import sqlite3; sqlite3.connect(":memory:")' },
+    { dir: "typescript", name: "TypeScript", runs: "tsx on Node 24", cmd: 'const xs: number[] = [1, 2, 3]; xs.map((x) => x * 2)' },
+    { dir: "go", name: "Go", runs: "yaegi, a Go interpreter", cmd: 'fmt.Sprintf("%x", sha256.Sum256([]byte("hi")))' },
+    { dir: "rust", name: "Rust", runs: "ripgrep, fd, bat and crabsay", cmd: "crabsay hello from a tab" },
+    { dir: "java", name: "Java", runs: "jshell on OpenJDK 11", cmd: "xs.stream().map(x -> x * x).reduce(0, Integer::sum)" },
+  ];
+
+  const mb = (bytes) => (bytes / 1048576).toFixed(1) + " MB";
+  const el = (tag, attrs = {}, ...children) => {
+    const node = Object.assign(document.createElement(tag), attrs);
+    node.append(...children);
+    return node;
+  };
+
+  document.getElementById("demos").append(...demos.map((d) =>
+    el("a", { className: "demo", href: d.dir + "/" },
+      el("h3", {}, d.name), el("p", { className: "runs" }, d.runs), el("code", {}, d.cmd))));
+
+  const sum = (phases) => phases.reduce((acc, p) => ({ files: acc.files + p.files, bytes: acc.bytes + p.bytes }), { files: 0, bytes: 0 });
+
+  (async () => {
+    const tbody = document.querySelector("#warm tbody");
+    const details = document.getElementById("details");
+
+    for (const d of demos) {
+      let report;
+      try {
+        report = await (await fetch(d.dir + "/warm-report.json")).json();
+      } catch {
+        tbody.append(el("tr", {}, el("td", {}, d.name), el("td", { colSpan: 5 }, "report unavailable")));
+        continue;
+      }
+      const first = sum(Object.values(report.exercise || {}));
+      const pack = sum([report.boot, first, report.pattern]);
+      const total = pack.bytes + report.cold.bytes;
+      const pct = (b) => total ? (100 * b / total) : 0;
+
+      tbody.append(el("tr", {},
+        el("td", {}, el("a", { href: d.dir + "/" }, d.name)),
+        el("td", {}, mb(report.boot.bytes)),
+        el("td", {}, mb(first.bytes)),
+        el("td", {}, mb(pack.bytes)),
+        el("td", {}, mb(report.cold.bytes)),
+        el("td", {}, pct(pack.bytes).toFixed(0) + "%")));
+
+      const bar = el("div", { className: "bar", role: "img",
+        ariaLabel: `${d.name}: ${mb(report.boot.bytes)} boot, ${mb(first.bytes)} first commands, ${mb(report.cold.bytes)} never read` });
+      for (const [bytes, color] of [[report.boot.bytes, "boot"], [first.bytes, "first"], [report.pattern.bytes, "pattern"]]) {
+        bar.append(el("span", { style: `width:${pct(bytes)}%;background:var(--${color})` }));
+      }
+
+      const rows = [];
+      const addRows = (label, phase) => phase.groups.slice(0, 4).forEach((g) =>
+        rows.push(el("tr", {}, el("td", {}, label + "  " + g.dir), el("td", {}, String(g.files)), el("td", {}, mb(g.bytes)))));
+      addRows("boot", report.boot);
+      for (const command of report.order || Object.keys(report.exercise || {})) {
+        const phase = report.exercise[command];
+        if (phase && phase.files) addRows("› " + command.slice(0, 40), phase);
+      }
+
+      details.append(el("details", {},
+        el("summary", {}, `${d.name}: where the preloaded files come from`),
+        bar,
+        el("div", { className: "table-wrap" }, el("table", { className: "dirs" },
+          el("thead", {}, el("tr", {}, el("th", {}, "phase / directory"), el("th", {}, "files"), el("th", {}, "size"))),
+          el("tbody", {}, ...rows)))));
+    }
+  })();
+</script>
+</body>
+</html>

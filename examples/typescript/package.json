@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "TypeScript REPL for the snowglobe demo",
+  "dependencies": {
+    "tsx": "4.23.13"
+  }
+}

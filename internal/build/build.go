@@ -3,6 +3,7 @@
 package build
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,23 +30,25 @@ const (
 
 // Options are the user's choices; empty fields fall back to image labels, then defaults.
 type Options struct {
-	Source string // a directory with a Dockerfile, or an image reference
-	Out    string
-	Title  string
-	Cmd    string
-	Ready  string
-	Memory int
-	Warm   string
+	Source   string // a directory with a Dockerfile, or an image reference
+	Out      string
+	Title    string
+	Cmd      string
+	Ready    string
+	Memory   int
+	Warm     string
+	Exercise []string
 }
 
 // Settings are the resolved values a build runs with.
 type Settings struct {
-	Title   string
-	Command string
-	Ready   string
-	Memory  int
-	Warm    *regexp.Regexp
-	Console boot.Console
+	Title    string
+	Command  string
+	Ready    string
+	Memory   int
+	Warm     *regexp.Regexp
+	Exercise []string
+	Console  boot.Console
 }
 
 // Run builds the site.
@@ -103,23 +106,70 @@ func Run(o Options, version string) error {
 		return err
 	}
 
-	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready) }); err != nil {
+	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise) }); err != nil {
 		return err
 	}
 
 	return step("Write warm pack", func() error {
-		readsFile := filepath.Join(out, "system", "boot-reads.txt")
-		reads, err := rootfs.ReadBootReads(readsFile)
+		readsFile := filepath.Join(out, "system", "reads.json")
+		reads, err := rootfs.ReadReads(readsFile)
 		if err != nil {
 			return err
 		}
 		os.Remove(readsFile)
-		files, bytes, err := rootfs.WriteWarmPack(fs, rootfs.WarmSelection{BootReads: reads, Match: s.Warm}, filepath.Join(out, "system"))
-		if err == nil {
-			fmt.Printf("    %d files, %d MB (%d read while booting, plus the warm pattern)\n", files, bytes>>20, len(reads))
+
+		files, bytes, err := rootfs.WriteWarmPack(fs, rootfs.WarmSelection{Reads: reads.All(), Match: s.Warm}, filepath.Join(out, "system"))
+		if err != nil {
+			return err
 		}
-		return err
+		fmt.Printf("    warm.pack: %d files, %.1f MB\n", files, float64(bytes)/(1<<20))
+
+		report := rootfs.BuildReport(fs, reads, s.Exercise, s.Warm, blobSize(fs))
+		printReport(report, s.Exercise)
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(out, "warm-report.json"), data, 0o644)
 	})
+}
+
+func blobSize(fs *rootfs.Result) func(string) int64 {
+	return func(name string) int64 {
+		if info, err := os.Stat(fs.Blobs[name]); err == nil {
+			return info.Size()
+		}
+		return 0
+	}
+}
+
+// printReport shows where each phase's reads come from, biggest directories first
+func printReport(r rootfs.Report, order []string) {
+	show := func(label string, p rootfs.Phase) {
+		fmt.Printf("    %-34s %5d files %8.1f MB\n", label, p.Files, float64(p.Bytes)/(1<<20))
+		for i, g := range p.Groups {
+			if i == 3 {
+				fmt.Printf("      … %d more directories\n", len(p.Groups)-3)
+				break
+			}
+			fmt.Printf("      %-50s %4d %8.1f MB\n", g.Dir, g.Files, float64(g.Bytes)/(1<<20))
+		}
+	}
+	show("read while booting", r.Boot)
+	for _, command := range order {
+		show("first read by: "+truncate(command, 18), r.Exercise[command])
+	}
+	if r.Pattern.Files > 0 {
+		show("added by the warm pattern", r.Pattern)
+	}
+	fmt.Printf("    %-34s %5d files %8.1f MB  (fetched on demand)\n", "never read", r.Cold.Files, float64(r.Cold.Bytes)/(1<<20))
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n-1] + "…"
 }
 
 // Resolve merges options, image labels and defaults.
@@ -133,12 +183,19 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 		Memory: o.Memory,
 	}
 
-	// A ready marker in the labels describes the image's own command, not one swapped in
+	// The ready marker and exercises in the labels describe the image's own command, not one
+	// swapped in with --cmd
+	s.Exercise = o.Exercise
 	if o.Cmd != "" {
 		s.Command = o.Cmd
 		s.Ready = o.Ready
 	} else {
 		s.Command = boot.Join(append(append([]string{}, img.Config.Entrypoint...), img.Config.Cmd...))
+		if len(s.Exercise) == 0 && label("exercise") != "" {
+			if err := json.Unmarshal([]byte(label("exercise")), &s.Exercise); err != nil {
+				return nil, fmt.Errorf("label %sexercise must be a JSON array of commands: %w", labelPrefix, err)
+			}
+		}
 	}
 	if s.Command == "" {
 		return nil, errors.New("the image has no ENTRYPOINT or CMD; pass --cmd")
