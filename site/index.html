@@ -101,7 +101,6 @@
 
     .hero { padding: clamp(32px, 4.5vw, 64px) 0 clamp(28px, 3.5vw, 48px); }
     h1 { font-size: clamp(2.75rem, 4.3vw, 4rem); line-height: .95; letter-spacing: -.035em; font-weight: 620; margin: 0 0 28px; max-width: 26ch; text-wrap: balance; }
-    .hero-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 28px 0 0; }
     .lede { font-size: clamp(19px, 1.7vw, 22px); line-height: 1.45; max-width: 36em; margin: 0 0 18px; color: var(--ink); }
     .aside-note { color: var(--ink-2); max-width: 40em; margin: 0; }
 
@@ -293,10 +292,6 @@
           <p class="aside-note">Run one here to type into it, or open it in a window of its own. It is an x86 CPU in
             emulation, so it is slower than native; every number and transcript below was measured and
             recorded when this site was built.</p>
-          <div class="hero-actions">
-            <button class="btn go" type="button" id="start-python">Run Python + Rich here</button>
-            <a class="btn" href="#runs">See all seven runs</a>
-          </div>
         </section>
 
         <div id="runs"></div>
@@ -419,7 +414,7 @@ $ snowglobe exec py 'sum(range(10))'
                 <tr><td>pwa &lt;site&gt;</td><td class="wrap-cell">make it an installable app that works offline once it has run; <code>--name</code> and <code>--short-name</code> override the title</td></tr>
                 <tr><td>pool &lt;dir&gt;</td><td class="wrap-cell">let every site under a directory share one blob store, for hosting several together</td></tr>
                 <tr><td>pack &lt;site&gt; [-o file]</td><td class="wrap-cell">write a site as one tarball (.tar.gz or .tar.zst) to publish on a CDN</td></tr>
-                <tr><td>run [site | url]</td><td class="wrap-cell">run a site without a browser, in a sandboxed container: a session in a terminal, or piped lines typed in as commands. Takes a folder, a tarball, or a URL to either; <code>--detach --name N</code> keeps it running</td></tr>
+                <tr><td>run [site | url]</td><td class="wrap-cell">run a site without a browser, in a sandboxed container: a session in a terminal, or piped lines typed in as commands. Takes a folder, a tarball, or a URL to either; <code>--detach --name N</code> keeps it running, and <code>-p 8000:8000</code> forwards a port into a guest built with a network</td></tr>
                 <tr><td>exec &lt;name&gt; &lt;command&gt;</td><td class="wrap-cell">type a command into a running instance and print only its output</td></tr>
                 <tr><td>attach &lt;name&gt;</td><td class="wrap-cell">join a running instance's session; ctrl-] detaches and leaves it running</td></tr>
                 <tr><td>ps</td><td class="wrap-cell">list running instances</td></tr>
@@ -574,8 +569,8 @@ $ snowglobe exec py 'sum(range(10))'
         spec("On demand", mb(cold), "MB");
         $(".command", node).append("Runs ", el("code", { textContent: demo.command || run.command.replaceAll("'", "") }),
           ` · ${run.memory_mb} MB RAM · ${run.network === "fetch" ? "network through your browser" : "no network"} · no server · `,
-          // Each run has an X player card at x/<dir>/: the post itself boots the run
-          el("a", { href: "https://x.com/intent/post?url=" + encodeURIComponent(new URL(`x/${demo.dir}/`, location.href).href),
+          // Each run has an X player card at card/<dir>/: the post itself boots the run
+          el("a", { href: "https://x.com/intent/post?url=" + encodeURIComponent(new URL(`card/${demo.dir}/`, location.href).href),
             target: "_blank", rel: "noopener", textContent: "Share on X" }));
         const labels = ["", "Snapshot", "Ready", "Preloaded", "On demand", "Files"];
         summaryRows.get(demo.dir).append(...[demo.name, mb(run.snapshot_bytes) + " MB", run.boot_seconds.toFixed(1) + " s",
@@ -818,7 +813,6 @@ $ snowglobe exec py 'sum(range(10))'
     }
     setInterval(render, 1000);
 
-    $("#start-python").addEventListener("click", () => toggleInline(entries.find((e) => e.demo.dir === "python")));
 
     $(".ledger-toggle").addEventListener("click", (event) => {
       const open = $("#ledger").classList.toggle("open");

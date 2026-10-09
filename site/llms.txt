@@ -25,7 +25,9 @@ Source and README: https://github.com/filipecabaco/snowglobe
   terminal it is an interactive session (ctrl-] quits); with stdin piped, each line is typed in as a
   command and the output printed as plain text. The site can be a directory, a tarball, a tarball
   URL, or a deployed site's URL (e.g. https://filipecabaco.github.io/snowglobe/python/): it is
-  fetched into a local cache first and revalidated on later runs.
+  fetched into a local cache first and revalidated on later runs. `-p HOST:GUEST` (repeatable)
+  forwards a host port to a guest port, bound to 127.0.0.1 unless given as IP:HOST:GUEST; it needs
+  a site built with `--network fetch`.
 - `snowglobe exec <name> <command>` types one command into a detached instance and prints only what
   it printed (plain text when piped): the way for scripts and agents to drive a REPL.
 - `snowglobe attach <name>` joins a detached instance (ctrl-] detaches); `snowglobe ps` lists them;

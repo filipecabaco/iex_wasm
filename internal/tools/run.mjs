@@ -22,6 +22,8 @@ const { values: options, positionals } = parseArgs({
     blobs: { type: "string" },
     detached: { type: "boolean", default: false },
     socket: { type: "string", default: "/tmp/snowglobe.sock" },
+    // <container port>:<guest port>, repeatable: connections to the first reach the guest's second
+    forward: { type: "string", multiple: true, default: [] },
   },
 });
 const [site] = positionals;
@@ -54,6 +56,9 @@ const emulator = new V86({
   vga_memory_size: 8 * 1024 * 1024,
   virtio_console: true,
   ...(run.network === "fetch" ? { net_device: { type: "virtio", relay_url: "fetch" } } : {}),
+  // Restore the guest's own MAC with the snapshot (and tell the network adapter): connections
+  // forwarded into the guest are addressed to it. Without this the NIC keeps a fresh random one
+  preserve_mac_from_state_image: true,
   filesystem: { basefs: { url: path.join(system, "filesystem.json") }, baseurl },
   initial_state: { buffer: state.buffer.slice(state.byteOffset, state.byteOffset + state.byteLength) },
   autostart: true,
@@ -202,6 +207,46 @@ net.createServer((socket) => {
   socket.on("data", onHeader);
   socket.on("error", () => {});
 }).listen(options.socket);
+
+// ---- port forwarding: host -> container -> guest ----
+
+// Each accepted connection becomes a TCP connection from the guest's router to the guest port,
+// through the same virtual network the guest's own requests use
+for (const spec of options.forward) {
+  const [listenPort, guestPort] = spec.split(":").map(Number);
+  net.createServer((socket) => {
+    ready.then(() => {
+      const adapter = emulator.network_adapter;
+      if (!adapter?.connect) return socket.destroy();
+      let conn;
+      try {
+        conn = adapter.connect(guestPort);
+      } catch {
+        return socket.destroy();
+      }
+      let open = false;
+      const early = [];
+      conn.on("connect", () => {
+        open = true;
+        for (const chunk of early.splice(0)) conn.write(chunk);
+      });
+      conn.on("data", (data) => {
+        lastActivity = Date.now();
+        socket.write(Buffer.from(data));
+      });
+      // The guest closed its side, or refused or reset the connection
+      conn.on("shutdown", () => socket.end());
+      conn.on("close", () => socket.destroy());
+      socket.on("data", (data) => {
+        const chunk = new Uint8Array(data);
+        if (open) conn.write(chunk);
+        else early.push(chunk);
+      });
+      socket.on("end", () => conn.close());
+      socket.on("error", () => conn.close());
+    });
+  }).listen(listenPort, "0.0.0.0");
+}
 
 // ---- the local terminal ----
 

@@ -38,7 +38,10 @@ Usage:
                                                      each line is typed in as a command. The site
                                                      can be a directory, a tarball, a tarball URL
                                                      or a deployed site's URL (fetched and cached
-                                                     first; the sandbox stays offline)
+                                                     first; the sandbox stays offline).
+                                                     -p 8000:8000 forwards a host port to a guest
+                                                     port (127.0.0.1 unless IP:HOST:GUEST); needs a
+                                                     site built with --network fetch
   snowglobe exec <name> <command>                    type a command into a running instance and
                                                      print what it printed
   snowglobe attach <name>                            join a running instance (ctrl-] detaches)
@@ -220,6 +223,9 @@ func runRun(args []string) error {
 	o := instance.Options{Site: "dist"}
 	fs.StringVar(&o.Name, "name", "", "")
 	fs.BoolVar(&o.Detach, "detach", false, "")
+	publish := func(v string) error { o.Publish = append(o.Publish, v); return nil }
+	fs.Func("p", "", publish)
+	fs.Func("publish", "", publish)
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 
 	positional, err := parse(fs, args)

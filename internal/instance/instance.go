@@ -5,9 +5,11 @@ package instance
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/filipecabaco/snowglobe/internal/docker"
@@ -22,6 +24,43 @@ type Options struct {
 	Site   string
 	Name   string
 	Detach bool
+	// Ports to forward into the guest: "guest", "host:guest" or "ip:host:guest"
+	Publish []string
+}
+
+// Port is one forwarded port.
+type Port struct {
+	IP    string // host address to bind; loopback unless asked otherwise
+	Host  int
+	Guest int
+}
+
+// ParsePort reads "8000", "8080:8000" or "0.0.0.0:8080:8000". The host side binds to 127.0.0.1
+// unless an address is given: the guest is a sandbox, so reaching it from the network is opt-in.
+func ParsePort(spec string) (Port, error) {
+	parts := strings.Split(spec, ":")
+	p := Port{IP: "127.0.0.1"}
+	var err error
+	switch len(parts) {
+	case 1:
+		p.Guest, err = strconv.Atoi(parts[0])
+		p.Host = p.Guest
+	case 2:
+		if p.Host, err = strconv.Atoi(parts[0]); err == nil {
+			p.Guest, err = strconv.Atoi(parts[1])
+		}
+	case 3:
+		p.IP = parts[0]
+		if p.Host, err = strconv.Atoi(parts[1]); err == nil {
+			p.Guest, err = strconv.Atoi(parts[2])
+		}
+	default:
+		err = errors.New("too many parts")
+	}
+	if err != nil || p.Host < 1 || p.Host > 65535 || p.Guest < 1 || p.Guest > 65535 {
+		return Port{}, fmt.Errorf("-p %s: use GUEST, HOST:GUEST or IP:HOST:GUEST", spec)
+	}
+	return p, nil
 }
 
 // Run restores the site and connects to it, or leaves it running when detached.
@@ -57,9 +96,24 @@ func Run(o Options, version string) error {
 		"--memory", fmt.Sprintf("%dm", run.MemoryMB+768), "--pids-limit", "256",
 		"-v", site + ":/site:ro"}
 	if run.Network != "fetch" {
+		if len(o.Publish) > 0 {
+			return fmt.Errorf("-p needs a guest with a network: build the site with --network fetch")
+		}
 		args = append(args, "--network", "none")
 	}
 	command := []string{"node", "/tools/run.mjs", "/site"}
+
+	// The container runs unprivileged, so it listens on high ports and forwards each to its guest port
+	for i, spec := range o.Publish {
+		p, err := ParsePort(spec)
+		if err != nil {
+			return err
+		}
+		inner := 20000 + i
+		args = append(args, "-p", fmt.Sprintf("%s:%d:%d", p.IP, p.Host, inner))
+		command = append(command, "--forward", fmt.Sprintf("%d:%d", inner, p.Guest))
+		fmt.Fprintf(os.Stderr, "forwarding %s:%d to the guest's port %d\n", p.IP, p.Host, p.Guest)
+	}
 
 	// A pooled site keeps its blobs in the directory next to it
 	if _, err := os.Stat(filepath.Join(site, "system", "filesystem")); err != nil {

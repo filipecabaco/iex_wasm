@@ -101,12 +101,12 @@ gets a new cache. Run it after `snowglobe pool`; every demo on the live site is 
 
 ## Share a run as a post
 
-Every demo has an X player card at `x/<demo>/` (e.g.
-[filipecabaco.github.io/snowglobe/x/elixir/](https://filipecabaco.github.io/snowglobe/x/elixir/)):
+Every demo has an X player card at `card/<demo>/` (e.g.
+[filipecabaco.github.io/snowglobe/card/elixir/](https://filipecabaco.github.io/snowglobe/card/elixir/)):
 shared on X, the post itself boots the run in a 480×480 frame, and the link opens the demo page.
 `elixir assets/cards.exs` writes the card pages and poster sources from `assets/cards.json`, where
 each poster's lines are real output from that run; capture each poster at 480×480 into
-`site/x/<demo>/poster.png`. X caches cards for about a week, so re-share with a new query string
+`site/card/<demo>/poster.png`. X caches cards for about a week, so re-share with a new query string
 after changing one.
 
 ## Running a site headlessly
@@ -143,6 +143,17 @@ local or by URL, made with `snowglobe pack`. Downloads happen on the host and ar
 $ snowglobe run https://filipecabaco.github.io/snowglobe/python/
 $ snowglobe pack dist/elixir -o elixir.tar.gz      # one self-contained file, pooled blobs included
 $ snowglobe run https://cdn.example.com/elixir.tar.gz
+```
+
+A site built with `--network fetch` can also serve: `-p HOST:GUEST` forwards a port on your machine
+to a port in the guest, through the same virtual network its own requests use. Host ports bind to
+127.0.0.1 unless you give an address (`-p 0.0.0.0:8080:4000`):
+
+```console
+$ snowglobe run dist/typescript --name web --detach -p 4000:4000
+$ snowglobe exec web 'const http = await import("node:http"); http.createServer((req, res) => res.end("hello\n")).listen(4000)'
+$ curl http://127.0.0.1:4000/
+hello
 ```
 
 Piped stdin is typed in one line at a time, each waiting until the app goes quiet. `exec` prints

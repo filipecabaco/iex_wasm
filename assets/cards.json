@@ -1,6 +1,6 @@
 {
   "base": "https://filipecabaco.github.io/snowglobe/",
-  "note": "One X player card per demo: assets/cards.exs writes site/x/<dir>/index.html and the poster sources from this. Poster lines are real output from each demo's recorded run; a line starting with ! is bold, the demo's prompt is dimmed.",
+  "note": "One X player card per demo: assets/cards.exs writes site/card/<dir>/index.html and the poster sources from this. Poster lines are real output from each demo's recorded run; a line starting with ! is bold, the demo's prompt is dimmed.",
   "cards": [
     {
       "dir": "elixir", "name": "Elixir + Postgres", "prompt": "iex(",
