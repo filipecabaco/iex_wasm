@@ -6,7 +6,8 @@ WebAssembly, snapshots it once your app is ready, and writes a folder of static 
 get your program running in their tab in about a second, with no server behind it.
 
 **[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir + SQLite, Python + Rich, TypeScript + Zod,
-Go + Bubble Tea, Rust + clap and Java + Gson, each a small project in [`examples/`](examples) running in the browser.
+Go + Bubble Tea, Rust + clap, Java + Gson, and curl + jq (plain Alpine tools, online through your browser), each a small
+project in [`examples/`](examples) running in the browser.
 
 [![Deploy to GitHub Pages](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml)
 
@@ -104,7 +105,7 @@ snowglobe fills it by **measuring**, not guessing:
 - **Pattern:** anything matching `--warm`, for files no exercise touches.
 
 Each build prints a breakdown and writes `warm-report.json` (by phase and directory, in download
-bytes). What the six demos show:
+bytes). What the demos show:
 
 | Demo | Boot | First commands | Never read | What dominates |
 |------|-----:|---------------:|-----------:|----------------|
@@ -114,6 +115,7 @@ bytes). What the six demos show:
 | Go + Bubble Tea | 5.4 MB | 0 | 18.1 MB | one static binary, read at boot |
 | Rust + clap | 4.0 MB | 0.5 MB | 18.1 MB | `jtab` is read on first use; the shell is all that boots |
 | Java + Gson | 39.2 MB | 0 | 91.1 MB | the JDK's 30 MB `lib/modules` image, opened at boot |
+| curl + jq | 4.1 MB | 2.4 MB | 17.9 MB | `curl`, its TLS and `jq` load on the first request |
 
 Whatever a program loads lazily needs exercises to warm well (TypeScript's compile path, Zod,
 first-use tools); whatever it loads up front (a release in embedded mode, a startup file's imports,
@@ -123,7 +125,7 @@ a single static binary, Java's module image) is captured by boot reads alone.
 
 `snowglobe pool <dir>` lets every site under a directory share one blob store. Blobs are named by
 content hash, so sites built on the same base (kernel, Alpine, the boot layer) share many: the six
-demos go from 715 MB to 544 MB, and a visitor's second demo reuses what their browser cached.
+language demos go from 715 MB to 544 MB, and a visitor's second demo reuses what their browser cached.
 
 ## How it works
 
@@ -149,7 +151,7 @@ flowchart LR
 ```sh
 mise install       # Go, pinned in mise.toml
 mise run test
-mise run build     # build all six examples into dist/ (a few minutes)
+mise run build     # build all seven examples into dist/ (a few minutes)
 mise run serve
 ```
 

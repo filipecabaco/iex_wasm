@@ -2,7 +2,7 @@
 go = "1.27.1"
 
 [env]
-DEMOS = "elixir python typescript go rust java"
+DEMOS = "elixir python typescript go rust java curl"
 
 [tasks.build]
 description = "Build every example into dist/<language>, pool their blobs, and add the index page"

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>snowglobe: real programs, sandboxed in your browser</title>
-  <meta name="description" content="Six sandboxed runs in your browser: real programs on Linux, emulated in WebAssembly, packaged from Dockerfiles by snowglobe.">
+  <meta name="description" content="Seven sandboxed runs in your browser: real programs on Linux, emulated in WebAssembly, packaged from Dockerfiles by snowglobe.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d0d0d'/%3E%3Ccircle cx='8' cy='8' r='3.2' fill='%23d6300c'/%3E%3C/svg%3E">
   <link rel="preload" href="fonts/Switzer-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="xterm/xterm.css">
@@ -273,7 +273,7 @@
             recorded when this site was built.</p>
           <div class="hero-actions">
             <button class="btn go" type="button" id="start-python">Run Python + Rich here</button>
-            <a class="btn" href="#runs">See all six runs</a>
+            <a class="btn" href="#runs">See all seven runs</a>
           </div>
         </section>
 
@@ -452,6 +452,7 @@ $ snowglobe pool dist</pre>
       { dir: "go", name: "Go + Bubble Tea", stack: "An interactive Game of Life built with Bubble Tea and Lip Gloss.", show: "screen" },
       { dir: "rust", name: "Rust + clap", stack: "jtab, a CLI rendering JSON as tables: clap, serde_json, comfy-table.", show: [1, 2], command: "sh, with jtab on the PATH and sample data in ./data" },
       { dir: "java", name: "Java + Gson", stack: "jshell on OpenJDK 11 with Gson on the classpath.", show: [0, 1, 2, 3] },
+      { dir: "curl", name: "curl + jq", stack: "Plain Alpine packages in a shell, online through your browser: curl against live APIs, piped into jq.", show: [0, 1, 2, 3], command: "sh, with curl and jq from Alpine's packages" },
     ];
 
     const $ = (sel, root = document) => root.querySelector(sel);
