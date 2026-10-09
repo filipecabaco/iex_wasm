@@ -1,0 +1,87 @@
+// Package docker runs the docker CLI.
+package docker
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+)
+
+// Run runs docker with its output streamed to the terminal.
+func Run(args ...string) error {
+	cmd := exec.Command("docker", args...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	return wrap(cmd.Run(), args)
+}
+
+// Output runs docker and returns its trimmed stdout.
+func Output(args ...string) (string, error) {
+	var stderr bytes.Buffer
+	cmd := exec.Command("docker", args...)
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", wrap(err, args), strings.TrimSpace(stderr.String()))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// Stream runs docker and hands its stdout to consume, e.g. `docker export` into a tar reader.
+func Stream(consume func(io.Reader) error, args ...string) error {
+	cmd := exec.Command("docker", args...)
+	cmd.Stderr = os.Stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return wrap(err, args)
+	}
+	consumeErr := consume(stdout)
+	// Drain whatever consume left so docker can exit
+	io.Copy(io.Discard, stdout)
+	if err := cmd.Wait(); err != nil {
+		return wrap(err, args)
+	}
+	return consumeErr
+}
+
+// Image is the part of `docker image inspect` snowglobe needs.
+type Image struct {
+	Architecture string
+	Config       struct {
+		Env        []string
+		WorkingDir string
+		Entrypoint []string
+		Cmd        []string
+		Labels     map[string]string
+	}
+}
+
+// Inspect reads an image's metadata.
+func Inspect(ref string) (*Image, error) {
+	out, err := Output("image", "inspect", ref)
+	if err != nil {
+		return nil, err
+	}
+	var images []Image
+	if err := json.Unmarshal([]byte(out), &images); err != nil || len(images) == 0 {
+		return nil, fmt.Errorf("unexpected docker image inspect output for %s", ref)
+	}
+	return &images[0], nil
+}
+
+func wrap(err error, args []string) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, exec.ErrNotFound) {
+		return errors.New("snowglobe needs Docker: no docker on the PATH")
+	}
+	return fmt.Errorf("docker %s: %w", strings.Join(args, " "), err)
+}

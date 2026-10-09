@@ -1,104 +1,96 @@
-# IEx in the browser
+# snowglobe
 
-**A real Elixir shell running in your browser tab.** Not a transpiler or a sandboxed subset: a
-full Linux machine with Erlang/OTP and Elixir, emulated in WebAssembly and served as static files.
+**Package a Docker image into a website that runs it in the browser.** snowglobe boots your
+image on real Linux inside [v86](https://github.com/copy/v86), an x86 emulator compiled to
+WebAssembly, snapshots it once your app is ready, and writes a folder of static files. Visitors
+get your program running in their tab in about a second, with no server behind it.
 
-**[▶ Try it live](https://filipecabaco.github.io/iex_wasm/)**
+**[▶ Try the live demo: IEx in the browser](https://filipecabaco.github.io/iex_wasm/)**
 
 [![Deploy to GitHub Pages](https://github.com/filipecabaco/iex_wasm/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/iex_wasm/actions/workflows/pages.yml)
 
-```elixir
-iex(1)> Enum.map(1..5, &(&1 * &1)) |> IO.inspect(label: System.version())
-1.19.6: [1, 4, 9, 16, 25]
-[1, 4, 9, 16, 25]
-iex(2)>
+```sh
+snowglobe build ./my-app          # a directory with a Dockerfile, or any image reference
+snowglobe serve dist              # preview at http://localhost:8000, then deploy dist/ anywhere
 ```
 
 > [!NOTE]
-> This is an experiment. Expect it to be slow next to a native IEx: every instruction runs on
-> an x86 CPU emulated in WebAssembly.
+> This is an experiment. Everything runs on an emulated 32-bit x86 CPU, so expect it to be much
+> slower than native.
 
-## What you get
+## What you need
 
-- **A real Elixir release**: Elixir 1.19 on Erlang/OTP 28, on Alpine Linux 3.24 with kernel 6.18
-- **Ready in under a second** once cached. The page restores a snapshot of a machine that has
-  already booted, so you never wait for Linux to start
-- **A real terminal**: xterm.js with colours, scrollback, copy/paste, and line wrapping that
-  follows the window size
-- **No backend.** About 80 MB of static files on GitHub Pages. Files load on demand, so a
-  session only downloads what it touches
+- **Docker.** That's all the host needs: the snapshot step runs in a build container.
+- **A 32-bit Alpine image** (`FROM i386/alpine`). v86 emulates a 32-bit x86 CPU, and Alpine is
+  the distro snowglobe knows how to make bootable.
+
+Build it from source with Go 1.27+ (`go build ./cmd/snowglobe`), or run it in place with
+`go run ./cmd/snowglobe`.
+
+## Your image, in a tab
+
+Whatever the image runs (its `ENTRYPOINT`/`CMD`, with its `ENV` and `WORKDIR`) appears in a
+terminal in the page. The live demo is this Dockerfile ([`examples/iex`](examples/iex/Dockerfile)):
+
+```dockerfile
+FROM i386/alpine:3.24.2
+RUN apk add --no-cache elixir erlang28
+ENV LANG=C.UTF-8
+CMD ["iex"]
+LABEL snowglobe.title="IEx in the browser" snowglobe.ready="iex(1)> "
+```
+
+| Flag | Label | Default |
+|------|-------|---------|
+| `--out DIR` | | `dist` |
+| `--cmd CMD` | | the image's `ENTRYPOINT` + `CMD` |
+| `--ready TEXT` | `snowglobe.ready` | snapshot once the terminal has been quiet for 5 s |
+| `--title TEXT` | `snowglobe.title` | the source |
+| `--memory MB` | `snowglobe.memory` | `512` |
+| `--warm REGEX` | `snowglobe.warm` | only what the guest read while booting |
+
+Labels let a Dockerfile describe itself; flags override them. `--cmd` swaps the program without
+touching the image, and drops the image's `snowglobe.ready`, which belonged to its own command.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    D[mix release<br/>on 32-bit Alpine] -->|docker export| T[tar2v86.exs]
-    T --> FS[filesystem.json<br/>+ zstd file blobs]
-    FS --> B[build-state.mjs<br/>boots it headless in v86]
-    B --> S[state.bin.zst<br/>snapshot with IEx running]
-    FS --> P[GitHub Pages]
-    S --> P
+    I[your image<br/>i386 Alpine] --> B[+ boot layer<br/>kernel, 9p initramfs]
+    B -->|docker export| C[9p filesystem<br/>zstd blobs]
+    C --> S[boot headless in v86<br/>snapshot when ready]
+    S --> D[dist/<br/>static files]
 ```
 
-1. **The guest** is an ordinary Docker image: a `mix release` built on 32-bit Alpine, plus a
-   kernel and an initramfs that can mount the root filesystem over 9p.
-2. **`tar2v86.exs`** turns the exported image into [v86](https://github.com/copy/v86)'s 9p
-   format. That's a JSON tree of the filesystem, plus every file stored once, named by its
-   sha256 and compressed with zstd.
-3. **`build-state.mjs`** boots that filesystem in v86 under Node, waits for the `iex(1)>`
-   prompt, and saves the whole machine state: about 75 MB, or 16 MB with zstd.
-4. **The browser** loads v86 and restores the snapshot. When IEx touches a file it hasn't read
-   yet, v86 fetches that blob over HTTP and the guest kernel sees it as a disk read.
-5. **The warm pack** avoids most of those fetches. Once the prompt is up, the page downloads
-   `warm.pack` in the background: one request carrying the code nearly every session touches
-   (Elixir, IEx, stdlib, kernel, crypto and the libraries they link). Commands like `h`, `Task`
-   or `:crypto` then load from memory instead of waiting on one network round trip per file.
+1. **Boot layer.** snowglobe adds a kernel, an initramfs that mounts the root filesystem over 9p,
+   OpenRC, and a terminal that runs your command, on top of your image.
+2. **Filesystem.** `docker export` streams straight into snowglobe, which writes v86's format: a
+   JSON tree plus one zstd-compressed blob per unique file, fetched by the browser on demand.
+3. **Snapshot.** The guest boots headless in v86 until your app is ready, and the whole machine
+   state is saved. Visitors restore it instead of booting Linux.
+4. **Warm pack.** Every file the guest read while booting (plus anything matching `--warm`) is
+   bundled into one `warm.pack` the page downloads in the background, so the first commands don't
+   wait on one network round trip per file.
 
-## Run it locally
-
-You need [mise](https://mise.jdx.dev) and Docker.
+## Develop
 
 ```sh
-mise install       # Erlang and Elixir, pinned in mise.toml
-mise run build     # build examples/playground into dist/ (about a minute)
-mise run serve     # http://localhost:8000
+mise install       # Go, pinned in mise.toml
+mise run test
+mise run build     # build examples/iex into dist/ (about a minute)
+mise run serve
 ```
 
-Every push to `main` runs the same build in GitHub Actions and deploys `dist/` to GitHub Pages.
-
-## Ship your own Elixir app
-
-Everything here is packaged as **[BeamBox](packages/beam_box)**, a Mix task you can add to any
-project:
-
-```elixir
-{:beam_box, path: "...", only: :dev, runtime: false}
-```
-
-```sh
-mix beam_box.build     # your release, booted and snapshotted, as a static site in dist/
-mix beam_box.serve
-```
-
-It builds `MIX_ENV=prod mix release` on 32-bit Alpine inside Docker, adds a kernel and 9p boot
-layer, converts it to v86's format, and snapshots it with `bin/<release> start_iex` running.
-Only Docker is needed on the host. See the [BeamBox README](packages/beam_box/README.md) for
-options, such as `--cmd` to start something other than IEx.
-
-The live demo is [`examples/playground`](examples/playground), a few lines of Elixir plus
-`beam_box: [title: "IEx in the browser"]` in its `mix.exs`.
-
-## Project layout
+Pushing to `main` runs the tests and the same build in GitHub Actions, and deploys `dist/` to
+GitHub Pages.
 
 ```
-examples/playground/      the app behind the live demo
-packages/beam_box/        the Mix package
-  lib/                    mix beam_box.build / beam_box.serve
-  priv/release.Dockerfile.eex   release build on 32-bit Alpine
-  priv/boot.Dockerfile    kernel, 9p boot and terminal, added on top of the release
-  priv/tools/             build container: tar2v86.exs, build-state.mjs, v86 + xterm.js pins
-  priv/web/               the page
-mise.toml                 toolchain and tasks
+cmd/snowglobe/        the CLI
+internal/rootfs/      tar stream → v86 9p filesystem + warm pack
+internal/boot/        the boot layer added on top of your image
+internal/tools/       build container: Node + v86 + xterm.js (pinned) and the snapshot script
+internal/site/        the page
+examples/iex/         the live demo's Dockerfile
 ```
 
 ## Credits

@@ -1,18 +1,14 @@
 [tools]
-erlang = "29.1.1"
-elixir = "1.20.4-otp-29"
+go = "1.27.1"
 
 [tasks.build]
-description = "Build the playground example into dist/ with beam_box"
-dir = "{{config_root}}/examples/playground"
-run = "mix deps.get && mix beam_box.build --out ../../dist"
+description = "Build the IEx example into dist/ with snowglobe"
+run = "go run ./cmd/snowglobe build examples/iex --out dist"
 
 [tasks.serve]
 description = "Serve dist/ locally at http://localhost:8000"
-dir = "{{config_root}}/examples/playground"
-run = "mix beam_box.serve --out ../../dist"
+run = "go run ./cmd/snowglobe serve dist"
 
 [tasks.test]
-description = "Run beam_box's tests"
-dir = "{{config_root}}/packages/beam_box"
-run = "mix test"
+description = "Run the tests"
+run = "go test ./..."

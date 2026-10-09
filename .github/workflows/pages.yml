@@ -21,8 +21,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Installs erlang, elixir and node from mise.toml (cached between runs)
+      # Installs Go from mise.toml (cached between runs)
       - uses: jdx/mise-action@v5
+
+      - name: Test
+        run: mise run test
 
       # The i386 guest image builds natively on amd64 runners, no emulation needed
       - name: Build site

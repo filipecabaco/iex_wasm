@@ -1,4 +1,6 @@
 # Build output
 /dist/
+/snowglobe
 
-.elixir_ls
+# npm install of the tools image's runtime, when inspected locally
+/internal/tools/node_modules/

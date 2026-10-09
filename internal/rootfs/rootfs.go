@@ -1,0 +1,318 @@
+// Package rootfs converts a root filesystem tarball into v86's 9p filesystem format:
+//
+//	<out>/filesystem.json                      tree metadata (v86 fs2json format, version 3)
+//	<out>/filesystem/<sha256[0:10]>.bin.zst   zstd-compressed file contents, deduplicated
+//
+// It is equivalent to v86's tools/fs2json.py and tools/copy-to-sha256.py --zstd, in one pass
+// over the tar stream, with contents hashed and compressed in parallel.
+package rootfs
+
+import (
+	"archive/tar"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+
+	"github.com/klauspost/compress/zstd"
+)
+
+const (
+	formatVersion = 3
+	// keep in sync with HASH_LENGTH in v86's fs2json.py
+	hashLength = 10
+
+	sIFREG = 0o100000
+	sIFDIR = 0o040000
+	sIFLNK = 0o120000
+)
+
+// File is a regular file in the converted filesystem.
+type File struct {
+	Path string // absolute path inside the guest, e.g. "/usr/bin/env"
+	Blob string // blob name under filesystem/, e.g. "0a1b2c3d4e.bin.zst"
+	Size int64  // uncompressed size
+}
+
+// Result describes a converted filesystem.
+type Result struct {
+	Entries   int
+	TotalSize int64
+	Files     []File
+	// Blob name -> path of the blob on disk
+	Blobs map[string]string
+}
+
+// entry is one tar member in tar order; node is filled in once its contents are processed.
+type entry struct {
+	path     string
+	typeflag byte
+	mode     int64
+	uid, gid int
+	mtime    int64
+	size     int64
+	linkname string
+
+	hash string
+	blob string
+}
+
+// Convert reads a tar stream and writes filesystem.json and filesystem/ under outDir.
+func Convert(r io.Reader, outDir string) (*Result, error) {
+	blobsDir := filepath.Join(outDir, "filesystem")
+	if err := os.MkdirAll(blobsDir, 0o755); err != nil {
+		return nil, err
+	}
+
+	entries, err := readAndStore(tar.NewReader(r), blobsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	root, result, err := buildTree(entries, blobsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := os.Create(filepath.Join(outDir, "filesystem.json"))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	doc := map[string]any{"fsroot": root, "version": formatVersion, "size": result.TotalSize}
+	if err := json.NewEncoder(f).Encode(doc); err != nil {
+		return nil, err
+	}
+	return result, f.Close()
+}
+
+type job struct {
+	index int
+	data  []byte
+}
+
+// readAndStore walks the tar sequentially and hands regular file contents to a worker pool that
+// hashes, compresses and writes them.
+func readAndStore(tr *tar.Reader, blobsDir string) ([]*entry, error) {
+	var (
+		entries []*entry
+		mu      sync.Mutex
+		wg      sync.WaitGroup
+		errOnce sync.Once
+		werr    error
+	)
+
+	workers := runtime.GOMAXPROCS(0)
+	jobs := make(chan job, workers*2)
+
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			enc, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBestCompression), zstd.WithEncoderConcurrency(1))
+			if err != nil {
+				errOnce.Do(func() { werr = err })
+				for range jobs {
+				}
+				return
+			}
+			defer enc.Close()
+
+			for j := range jobs {
+				sum := sha256.Sum256(j.data)
+				hash := hex.EncodeToString(sum[:])
+				blob := hash[:hashLength] + ".bin.zst"
+
+				if err := writeBlob(filepath.Join(blobsDir, blob), enc.EncodeAll(j.data, nil)); err != nil {
+					errOnce.Do(func() { werr = err })
+				}
+
+				mu.Lock()
+				entries[j.index].hash, entries[j.index].blob = hash, blob
+				mu.Unlock()
+			}
+		}()
+	}
+
+	readErr := func() error {
+		for {
+			h, err := tr.Next()
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			if err != nil {
+				return fmt.Errorf("reading tar: %w", err)
+			}
+
+			p := normalize(h.Name)
+			if p == "" {
+				continue
+			}
+
+			e := &entry{
+				path:     p,
+				typeflag: h.Typeflag,
+				mode:     h.Mode,
+				uid:      h.Uid,
+				gid:      h.Gid,
+				mtime:    h.ModTime.Unix(),
+				size:     h.Size,
+				linkname: h.Linkname,
+			}
+			if h.Typeflag == tar.TypeLink {
+				e.linkname = normalize(h.Linkname)
+			}
+
+			mu.Lock()
+			entries = append(entries, e)
+			index := len(entries) - 1
+			mu.Unlock()
+
+			if h.Typeflag == tar.TypeReg || h.Typeflag == tar.TypeRegA || h.Typeflag == tar.TypeCont {
+				data, err := io.ReadAll(tr)
+				if err != nil {
+					return fmt.Errorf("reading %s: %w", p, err)
+				}
+				jobs <- job{index: index, data: data}
+			}
+		}
+	}()
+
+	close(jobs)
+	wg.Wait()
+
+	if readErr != nil {
+		return nil, readErr
+	}
+	return entries, werr
+}
+
+// writeBlob writes a blob unless an identical one exists; write-then-rename so concurrent
+// writers of the same content never interleave.
+func writeBlob(target string, data []byte) error {
+	if _, err := os.Stat(target); err == nil {
+		return nil
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(target), ".blob-*")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmp.Name())
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), target)
+}
+
+// buildTree turns the flat entry list into v86's nested node arrays:
+// [name, size, mtime, mode, uid, gid, filename | symlink target | children]
+func buildTree(entries []*entry, blobsDir string) ([]any, *Result, error) {
+	result := &Result{Entries: len(entries), Blobs: map[string]string{}}
+	nodes := make(map[string][]any, len(entries))
+	children := map[string][]string{}
+	files := map[string]*entry{}
+	fullHash := map[string]string{}
+
+	for _, e := range entries {
+		node := []any{path.Base(e.path), e.size, e.mtime, e.mode, e.uid, e.gid}
+
+		switch e.typeflag {
+		case tar.TypeReg, tar.TypeRegA, tar.TypeCont:
+			if prev, ok := fullHash[e.blob]; ok && prev != e.hash {
+				return nil, nil, fmt.Errorf("collision in short hash (%s and %s)", prev, e.hash)
+			}
+			fullHash[e.blob] = e.hash
+			node[3] = e.mode | sIFREG
+			node = append(node, e.blob)
+			files[e.path] = e
+
+		case tar.TypeLink:
+			// Hard links become independent files sharing the target's blob
+			target, ok := files[e.linkname]
+			if !ok {
+				return nil, nil, fmt.Errorf("hard link %s points at unknown %s", e.path, e.linkname)
+			}
+			e.blob, e.hash, e.size = target.blob, target.hash, target.size
+			node[1] = target.size
+			node[3] = e.mode | sIFREG
+			node = append(node, target.blob)
+			files[e.path] = e
+
+		case tar.TypeDir:
+			node[3] = e.mode | sIFDIR
+			node = append(node, nil) // children, filled in below
+
+		case tar.TypeSymlink:
+			node[3] = e.mode | sIFLNK
+			node = append(node, e.linkname)
+
+		default:
+			fmt.Fprintf(os.Stderr, "rootfs: unsupported tar entry type %q (%s)\n", e.typeflag, e.path)
+		}
+
+		result.TotalSize += e.size
+		addNode(nodes, children, e.path, node, e.mtime)
+	}
+
+	for _, e := range entries {
+		if e.blob != "" {
+			result.Files = append(result.Files, File{Path: "/" + e.path, Blob: e.blob, Size: e.size})
+			result.Blobs[e.blob] = filepath.Join(blobsDir, e.blob)
+		}
+	}
+
+	var tree func(dir string) []any
+	tree = func(dir string) []any {
+		out := []any{}
+		for _, p := range children[dir] {
+			node := nodes[p]
+			if len(node) == 7 && node[6] == nil {
+				node[6] = tree(p)
+			}
+			out = append(out, node)
+		}
+		return out
+	}
+	return tree(""), result, nil
+}
+
+// addNode records a node under its parent, creating parent directories the tar never listed
+// (docker export lists them all, but other tar sources may not)
+func addNode(nodes map[string][]any, children map[string][]string, p string, node []any, mtime int64) {
+	if _, exists := nodes[p]; !exists {
+		parent := path.Dir(p)
+		if parent == "." {
+			parent = ""
+		}
+		if parent != "" {
+			if _, ok := nodes[parent]; !ok {
+				addNode(nodes, children, parent, []any{path.Base(parent), 0, mtime, int64(sIFDIR | 0o755), 0, 0, nil}, mtime)
+			}
+		}
+		children[parent] = append(children[parent], p)
+	}
+	nodes[p] = node
+}
+
+func normalize(name string) string {
+	name = strings.TrimPrefix(name, "./")
+	name = strings.TrimLeft(name, "/")
+	return strings.TrimRight(name, "/")
+}

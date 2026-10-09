@@ -1,0 +1,10 @@
+{
+  "name": "snowglobe-tools",
+  "private": true,
+  "description": "Browser runtime for snowglobe sites (v86, xterm.js); installed into the tools image",
+  "dependencies": {
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "v86": "0.5.462"
+  }
+}
