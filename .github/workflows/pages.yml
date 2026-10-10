@@ -1,8 +1,12 @@
-name: Deploy to GitHub Pages
+name: CI and Pages
 
+# Every push to main and every pull request: the tests, then every site built and checked (the
+# demos on the site, plus the examples in EXAMPLES that aren't). Pushes to main then assemble the
+# demos into the site and deploy it to GitHub Pages.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -10,20 +14,18 @@ permissions:
   pages: write
   id-token: write
 
+# A newer push to a pull request replaces its run; main's runs (and deploys) queue
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Each demo takes minutes to build (docker builds, then booting the guest to snapshot it), so they
-# build side by side, one job each, and `assemble` gathers them into the site. Locally, `mise run
-# build` does the same steps one after another.
 jobs:
-  # DEMOS in mise.toml is the one list of demos; this hands it to the matrix below
+  # DEMOS (on the site) and EXAMPLES (CI only) in mise.toml are the lists of sites
   setup:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      demos: ${{ steps.demos.outputs.demos }}
+      sites: ${{ steps.sites.outputs.sites }}
     steps:
       - uses: actions/checkout@v7
 
@@ -31,8 +33,10 @@ jobs:
         with:
           install: false
 
-      - id: demos
-        run: echo "demos=$(mise env --json | jq -c '.DEMOS | split(" ")')" >> "$GITHUB_OUTPUT"
+      - id: sites
+        run: |
+          echo "sites=$(mise env --json | jq -c '[(.DEMOS | split(" ") | .[] | {name: ., deploy: true}),
+                                                 (.EXAMPLES | split(" ") | .[] | {name: ., deploy: false})]')" >> "$GITHUB_OUTPUT"
 
   test:
     runs-on: ubuntu-24.04
@@ -47,7 +51,7 @@ jobs:
         run: mise run test
 
   # The tools image (snowglobe-vm, compiled from Rust, and the page runtime) is built once and
-  # loaded by every demo job, instead of compiled nine times; it's cached until its sources change
+  # loaded by every site job; it's cached until its sources change
   tools:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
@@ -74,81 +78,126 @@ jobs:
           path: tools.tar.zst
           retention-days: 1
 
-  demo:
+  # Each site is built (or restored: a site is cached until its example or snowglobe changes),
+  # then run headlessly and checked. Guests are arm64: arm64 runners build them natively.
+  site:
     needs: [setup, tools]
-    # Guests are arm64: arm64 runners build their images natively, no emulation needed
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
-        demo: ${{ fromJSON(needs.setup.outputs.demos) }}
+        site: ${{ fromJSON(needs.setup.outputs.sites) }}
+    name: ${{ matrix.site.name }}
+    env:
+      SITE: ${{ matrix.site.name }}
     steps:
       - uses: actions/checkout@v7
 
       # Installs Go from mise.toml (cached between runs)
       - uses: jdx/mise-action@v5
 
+      - uses: actions/cache@v6
+        id: cache
+        with:
+          path: dist/${{ matrix.site.name }}
+          key: site-${{ matrix.site.name }}-${{ hashFiles(format('examples/{0}/**', matrix.site.name), 'internal/**', 'cmd/**', 'go.mod', 'go.sum') }}
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: tools-image
+
+      - name: Load the tools image
+        run: |
+          zstd -dc tools.tar.zst | docker load && rm tools.tar.zst
+          go build -o snowglobe ./cmd/snowglobe
+
       # Anonymous Docker Hub pulls from shared runners hit its rate limit (429); pull through
       # Google's public mirror instead
       - name: Use a Docker Hub mirror
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           config=/etc/docker/daemon.json
           [ -s "$config" ] || echo '{}' | sudo tee "$config" > /dev/null
           sudo jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' "$config" | sudo tee "$config.new" > /dev/null
           sudo mv "$config.new" "$config"
           sudo systemctl restart docker
-          docker info --format '{{.RegistryConfig.Mirrors}}'
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: tools-image
+      - name: Build ${{ matrix.site.name }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./snowglobe build "examples/$SITE" --out "dist/$SITE"
 
-      - name: Build ${{ matrix.demo }}
-        env:
-          DEMO: ${{ matrix.demo }}
+      # Type into the app in its own language and check what it prints. The Go demo is a
+      # full-screen app with no prompt: it only has to keep running.
+      - name: Check ${{ matrix.site.name }}
+        if: matrix.site.name != 'curl'
         run: |
-          zstd -dc tools.tar.zst | docker load && rm tools.tar.zst
-          go build -o snowglobe ./cmd/snowglobe
-          ./snowglobe build "examples/$DEMO" --out "dist/$DEMO"
-
-      # The headless runtime, on the site just built: type into the app in its own language and
-      # check what it prints (the Go demo is a full-screen app with no prompt: it only has to run)
-      - name: Run ${{ matrix.demo }} headlessly
-        env:
-          DEMO: ${{ matrix.demo }}
-        run: |
-          ./snowglobe run "dist/$DEMO" --name smoke --detach
-          case "$DEMO" in
-            iex|elixir) check='IO.puts("snowglobe-#{6 * 7}")' ;;
-            python)     check='print(f"snowglobe-{6 * 7}")' ;;
-            typescript) check='console.log("snowglobe-" + 6 * 7)' ;;
-            java)       check='System.out.println("snowglobe-" + 6 * 7)' ;;
-            postgres)   check="SELECT 'snowglobe-' || 6 * 7;" ;;
-            go)         check= ;;
-            *)          check='echo snowglobe-$((6 * 7))' ;;
+          case "$SITE" in
+            iex|elixir) commands='IO.puts("snowglobe-#{6 * 7}")'; expect=snowglobe-42 ;;
+            python)     commands='print(f"snowglobe-{6 * 7}")'; expect=snowglobe-42 ;;
+            typescript) commands='console.log("snowglobe-" + 6 * 7)'; expect=snowglobe-42 ;;
+            java)       commands='System.out.println("snowglobe-" + 6 * 7)'; expect=snowglobe-42 ;;
+            postgres)   commands="SELECT 'snowglobe-' || 6 * 7;"; expect=snowglobe-42 ;;
+            rust)       commands='echo snowglobe-$((6 * 7))'; expect=snowglobe-42 ;;
+            # Packages installed into the running machine, from Alpine's mirrors
+            apk)        commands=$'apk add figlet >/dev/null 2>&1; echo "apk exit=$?"\nfiglet -w 60 armless'
+                        expect=$'apk exit=0\n__ _ _ __ _ __ ___' ;;
+            # The Supabase CLI's native stack and the notes app on it: Grace can't see Ada's note
+            supabase)   commands=$'notes signup ada@example.com lovelace-1815\nnotes add first program, for the analytical engine\nnotes ls\nnotes signup grace@example.com hopper-1906\nnotes ls'
+                        expect=$'#1 added\nada@example.com: 1 note(s)\ngrace@example.com: 0 note(s)' ;;
+            go)         commands= ;;
+            *)          echo "::error title=$SITE::no check for $SITE"; exit 1 ;;
           esac
-          if [ -n "$check" ]; then
-            out=$(./snowglobe exec smoke "$check" || true)
-            echo "$out"
-            echo "$out" | grep -q snowglobe-42 || { echo "::error title=$DEMO::expected snowglobe-42"; ./snowglobe stop smoke; exit 1; }
-          else
+          if [ -z "$commands" ]; then
+            ./snowglobe run "dist/$SITE" --name check --detach
             sleep 20
-            ./snowglobe ps | grep -q smoke || { echo "::error title=$DEMO::the instance stopped"; exit 1; }
+            ./snowglobe ps | grep -q check || { echo "::error title=$SITE::the instance stopped"; exit 1; }
+            ./snowglobe stop check
+            exit 0
           fi
-          ./snowglobe stop smoke
+          printf '%s\n' "$commands" | ./snowglobe run "dist/$SITE" | tee out.txt
+          printf '%s\n' "$expect" | while IFS= read -r line; do
+            grep -qF -- "$line" out.txt || { echo "::error title=$SITE::expected a line with: $line"; exit 1; }
+          done
+
+      # curl gets the whole headless workflow: piped and detached runs, exec, HTTP(S) out of
+      # the guest, -p port forwarding and attach
+      - name: Check curl end to end
+        if: matrix.site.name == 'curl'
+        run: |
+          out=$(printf 'uname -m\n' | ./snowglobe run dist/curl)
+          [ "$out" = aarch64 ] || { echo "::error title=piped::got $out"; exit 1; }
+          ./snowglobe run dist/curl --name smoke --detach -p 18000:8000
+          trap './snowglobe stop smoke || true' EXIT
+          [ "$(./snowglobe exec smoke nproc)" = 1 ]
+          ./snowglobe exec smoke 'curl -sS -m 30 -o /dev/null -w "%{http_code}" https://api.github.com/zen; echo " exit=$?"' | tee https.txt
+          grep -q '^200 exit=0$' https.txt || { echo "::error title=https::$(cat https.txt)"; exit 1; }
+          ./snowglobe exec smoke 'curl -sS -m 30 -o /dev/null -w "%{http_code}" http://example.com/; echo " exit=$?"' | tee http.txt
+          grep -q '^200 exit=0$' http.txt || { echo "::error title=http::$(cat http.txt)"; exit 1; }
+          ./snowglobe exec smoke '(while true; do printf "HTTP/1.0 200 OK\r\n\r\nhello from the guest\n" | nc -l -p 8000; done) >/dev/null 2>&1 &'
+          for i in 1 2 3 4 5; do
+            body=$(curl -sS -m 20 http://127.0.0.1:18000/ || true)
+            [ "$body" = "hello from the guest" ] && break
+            sleep 2
+          done
+          [ "$body" = "hello from the guest" ] || { echo "::error title=port forwarding::got $body"; exit 1; }
+          out=$( (sleep 2; printf 'echo attached-$((40+2))\n'; sleep 3; printf '\035') | ./snowglobe attach smoke)
+          echo "$out" | grep -q attached-42 || { echo "::error title=attach::$out"; exit 1; }
+          ./snowglobe ps | grep -q smoke
 
       # Hidden files must come along: `snowglobe pool` looks for each build's .snowglobe marker
       - uses: actions/upload-artifact@v7
+        if: matrix.site.deploy && github.event_name != 'pull_request'
         with:
-          name: ${{ matrix.demo }}
-          path: dist/${{ matrix.demo }}
+          name: site-${{ matrix.site.name }}
+          path: dist/${{ matrix.site.name }}
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
 
   assemble:
-    needs: [test, demo]
+    needs: [test, site]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -157,14 +206,14 @@ jobs:
       # Installs Go from mise.toml (cached between runs)
       - uses: jdx/mise-action@v5
 
-      # The demo artifacts are the only ones in the run at this point; each lands in dist/<demo>
       - uses: actions/download-artifact@v8
         with:
+          pattern: site-*
           path: dist
 
       - name: Assemble site
         run: |
-          rm -rf dist/tools-image
+          for d in dist/site-*; do mv "$d" "dist/${d#dist/site-}"; done
           mise run assemble
           du -sh dist
 
@@ -176,9 +225,10 @@ jobs:
 
   deploy:
     needs: assemble
-    # main-demo is skipped on main, and a skip upstream would skip this too
-    if: ${{ !cancelled() && needs.assemble.result == 'success' }}
     runs-on: ubuntu-24.04
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

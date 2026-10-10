@@ -10,7 +10,7 @@ get your program running in their tab in about a second, with no server behind i
 Go + Bubble Tea, Rust + clap, Java + Gson, and curl + jq (plain Alpine tools, online through your browser), each a small
 project in [`examples/`](examples) running in the browser.
 
-[![Deploy to GitHub Pages](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml)
+[![CI and Pages](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml)
 
 ```sh
 snowglobe build ./my-app          # a directory with a Dockerfile, or any image reference
