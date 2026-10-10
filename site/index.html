@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="snowglobe">
   <meta property="og:title" content="snowglobe: real programs, sandboxed in your browser">
-  <meta property="og:description" content="Docker images as static sites: Linux on an x86 CPU emulated in WebAssembly, restored from a snapshot. Nine live runs, from Elixir + Postgres to curl + jq. No server.">
+  <meta property="og:description" content="Docker images as static sites: Linux on a 64-bit ARM CPU emulated in WebAssembly, restored from a snapshot. Nine live runs, from Elixir + Postgres to curl + jq. No server.">
   <meta property="og:url" content="https://filipecabaco.github.io/snowglobe/">
   <meta property="og:image" content="https://filipecabaco.github.io/snowglobe/og.png">
   <meta property="og:image:width" content="1200">
@@ -18,7 +18,7 @@
   <meta property="og:image:alt" content="snowglobe: real programs, sandboxed in your browser, with a terminal showing Postgres, curl and jq output recorded at build">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="snowglobe: real programs, sandboxed in your browser">
-  <meta name="twitter:description" content="Docker images as static sites: Linux on an emulated x86 CPU in WebAssembly. Nine live runs. No server.">
+  <meta name="twitter:description" content="Docker images as static sites: Linux on an emulated ARM CPU in WebAssembly. Nine live runs. No server.">
   <meta name="twitter:image" content="https://filipecabaco.github.io/snowglobe/og.png">
   <meta name="twitter:image:alt" content="snowglobe: real programs, sandboxed in your browser">
   <meta name="description" content="Nine sandboxed runs in your browser: real programs on Linux, emulated in WebAssembly, packaged from Dockerfiles by snowglobe.">
@@ -289,7 +289,7 @@
           <p class="lede">Each run below is a whole Linux machine, packaged from a Dockerfile and emulated
             in WebAssembly right in this tab. No server runs it, its only way out is your browser's own
             requests, and closing it throws the machine away.</p>
-          <p class="aside-note">Run one here to type into it, or open it in a window of its own. It is an x86 CPU in
+          <p class="aside-note">Run one here to type into it, or open it in a window of its own. It is a 64-bit ARM CPU in
             emulation, so it is slower than native; every number and transcript below was measured and
             recorded when this site was built.</p>
         </section>
@@ -322,11 +322,11 @@
             <div class="step">
               <h3>Describe</h3>
               <div>
-                <p>Any 32-bit Alpine image works. Its <code>CMD</code>, <code>ENV</code> and <code>WORKDIR</code> are what the
+                <p>Any arm64 Alpine image works. Its <code>CMD</code>, <code>ENV</code> and <code>WORKDIR</code> are what the
                   visitor's terminal gets. Labels say when the program is ready, and which commands to exercise
                   so their files are preloaded. The Python run's Dockerfile, exercise list shortened:</p>
 <pre><span class="dim"># examples/python/Dockerfile</span>
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 RUN apk add --no-cache python3 &amp;&amp; \
     python3 -m venv /opt/venv &amp;&amp; \
     /opt/venv/bin/pip install --no-cache-dir rich==15.0.0
@@ -353,7 +353,7 @@ LABEL snowglobe.title="Python + Rich in the browser" \
     memory:  512 MB
     network: none
 ==&gt; Add boot layer
-==&gt; Convert to v86 filesystem
+==&gt; Convert to a 9p filesystem
     5600 entries, 107 MB uncompressed, 4437 unique files
 ==&gt; Boot and snapshot
 App ready on hvc0 after 19.966s
@@ -457,7 +457,7 @@ $ snowglobe exec py 'sum(range(10))'
     </div>
 
     <footer>
-      <span><a href="https://github.com/filipecabaco/snowglobe">snowglobe</a> · <a href="llms.txt">llms.txt</a> · built on <a href="https://github.com/copy/v86">v86</a> by Fabian Hemmer and contributors</span>
+      <span><a href="https://github.com/filipecabaco/snowglobe">snowglobe</a> · <a href="llms.txt">llms.txt</a> · runs on <a href="https://github.com/filipecabaco/armless">armless</a>, which grew out of <a href="https://github.com/copy/v86">v86</a> by Fabian Hemmer and contributors</span>
       <span>Inspired by <a href="https://github.com/snaplet/postgres-wasm">postgres-wasm</a> and <a href="https://github.com/iximiuz/docker-to-linux">docker-to-linux</a></span>
     </footer>
   </div>

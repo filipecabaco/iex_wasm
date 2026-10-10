@@ -21,7 +21,7 @@ if (!process.env.SNOWGLOBE_BANNER_SHOWN) {
   process.env.SNOWGLOBE_BANNER_SHOWN = "1";
   const cyan = (s) => `\x1b[36m${s}\x1b[0m`;
   console.log(`
-  \x1b[1mTypeScript + Zod\x1b[0m: tsx on Node 24, 32-bit Linux, emulated in this tab. Try:
+  \x1b[1mTypeScript + Zod\x1b[0m: tsx on Node 24, 64-bit ARM Linux, emulated in this tab. Try:
 
     ${cyan('User.parse({ name: "Ada", email: "ada@example.com" })')}
     ${cyan('User.safeParse({ name: "", email: "nope" }).error?.issues.map((i) => i.message)')}

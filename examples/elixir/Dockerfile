@@ -1,6 +1,6 @@
 # Elixir + Ecto + PostgreSQL: a Mix release and a Postgres server, both running in the tab.
-# Postgres is Alpine's own 32-bit package; Postgrex is pure Elixir, so nothing needs compiling.
-FROM i386/alpine:3.24.2 AS build
+# Postgres is Alpine's own package; Postgrex is pure Elixir, so nothing needs compiling.
+FROM alpine:3.24.2 AS build
 RUN apk add --no-cache elixir erlang28 git
 ENV MIX_ENV=prod LANG=C.UTF-8
 WORKDIR /src
@@ -11,7 +11,7 @@ RUN mix deps.get --only prod && mix deps.compile
 COPY lib lib
 RUN mix release --path /release
 
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 RUN apk add --no-cache libstdc++ libgcc ncurses-libs zlib postgresql18 postgresql18-client
 
 # A cluster made at build time, sized for a browser tab: small buffers, a handful of connections,

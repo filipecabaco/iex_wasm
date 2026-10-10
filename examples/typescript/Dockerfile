@@ -1,7 +1,7 @@
-# TypeScript + Zod: the tsx REPL (TypeScript on Node, compiled by esbuild's 32-bit x86 binary)
+# TypeScript + Zod: the tsx REPL (TypeScript on Node, compiled by esbuild's arm64 binary)
 # with Zod preloaded as `z`, sample `User` and `Repo` schemas, and the network on: fetch() and
 # WebSocket go out through the visitor's browser.
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 
 RUN apk add --no-cache nodejs npm
 

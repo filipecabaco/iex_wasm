@@ -19,8 +19,8 @@ People who might package their own project with snowglobe are secondary; the rep
 
 ## Product Purpose
 
-snowglobe is a Go CLI that packages a Docker image (32-bit Alpine) into a static website that runs
-it in the browser: real Linux on an x86 CPU emulated in WebAssembly (v86), restored from a
+snowglobe is a Go CLI that packages a Docker image (arm64 Alpine) into a static website that runs
+it in the browser: real Linux on a 64-bit ARM CPU emulated in WebAssembly (armless), restored from a
 snapshot taken once the app was ready. The demo page showcases nine such runs, one per language plus a shell of ordinary tools,
 each a small project with a real dependency.
 
@@ -36,21 +36,22 @@ shell, not a subset runtime: the real program built from a Dockerfile.
 - Demos open in their own browser windows; the index page presents them and the runs.
 - Each demo build emits measured data: `warm-report.json` (files read by phase) and the snapshot.
 - Demos: Elixir IEx (plain IEx from Alpine packages), PostgreSQL (psql against a Postgres 18 server), Elixir + Postgres (Ecto/Postgrex, PostgreSQL 18 in the guest), Python + Rich, TypeScript + Zod (tsx), Go + Bubble Tea
-  (Game of Life), Rust + clap (jtab), Java + Gson (jshell, OpenJDK 11), curl + jq (a shell, network on).
+  (Game of Life), Rust + clap (jtab), Java + Gson (jshell, OpenJDK 21), curl + jq (a shell, network on).
 - Repository: https://github.com/filipecabaco/snowglobe. Site: https://filipecabaco.github.io/snowglobe/
 
 ## Capabilities and Constraints
 
-- Everything runs emulated on 32-bit x86: much slower than native. Cold loads take seconds (a CDN
+- Everything runs emulated on 64-bit ARM (translated to WebAssembly as it runs): slower than native. Cold loads take seconds (a CDN
   cache miss right after a deploy can take ~15 s); commands take tens of milliseconds (Rust) to
   several seconds (Java snippets compile with javac).
 - Networking is opt-in per run (`--network fetch`): HTTP(S) and WebSockets leave as the visitor's own
   browser requests (CORS applies); otherwise the guest has no network. No snowglobe server exists.
-- Guests must be i386 Alpine images; Java is limited to OpenJDK 11, the newest Alpine builds for x86.
+- Guests must be arm64 Alpine images. Sites can have several CPUs (`--cpus`), each in a Web Worker.
 
 ## Brand Commitments
 
-Name: snowglobe (lowercase). Built on v86 by Fabian Hemmer and contributors, which must be credited.
+Name: snowglobe (lowercase). Runs on armless, which grew out of v86 by Fabian Hemmer and contributors,
+which must be credited.
 The repo's voice is candid ("this is an experiment"); claims stay honest.
 
 ## Evidence on Hand

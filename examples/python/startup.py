@@ -22,7 +22,7 @@ _examples = [
 # Plain lines rather than a panel: the banner is replayed on whatever screen opens the run, and
 # short unboxed lines wrap cleanly on a phone where a box would break apart
 console.print(Text.from_markup(
-    "\n[bold]Python + Rich[/]: CPython 3.14 on 32-bit Linux,\nemulated in this tab. Try:\n\n"
+    "\n[bold]Python + Rich[/]: CPython 3.14 on 64-bit ARM Linux,\nemulated in this tab. Try:\n\n"
     + "\n".join(f"  [cyan]{escape(e)}[/]" for e in _examples)
     + "\n",
     # show the examples' :sparkles: as typed, not as an emoji

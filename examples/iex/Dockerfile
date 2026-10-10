@@ -1,5 +1,5 @@
 # Elixir IEx: just the interactive shell, from Alpine's own Elixir and Erlang packages.
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 
 RUN apk add --no-cache elixir
 

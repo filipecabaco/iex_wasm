@@ -1,8 +1,8 @@
-# Java + Gson: jshell on OpenJDK 11 (the newest JDK Alpine builds for 32-bit x86) with Gson on the
+# Java + Gson: jshell on OpenJDK 21 with Gson on the
 # classpath, a Gson instance ready as `gson`, and a sample Planet class.
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 
-RUN apk add --no-cache openjdk11-jdk && \
+RUN apk add --no-cache openjdk21-jdk && \
     # jshell announces creating this on first run; create it now so it isn't on the snapshot
     mkdir -p /root/.java/.userPrefs
 

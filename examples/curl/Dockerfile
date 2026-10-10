@@ -1,6 +1,6 @@
 # curl + jq: ordinary command-line tools in a shell, with the network on. Their requests leave as
 # the visitor's own browser requests, so any API that allows CORS answers. No server is involved.
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 
 RUN apk add --no-cache curl jq && \
     printf '%s\n' \

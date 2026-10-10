@@ -1,5 +1,5 @@
 # Python + Rich: the REPL with Rich installed, so results, tables and tracebacks render richly.
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 
 RUN apk add --no-cache python3 && \
     python3 -m venv /opt/venv && \

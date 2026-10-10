@@ -1,5 +1,5 @@
 // Conway's Game of Life as a Bubble Tea app: an Elm-style model/update/view loop, styled with
-// Lip Gloss, cross-compiled for 32-bit x86 and running in a browser tab.
+// Lip Gloss, cross-compiled for 64-bit ARM and running in a browser tab.
 package main
 
 import (

@@ -1,14 +1,14 @@
 # Rust: jtab, a CLI that renders JSON as tables, built with clap, serde_json and comfy-table.
-# Cross-compiled for 32-bit x86 musl on the build machine's own architecture with Rust's bundled
+# Cross-compiled for 64-bit ARM musl on the build machine's own architecture with Rust's bundled
 # linker, so building it needs no emulation.
 FROM --platform=$BUILDPLATFORM rust:1.98-slim AS build
-RUN rustup target add i686-unknown-linux-musl
+RUN rustup target add aarch64-unknown-linux-musl
 WORKDIR /src
 COPY jtab ./
-RUN RUSTFLAGS="-C linker=rust-lld" cargo build --release --locked --target i686-unknown-linux-musl
+RUN RUSTFLAGS="-C linker=rust-lld" cargo build --release --locked --target aarch64-unknown-linux-musl
 
-FROM i386/alpine:3.24.2
-COPY --from=build /src/target/i686-unknown-linux-musl/release/jtab /usr/local/bin/jtab
+FROM alpine:3.24.2
+COPY --from=build /src/target/aarch64-unknown-linux-musl/release/jtab /usr/local/bin/jtab
 COPY data /root/data
 RUN printf '%s\n' \
       '' \

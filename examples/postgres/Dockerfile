@@ -1,5 +1,5 @@
 # PostgreSQL in the browser: a real Postgres 18 server from Alpine's packages, with psql attached.
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 
 RUN apk add --no-cache postgresql18 postgresql18-client
 

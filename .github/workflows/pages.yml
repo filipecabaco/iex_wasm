@@ -1,8 +1,11 @@
 name: Deploy to GitHub Pages
 
+# main deploys the site. Other branches listed below deploy a preview without touching it: main's
+# site is built from main as usual, this branch's site goes under /preview/, and the two are
+# deployed together (the github-pages environment must allow the branch to deploy).
 on:
   push:
-    branches: [main]
+    branches: [main, armless]
   workflow_dispatch:
 
 permissions:
@@ -18,21 +21,35 @@ concurrency:
 # build side by side, one job each, and `assemble` gathers them into the site. Locally, `mise run
 # build` does the same steps one after another.
 jobs:
-  # DEMOS in mise.toml is the one list of demos; this hands it to the matrix below
+  # DEMOS in mise.toml is the one list of demos; this hands it (this branch's and main's) to the
+  # matrices below
   setup:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       demos: ${{ steps.demos.outputs.demos }}
+      main_demos: ${{ steps.demos.outputs.main_demos }}
+      preview: ${{ steps.demos.outputs.preview }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: jdx/mise-action@v5
         with:
           install: false
 
       - id: demos
-        run: echo "demos=$(mise env --json | jq -c '.DEMOS | split(" ")')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "demos=$(mise env --json | jq -c '.DEMOS | split(" ")')" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            echo "preview=false" >> "$GITHUB_OUTPUT"
+            echo "main_demos=[]" >> "$GITHUB_OUTPUT"
+          else
+            echo "preview=true" >> "$GITHUB_OUTPUT"
+            git show origin/main:mise.toml > /tmp/main-mise.toml
+            echo "main_demos=$(sed -n 's/^DEMOS = "\(.*\)"/\1/p' /tmp/main-mise.toml | jq -Rc 'split(" ")')" >> "$GITHUB_OUTPUT"
+          fi
 
   test:
     runs-on: ubuntu-24.04
@@ -48,8 +65,9 @@ jobs:
 
   demo:
     needs: setup
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Guests are arm64: arm64 runners build their images natively, no emulation needed
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -71,7 +89,6 @@ jobs:
           sudo systemctl restart docker
           docker info --format '{{.RegistryConfig.Mirrors}}'
 
-      # The i386 guest image builds natively on amd64 runners, no emulation needed
       - name: Build ${{ matrix.demo }}
         env:
           DEMO: ${{ matrix.demo }}
@@ -79,17 +96,76 @@ jobs:
           go build -o snowglobe ./cmd/snowglobe
           ./snowglobe build "examples/$DEMO" --out "dist/$DEMO"
 
+      # The headless runtime, on the site just built: exec into it and check what it prints
+      - name: Run ${{ matrix.demo }} headlessly
+        env:
+          DEMO: ${{ matrix.demo }}
+        run: |
+          ./snowglobe run "dist/$DEMO" --name smoke --detach
+          # Restoring takes a moment: an empty line until the instance answers
+          for i in $(seq 60); do ./snowglobe exec smoke '' > /dev/null 2>&1 && break; sleep 2; done
+          out=$(./snowglobe exec smoke 'echo snowglobe-$((6*7))' || true)
+          ./snowglobe stop smoke
+          echo "$out"
+          case "$DEMO" in
+            # Not shells: their prompts evaluate other languages
+            iex|elixir|python|typescript|java|go|postgres) ;;
+            *) echo "$out" | grep -q snowglobe-42 ;;
+          esac
+
       # Hidden files must come along: `snowglobe pool` looks for each build's .snowglobe marker
       - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.demo }}
+          name: ${{ needs.setup.outputs.preview == 'true' && 'preview-' || '' }}${{ matrix.demo }}
+          path: dist/${{ matrix.demo }}
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # A preview leaves the live site as main has it: main's demos, built from main
+  main-demo:
+    needs: setup
+    if: needs.setup.outputs.preview == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        demo: ${{ fromJSON(needs.setup.outputs.main_demos) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - uses: jdx/mise-action@v5
+
+      - name: Use a Docker Hub mirror
+        run: |
+          config=/etc/docker/daemon.json
+          [ -s "$config" ] || echo '{}' | sudo tee "$config" > /dev/null
+          sudo jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' "$config" | sudo tee "$config.new" > /dev/null
+          sudo mv "$config.new" "$config"
+          sudo systemctl restart docker
+
+      - name: Build ${{ matrix.demo }} (main)
+        env:
+          DEMO: ${{ matrix.demo }}
+        run: |
+          go build -o snowglobe ./cmd/snowglobe
+          ./snowglobe build "examples/$DEMO" --out "dist/$DEMO"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: main-${{ matrix.demo }}
           path: dist/${{ matrix.demo }}
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
 
   assemble:
-    needs: [test, demo]
+    needs: [setup, test, demo, main-demo]
+    # main-demo is skipped on main
+    if: ${{ !cancelled() && needs.test.result == 'success' && needs.demo.result == 'success' && (needs.main-demo.result == 'success' || needs.main-demo.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -98,13 +174,51 @@ jobs:
       # Installs Go from mise.toml (cached between runs)
       - uses: jdx/mise-action@v5
 
-      # The demo artifacts are the only ones in the run at this point; each lands in dist/<demo>
-      - uses: actions/download-artifact@v8
+      - name: Assemble the site (main)
+        if: needs.setup.outputs.preview != 'true'
+        uses: actions/download-artifact@v8
         with:
           path: dist
 
       - name: Assemble site
+        if: needs.setup.outputs.preview != 'true'
         run: mise run assemble
+
+      # A preview: main's site at the root, assembled by main's own code, and this branch's under
+      # /preview/, assembled by this branch's
+      - name: Download main's demos
+        if: needs.setup.outputs.preview == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: main-*
+          path: main-dist
+
+      - name: Download this branch's demos
+        if: needs.setup.outputs.preview == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: preview-*
+          path: preview-dist
+
+      - name: Assemble main's site, and the preview under /preview/
+        if: needs.setup.outputs.preview == 'true'
+        run: |
+          set -e
+          # main's site, with main's tools
+          git fetch --depth 1 origin main
+          git worktree add --detach ../main FETCH_HEAD
+          rm -rf ../main/dist && mkdir -p ../main/dist
+          for d in main-dist/main-*; do mv "$d" "../main/dist/${d#main-dist/main-}"; done
+          mise trust ../main
+          (cd ../main && mise run assemble)
+          # this branch's site
+          rm -rf dist && mkdir -p dist
+          for d in preview-dist/preview-*; do mv "$d" "dist/${d#preview-dist/preview-}"; done
+          mise run assemble
+          mv dist preview
+          mv ../main/dist dist
+          mv preview dist/preview
+          du -sh dist dist/preview
 
       - uses: actions/configure-pages@v6
 

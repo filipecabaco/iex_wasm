@@ -1,8 +1,9 @@
 # snowglobe
 
 **Package a Docker image into a website that runs it in the browser.** snowglobe boots your
-image on real Linux inside [v86](https://github.com/copy/v86), an x86 emulator compiled to
-WebAssembly, snapshots it once your app is ready, and writes a folder of static files. Visitors
+image on real Linux inside [armless](https://github.com/filipecabaco/armless), a 64-bit ARM
+machine compiled to WebAssembly, snapshots it once your app is ready, and writes a folder of
+static files. Visitors
 get your program running in their tab in about a second, with no server behind it.
 
 **[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir IEx, PostgreSQL, Elixir + Postgres, Python + Rich, TypeScript + Zod,
@@ -18,14 +19,16 @@ snowglobe pool sites              # several sites under one host share a single 
 ```
 
 > [!NOTE]
-> This is an experiment. Everything runs on an emulated 32-bit x86 CPU, so expect it to be much
-> slower than native.
+> This is an experiment. Everything runs on an emulated 64-bit ARM CPU (translated to WebAssembly as
+> it runs), so expect it to be slower than native.
 
 ## What you need
 
 - **Docker.** That's all the host needs: the snapshot step runs in a build container.
-- **A 32-bit Alpine image** (`FROM i386/alpine`). v86 emulates a 32-bit x86 CPU, and Alpine is
-  the distro snowglobe knows how to make bootable.
+- **An arm64 Alpine image**: `FROM alpine` (multi-arch; snowglobe builds it for arm64) or
+  `FROM arm64v8/alpine`. Alpine is the distro snowglobe knows how to make bootable. On an x86
+  host, Docker needs QEMU's binfmt handlers to build arm64 images (Docker Desktop has them; on
+  Linux: `docker run --privileged --rm tonistiigi/binfmt --install arm64`).
 
 Install with Go 1.27+:
 
@@ -39,7 +42,7 @@ Whatever the image runs (its `ENTRYPOINT`/`CMD`, with its `ENV` and `WORKDIR`) a
 terminal in the page. The Python demo is this Dockerfile:
 
 ```dockerfile
-FROM i386/alpine:3.24.2
+FROM alpine:3.24.2
 RUN apk add --no-cache python3
 CMD ["python3"]
 LABEL snowglobe.title="Python in the browser" \
@@ -57,25 +60,31 @@ LABEL snowglobe.title="Python in the browser" \
 | `--exercise CMD` (repeatable) | `snowglobe.exercise` (JSON array) | none |
 | `--warm REGEX` | `snowglobe.warm` | none |
 | `--network fetch` | `snowglobe.network` | `none` |
+| `--cpus N` (1–8) | `snowglobe.cpus` | `1` |
 
 Labels let a Dockerfile describe itself; flags override them. `--cmd` swaps the program without
 touching the image, and drops the image's `ready` and `exercise` labels, which belonged to its
 own command.
 
+With `--cpus 2` or more, each guest CPU runs in its own Web Worker on shared memory. Browsers only
+allow that on a cross-origin isolated page, which a static host can't declare, so the site ships a
+small service worker that adds the headers and reloads the page once on the first visit.
+
 ## Networking
 
 Guests have no network unless you ask for it. With `--network fetch` (or
 `LABEL snowglobe.network="fetch"`), the guest gets a virtio NIC and DHCP, and every request it
-makes leaves as the page's own browser request. There is still no server:
+makes leaves as the page's own browser request. There is still no server. The guest's connections
+to ports 80 and 443 end inside the machine, in armless's web relay:
 
-- **HTTP** (port 80) goes through v86's fetch backend: each request becomes a `fetch()`.
-- **HTTPS** (port 443) is terminated in the page. `https-bridge.js` runs a small TLS 1.3 server on
-  WebCrypto, presents a certificate for the requested host signed by a CA made fresh for each
-  build, and replays the decrypted request with `fetch("https://…")`. The guest trusts that CA (the
-  system bundle, plus `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS` and Java's
-  `cacerts`); nothing else should, since its key ships with the site.
+- **HTTP** (port 80): each request becomes a `fetch()`.
+- **HTTPS** (port 443) is terminated in the machine by a small TLS 1.3 server. It presents a
+  certificate for the requested host, signed by a CA made fresh for each build, and the request
+  inside is replayed with `fetch("https://…")`. The guest trusts that CA (the system bundle, plus
+  `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `NODE_EXTRA_CA_CERTS` and Java's `cacerts`). Nothing else
+  should, since its key ships with the site.
 - **WebSockets** (`wss://` and `ws://`): the guest's upgrade request opens a browser `WebSocket` to
-  the same URL, and frames are passed through both ways.
+  the same URL, and messages pass through both ways.
 
 ```console
 / # curl -sS https://api.github.com/zen
@@ -94,7 +103,7 @@ it: Zod validating a live GitHub API response, and a WebSocket echo.
 ## Install it as an app
 
 `snowglobe pwa dist/python` makes a built site a Progressive Web App: a manifest and icons, and a
-service worker that caches the page, the emulator and every file the run fetched, so it installs
+service worker that caches the page, the machine and every file the run fetched, so it installs
 to a home screen or dock and keeps working offline once it has run. Chromium shows an
 **Install app** button in the status strip; on iOS, use Share → Add to Home Screen. A new build
 gets a new cache. Run it after `snowglobe pool`; every demo on the live site is installable.
@@ -112,9 +121,14 @@ after changing one.
 ## Running a site headlessly
 
 A built site also runs without a browser, in a sandboxed container: the same snapshot, restored
-in v86 under Node, with its app console on your terminal. The guest is an emulated machine with no
-access to the host, and the container around it runs unprivileged, read-only, memory-capped and
-offline unless the site was built with `--network fetch`.
+by armless natively (`snowglobe-vm`, in Rust), with its app console on your terminal. The guest is
+an emulated machine with no access to the host, and the container around it runs unprivileged,
+read-only, memory-capped and offline unless the site was built with `--network fetch`.
+
+With a network, the guest goes out the way your machine does. The same web relay makes its HTTP(S)
+and WebSocket requests, other TCP connections are made for it, and private addresses are off
+limits. If `HTTPS_PROXY`, `HTTP_PROXY` or `NO_PROXY` are set, they go to the container, and so does
+`SSL_CERT_FILE`. That covers sandboxes whose only way out is a TLS-intercepting proxy.
 
 ```console
 $ snowglobe run dist/elixir                 # a session; ctrl-] quits
@@ -200,18 +214,19 @@ language demos go from 715 MB to 544 MB, and a visitor's second demo reuses what
 
 ```mermaid
 flowchart LR
-    I[your image<br/>i386 Alpine] --> B[+ boot layer<br/>kernel, 9p initramfs]
+    I[your image<br/>arm64 Alpine] --> B[+ boot layer<br/>kernel, 9p initramfs]
     B -->|docker export| C[9p filesystem<br/>zstd blobs]
-    C --> S[boot headless in v86<br/>snapshot when ready]
+    C --> S[boot headless in armless<br/>snapshot when ready]
     S --> D[dist/<br/>static files]
 ```
 
 1. **Boot layer.** snowglobe adds a kernel, an initramfs that mounts the root filesystem over 9p,
    OpenRC, and a terminal that runs your command, on top of your image.
-2. **Filesystem.** `docker export` streams straight into snowglobe, which writes v86's format: a
-   JSON tree plus one zstd-compressed blob per unique file, fetched by the browser on demand.
-3. **Snapshot.** The guest boots headless in v86 until your app is ready, and the whole machine
-   state is saved. Visitors restore it instead of booting Linux.
+2. **Filesystem.** `docker export` streams straight into snowglobe, which writes a 9p filesystem
+   (v86's format, which armless reads): a JSON tree plus one zstd-compressed blob per unique file,
+   fetched by the browser on demand.
+3. **Snapshot.** The guest boots headless in armless (natively, in the build container) until your
+   app is ready, and the whole machine state is saved. Visitors restore it instead of booting Linux.
 4. **Warm pack.** The files the guest read while booting and while being exercised are bundled
    into one `warm.pack` the page downloads in the background (see above).
 
@@ -229,9 +244,10 @@ GitHub Pages.
 
 ```
 cmd/snowglobe/        the CLI
-internal/rootfs/      tar stream → v86 9p filesystem + warm pack
+internal/rootfs/      tar stream → 9p filesystem + warm pack
 internal/boot/        the boot layer added on top of your image
-internal/tools/       build container: Node + v86 + xterm.js (pinned) and the snapshot script
+internal/tools/       build container: snowglobe-vm (runtime/, Rust on armless) + armless.js and
+                      xterm.js (pinned)
 internal/site/        the page
 internal/pool/        shared blob store for several sites
 examples/             one Dockerfile per demo language
@@ -240,8 +256,9 @@ site/                 the demo index page
 
 ## Credits
 
-Built on [v86](https://github.com/copy/v86) by Fabian Hemmer and contributors, which does all
-the heavy lifting. The idea and early setup came from
+The machine is [armless](https://github.com/filipecabaco/armless), which started as a fork of
+[v86](https://github.com/copy/v86) by Fabian Hemmer and contributors. snowglobe was built on v86
+first, and its 9p filesystem format is v86's. The idea and early setup came from
 [snaplet/postgres-wasm](https://github.com/snaplet/postgres-wasm) and
 [iximiuz/docker-to-linux](https://github.com/iximiuz/docker-to-linux).
 
