@@ -40,6 +40,8 @@ type Options struct {
 	Warm     string
 	Exercise []string
 	Network  string
+	Arch     string // "x86" (default) or "arm64"
+	CPUs     int    // arm64 only; default 1
 }
 
 // Settings are the resolved values a build runs with.
@@ -51,7 +53,34 @@ type Settings struct {
 	Warm     *regexp.Regexp
 	Exercise []string
 	Network  string
+	Arch     string
+	CPUs     int
 	Console  boot.Console
+}
+
+// Arch is a guest architecture snowglobe can build for.
+type Arch struct {
+	Name     string // as in --arch and run.json
+	Platform string // Docker's
+	Docker   string // what `docker inspect` reports as Architecture
+	Example  string // a base image for error messages
+}
+
+var arches = map[string]Arch{
+	"x86":   {Name: "x86", Platform: "linux/386", Docker: "386", Example: "i386/alpine"},
+	"arm64": {Name: "arm64", Platform: "linux/arm64", Docker: "arm64", Example: "arm64v8/alpine"},
+}
+
+// ArchFor resolves --arch; empty means x86.
+func ArchFor(name string) (Arch, error) {
+	if name == "" {
+		name = "x86"
+	}
+	a, ok := arches[name]
+	if !ok {
+		return Arch{}, fmt.Errorf("arch %q: use x86 or arm64", name)
+	}
+	return a, nil
 }
 
 // Run builds the site.
@@ -64,11 +93,16 @@ func Run(o Options, version string) error {
 		return err
 	}
 
+	arch, err := ArchFor(o.Arch)
+	if err != nil {
+		return err
+	}
+
 	var t *tools.Image
 	if err := step("Build tools image", func() (err error) { t, err = tools.Build(version); return }); err != nil {
 		return err
 	}
-	if err := step("Resolve source image", func() error { return resolveSource(o.Source) }); err != nil {
+	if err := step("Resolve source image", func() error { return resolveSource(o.Source, arch.Platform) }); err != nil {
 		return err
 	}
 
@@ -76,14 +110,16 @@ func Run(o Options, version string) error {
 	if err != nil {
 		return err
 	}
-	if img.Architecture != "386" {
-		return fmt.Errorf("%s is %s; v86 emulates a 32-bit x86 CPU, so build it FROM an i386 Alpine image (e.g. i386/alpine)", o.Source, img.Architecture)
+	if img.Architecture != arch.Docker {
+		return fmt.Errorf("%s is %s, not %s: build it FROM an %s Alpine image (e.g. %s), or pass the matching --arch",
+			o.Source, img.Architecture, arch.Name, arch.Name, arch.Example)
 	}
 	s, err := Resolve(o, img)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("    command: %s\n    ready:   %s\n    memory:  %d MB\n    network: %s\n", s.Command, describeReady(s.Ready), s.Memory, s.Network)
+	fmt.Printf("    command: %s\n    ready:   %s\n    memory:  %d MB\n    network: %s\n    arch:    %s, %d CPU(s)\n",
+		s.Command, describeReady(s.Ready), s.Memory, s.Network, s.Arch, s.CPUs)
 
 	// With networking on, the page terminates the guest's HTTPS with certificates from a CA
 	// made for this build
@@ -98,14 +134,14 @@ func Run(o Options, version string) error {
 		if ca != nil {
 			caPEM = ca.CertPEM
 		}
-		return boot.Build(sourceTag, bootTag, s.Console, s.Network, caPEM)
+		return boot.Build(sourceTag, bootTag, arch.Platform, s.Console, s.Network, caPEM)
 	}); err != nil {
 		return err
 	}
 
 	var fs *rootfs.Result
 	if err := step("Convert to v86 filesystem", func() (err error) {
-		fs, err = exportRootfs(filepath.Join(out, "system"))
+		fs, err = exportRootfs(filepath.Join(out, "system"), arch.Platform)
 		if err == nil {
 			fmt.Printf("    %d entries, %d MB uncompressed, %d unique files\n", fs.Entries, fs.TotalSize>>20, len(fs.Blobs))
 		}
@@ -118,17 +154,20 @@ func Run(o Options, version string) error {
 		if err := t.CopySite(out); err != nil {
 			return err
 		}
+		if err := pruneRuntime(out, s.Arch, s.CPUs); err != nil {
+			return err
+		}
 		if ca != nil {
 			if err := ca.WritePage(filepath.Join(out, "system", "tls.json")); err != nil {
 				return err
 			}
 		}
-		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network})
+		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, Arch: s.Arch, CPUs: s.CPUs})
 	}); err != nil {
 		return err
 	}
 
-	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise, s.Network) }); err != nil {
+	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise, s.Network, s.Arch, s.CPUs) }); err != nil {
 		return err
 	}
 
@@ -167,6 +206,8 @@ type RunInfo struct {
 	Command       string    `json:"command"`
 	MemoryMB      int       `json:"memory_mb"`
 	Network       string    `json:"network"`
+	Arch          string    `json:"arch"`
+	CPUs          int       `json:"cpus"`
 	BootSeconds   float64   `json:"boot_seconds"`
 	SnapshotBytes int64     `json:"snapshot_bytes"`
 	StateBytes    int64     `json:"state_bytes"`
@@ -194,6 +235,7 @@ func writeRunInfo(out string, o Options, s *Settings, fs *rootfs.Result, packFil
 
 	info := RunInfo{
 		Title: s.Title, Source: o.Source, Command: s.Command, MemoryMB: s.Memory, Network: s.Network,
+		Arch: s.Arch, CPUs: s.CPUs,
 		BootSeconds: meta.BootSeconds, SnapshotBytes: meta.SnapshotBytes, StateBytes: meta.StateBytes,
 		WarmPackFiles: packFiles, WarmPackBytes: packBytes, Files: len(fs.Files),
 		BuiltAt: time.Now().UTC().Truncate(time.Second), Snowglobe: version,
@@ -299,6 +341,30 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 		return nil, fmt.Errorf("network %q: use none or fetch", s.Network)
 	}
 
+	arch, err := ArchFor(o.Arch)
+	if err != nil {
+		return nil, err
+	}
+	s.Arch = arch.Name
+	s.CPUs = o.CPUs
+	if s.CPUs == 0 {
+		if c := label("cpus"); c != "" {
+			n, err := strconv.Atoi(c)
+			if err != nil {
+				return nil, fmt.Errorf("label %scpus: %q is not a number", labelPrefix, c)
+			}
+			s.CPUs = n
+		} else {
+			s.CPUs = 1
+		}
+	}
+	if s.CPUs < 1 || s.CPUs > 8 {
+		return nil, fmt.Errorf("cpus %d: use 1 to 8", s.CPUs)
+	}
+	if s.CPUs > 1 && s.Arch != "arm64" {
+		return nil, errors.New("more than one CPU needs --arch arm64")
+	}
+
 	if w := first(o.Warm, label("warm")); w != "" {
 		re, err := regexp.Compile(w)
 		if err != nil {
@@ -311,19 +377,39 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 	return s, nil
 }
 
-func resolveSource(source string) error {
+func resolveSource(source, platform string) error {
 	if _, err := os.Stat(filepath.Join(source, "Dockerfile")); err == nil {
-		return docker.Run("build", "--platform", "linux/386", "--tag", sourceTag, source)
+		return docker.Run("build", "--platform", platform, "--tag", sourceTag, source)
 	}
-	if err := docker.Run("pull", "--platform", "linux/386", source); err != nil {
+	if err := docker.Run("pull", "--platform", platform, source); err != nil {
 		return err
 	}
 	return docker.Run("tag", source, sourceTag)
 }
 
+// pruneRuntime keeps only the emulator files this site's machine loads: v86.wasm and the BIOS
+// for x86, armless.wasm (one CPU) or armless-smp.wasm (several) for arm64.
+func pruneRuntime(out, arch string, cpus int) error {
+	var drop []string
+	switch {
+	case arch == "arm64" && cpus > 1:
+		drop = []string{"v86/v86.wasm", "v86/v86-fallback.wasm", "bios", "v86/armless.wasm"}
+	case arch == "arm64":
+		drop = []string{"v86/v86.wasm", "v86/v86-fallback.wasm", "bios", "v86/armless-smp.wasm"}
+	default:
+		drop = []string{"v86/armless.wasm", "v86/armless-smp.wasm"}
+	}
+	for _, f := range drop {
+		if err := os.RemoveAll(filepath.Join(out, f)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // exportRootfs streams `docker export` of the boot image straight into the converter.
-func exportRootfs(systemDir string) (*rootfs.Result, error) {
-	container, err := docker.Output("create", "--platform", "linux/386", bootTag)
+func exportRootfs(systemDir, platform string) (*rootfs.Result, error) {
+	container, err := docker.Output("create", "--platform", platform, bootTag)
 	if err != nil {
 		return nil, err
 	}

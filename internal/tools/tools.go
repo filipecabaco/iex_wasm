@@ -44,7 +44,8 @@ func Build(version string) (*Image, error) {
 	return &Image{tag: tag}, nil
 }
 
-// CopySite copies the browser runtime (v86, xterm.js, BIOS) into out.
+// CopySite copies the browser runtime (v86 with both machines, xterm.js, BIOS) into out.
+// build.pruneRuntime then drops what the site's machine doesn't load.
 func (i *Image) CopySite(out string) error {
 	return i.run(out, "cp", "-R", "/tools/site/.", "/out/")
 }
@@ -52,9 +53,9 @@ func (i *Image) CopySite(out string) error {
 // Snapshot boots <out>/system in v86 and writes the state, console replay and reads.json there.
 //
 // After the snapshot it types each exercise command into the app and records what it reads.
-func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string, network string) error {
+func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string, network, arch string, cpus int) error {
 	args := []string{"node", "/tools/build-state.mjs", "/tools/node_modules/v86/build", "/out/bios", "/out/system",
-		"--memory", fmt.Sprint(memoryMB), "--network", network}
+		"--memory", fmt.Sprint(memoryMB), "--network", network, "--arch", arch, "--cpus", fmt.Sprint(cpus)}
 	if ready != "" {
 		args = append(args, "--ready", ready)
 	}

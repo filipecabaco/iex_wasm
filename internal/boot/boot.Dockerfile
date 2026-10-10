@@ -2,7 +2,8 @@
 # that mounts the root filesystem over 9p, OpenRC, and consoles. Based on upstream v86's
 # tools/docker/alpine.
 #
-# BASE must be an i386 Alpine image (v86 emulates a 32-bit x86 CPU); snowglobe always passes it.
+# BASE is the app image, i386 or arm64 Alpine; snowglobe always passes it, and builds this for
+# the same platform. On arm64 linux-virt's kernel is an EFI zboot image, which armless unpacks.
 ARG BASE=i386/alpine:3.24.2
 FROM ${BASE}
 

@@ -1,0 +1,20 @@
+[package]
+name = "snowglobe-vm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "snowglobe's machine runtime: boots and snapshots a site's guest, and runs built sites (armless)"
+license = "MIT"
+
+[dependencies]
+armless = { git = "https://github.com/filipecabaco/armless", rev = "c76deb540f0e9f479198fd6ea08bd0de45ac837c" }
+libc = "0.2"
+regex = { version = "1", default-features = false, features = ["std", "perf"] }
+serde_json = "1"
+zstd = { version = "0.13", default-features = false, features = ["zstdmt"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

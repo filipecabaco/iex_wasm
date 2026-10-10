@@ -22,10 +22,10 @@ type Console struct {
 	Command string // a shell command line
 }
 
-// Build builds the boot layer on top of base and tags it as tag. network is "none" or a v86
-// network backend ("fetch"); anything but "none" configures DHCP on the guest's NIC and trusts
-// caPEM, the CA the page signs HTTPS certificates with.
-func Build(base, tag string, console Console, network string, caPEM []byte) error {
+// Build builds the boot layer on top of base for platform (linux/386 or linux/arm64) and tags it
+// as tag. network is "none" or a v86 network backend ("fetch"); anything but "none" configures
+// DHCP on the guest's NIC and trusts caPEM, the CA the page signs HTTPS certificates with.
+func Build(base, tag, platform string, console Console, network string, caPEM []byte) error {
 	context, err := os.MkdirTemp("", "snowglobe-boot-")
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func Build(base, tag string, console Console, network string, caPEM []byte) erro
 		return err
 	}
 
-	return docker.Run("build", "--platform", "linux/386", "--build-arg", "BASE="+base,
+	return docker.Run("build", "--platform", platform, "--build-arg", "BASE="+base,
 		"--build-arg", "NETWORK="+network, "--tag", tag, context)
 }
 

@@ -61,14 +61,21 @@ Build flags:
                   browser's fetch(), upgraded to HTTPS on HTTPS pages; servers must allow CORS
   --exercise CMD  a command to type into the app after the snapshot, recording the files it reads
                   so they're preloaded too; repeatable. A warm-report.json explains the result
+  --arch NAME     x86 (default: 32-bit x86, FROM i386/alpine) or arm64 (64-bit ARM, FROM
+                  arm64v8/alpine; the armless AArch64 machine). Multi-arch bases such as
+                  "FROM alpine" build for either
+  --cpus N        arm64 only: guest CPUs (default: 1). More than one runs each CPU in a Web
+                  Worker; the page then makes itself cross-origin isolated with a service worker
 
 An image can carry its own settings as labels, which flags override:
   LABEL snowglobe.ready="iex(1)> " snowglobe.title="My app" snowglobe.memory="256" \
         snowglobe.exercise='["h Enum.map", "Task.async(fn -> 1 end)"]'
   LABEL snowglobe.network="fetch"
 
-The image must be 32-bit Alpine (FROM i386/alpine): v86 emulates a 32-bit x86 CPU.
-Docker is the only requirement.
+The image must be Alpine for the chosen --arch: 32-bit x86 (i386/alpine), or 64-bit ARM
+(arm64v8/alpine) with --arch arm64. Docker is the only requirement; building arm64 images on
+an x86 host needs QEMU's binfmt handlers (Docker Desktop has them; on Linux:
+docker run --privileged --rm tonistiigi/binfmt --install arm64).
 `
 
 func main() {
@@ -137,6 +144,8 @@ func runBuild(args []string) error {
 	fs.StringVar(&o.Warm, "warm", "", "")
 	fs.Func("exercise", "", func(v string) error { o.Exercise = append(o.Exercise, v); return nil })
 	fs.StringVar(&o.Network, "network", "", "")
+	fs.StringVar(&o.Arch, "arch", "", "")
+	fs.IntVar(&o.CPUs, "cpus", 0, "")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 
 	positional, err := parse(fs, args)

@@ -21,6 +21,8 @@ type Page struct {
 	Title    string
 	MemoryMB int    // must match the snapshot
 	Network  string // "none" or a v86 network backend; must match the snapshot
+	Arch     string // "x86" or "arm64"; must match the snapshot
+	CPUs     int    // arm64: must match the snapshot; more than one needs cross-origin isolation
 }
 
 // Render writes <out>/index.html and marks the site for GitHub Pages.
