@@ -198,3 +198,30 @@ pub fn host(board: &Arc<armless::Board>, blobs: PathBuf, network: &str, activity
         Box::new(move |e| a.observe(e)),
     )
 }
+
+/// Whether the guest's CPUs are working: a command that computes without printing is not done
+/// yet. Judged by the instructions run since the last look; an idle Linux guest runs only its
+/// timer ticks (well under a million a second), a busy CPU runs tens of millions.
+pub struct Load {
+    last: u64,
+    at: Instant,
+}
+
+/// Instructions per second, over all CPUs, above which the guest counts as busy
+const BUSY_RATE: f64 = 25_000_000.0;
+
+impl Load {
+    pub fn new(runner: &armless::runner::Runner) -> Load {
+        Load { last: runner.insn_count(), at: Instant::now() }
+    }
+
+    /// Busy since the last call?
+    pub fn busy(&mut self, runner: &armless::runner::Runner) -> bool {
+        let now = runner.insn_count();
+        let secs = self.at.elapsed().as_secs_f64().max(1e-3);
+        let rate = now.saturating_sub(self.last) as f64 / secs;
+        self.last = now;
+        self.at = Instant::now();
+        rate > BUSY_RATE
+    }
+}

@@ -82,7 +82,7 @@ fn main() -> ExitCode {
         return usage();
     };
     let result = match command.as_str() {
-        "snapshot" => Args::parse(rest, &["memory", "cpus", "network", "ready", "exercise"])
+        "snapshot" => Args::parse(rest, &["memory", "cpus", "network", "ready", "exercise", "cols", "rows"])
             .and_then(|a| snapshot::main(&a)),
         "run" => Args::parse(rest, &["blobs", "socket", "forward"]).and_then(|a| run::main(&a)),
         "exec" => {

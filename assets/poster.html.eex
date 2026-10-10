@@ -36,6 +36,6 @@
     <h1><%= h.(card["name"]) %>,<br>running in this post.</h1>
 <pre><%= lines %></pre>
   </div>
-  <div class="foot"><b>Tap to boot it</b><span>Linux on x86, in WebAssembly</span></div>
+  <div class="foot"><b>Tap to boot it</b><span>Linux on 64-bit ARM, in WebAssembly</span></div>
 </body>
 </html>

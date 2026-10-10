@@ -32,6 +32,7 @@ const COMMAND_CAP: Duration = Duration::from_secs(300);
 
 struct Session {
     board: Arc<Board>,
+    runner: Arc<Runner>,
     activity: Arc<Activity>,
     /// The console output saved with the snapshot
     persisted: Vec<u8>,
@@ -48,8 +49,13 @@ impl Session {
 
     fn quiet(&self) {
         let begun = Instant::now();
-        while (self.activity.connected() || self.activity.idle_for() < QUIET) && begun.elapsed() < COMMAND_CAP {
+        let mut load = machine::Load::new(&self.runner);
+        loop {
             std::thread::sleep(Duration::from_millis(100));
+            let busy = load.busy(&self.runner);
+            if !(busy || self.activity.connected() || self.activity.idle_for() < QUIET) || begun.elapsed() >= COMMAND_CAP {
+                break;
+            }
         }
     }
 
@@ -57,6 +63,13 @@ impl Session {
     /// the prompt left waiting after it are the terminal's, not the command's, so they're cut.
     fn exec(&self, command: &str) -> Vec<u8> {
         let _one_at_a_time = self.exec_lock.lock().unwrap();
+        // The prompt the command is typed after: the screen's last line so far (right after a
+        // restore, that's in the console saved with the snapshot)
+        let prompt = {
+            let screen = self.screen();
+            let line = screen.rsplit(|&b| b == b'\n').next().unwrap_or_default();
+            String::from_utf8_lossy(&text::plain(line)).trim().to_string()
+        };
         let from = self.activity.screen.lock().unwrap().total();
         self.board
             .console_input(format!("{}\r", command.trim_end_matches('\n')).as_bytes());
@@ -84,7 +97,20 @@ impl Session {
             }
             lines.drain(..cut);
         }
-        lines.pop(); // the prompt now waiting for the next command
+        // The prompt now waiting for the next command. Output that didn't end its line (printf,
+        // curl -w) shares that line: keep what comes before the prompt
+        if let Some(last) = lines.pop() {
+            let last = String::from_utf8_lossy(&text::plain(last.as_bytes())).into_owned();
+            let rest = last.trim_end();
+            let rest = if prompt.is_empty() { "" } else { rest.strip_suffix(prompt.as_str()).unwrap_or("") };
+            if !rest.is_empty() {
+                let mut out = lines.join("\n");
+                if !out.is_empty() {
+                    out.push('\n');
+                }
+                return (out + rest + "\n").into_bytes();
+            }
+        }
         if lines.is_empty() {
             Vec::new()
         } else {
@@ -125,9 +151,11 @@ pub fn main(args: &Args) -> Result<u8, String> {
     let activity = Activity::new(false);
     let host = Arc::new(machine::host(&board, blobs, &spec.network, &activity));
     runner.start();
+    let runner = Arc::new(runner);
 
     let session = Arc::new(Session {
         board: board.clone(),
+        runner: runner.clone(),
         activity: activity.clone(),
         persisted: std::fs::read(system.join("console.bin")).unwrap_or_default(),
         exec_lock: Mutex::new(()),
@@ -282,8 +310,24 @@ fn serve(session: &Session, stream: UnixStream) {
     let _ = writer.shutdown(std::net::Shutdown::Both);
 }
 
+/// How long exec and attach wait for a detached instance that is still restoring
+const RESTORE_WAIT: Duration = Duration::from_secs(120);
+
 fn connect(socket: &str) -> Result<UnixStream, String> {
-    UnixStream::connect(socket).map_err(|e| format!("can't reach the instance ({e}); is it still restoring?"))
+    let begun = Instant::now();
+    loop {
+        match UnixStream::connect(socket) {
+            Ok(s) => return Ok(s),
+            // Not listening yet: the instance is still restoring its snapshot
+            Err(e)
+                if matches!(e.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::ConnectionRefused)
+                    && begun.elapsed() < RESTORE_WAIT =>
+            {
+                std::thread::sleep(Duration::from_millis(200))
+            },
+            Err(e) => return Err(format!("can't reach the instance ({e}); did it stop?")),
+        }
+    }
 }
 
 /// `exec`: type one command into the app, print what it printed.

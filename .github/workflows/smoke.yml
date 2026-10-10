@@ -1,0 +1,74 @@
+name: Smoke test
+
+# One small site, built and driven end to end the way people use it: snowglobe build, then
+# snowglobe run (piped and detached), exec, attach, -p port forwarding, and HTTP(S) out of the
+# guest. arm64 runners build the arm64 guest natively.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs Go from mise.toml (cached between runs)
+      - uses: jdx/mise-action@v5
+
+      - name: Use a Docker Hub mirror
+        run: |
+          config=/etc/docker/daemon.json
+          [ -s "$config" ] || echo '{}' | sudo tee "$config" > /dev/null
+          sudo jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' "$config" | sudo tee "$config.new" > /dev/null
+          sudo mv "$config.new" "$config"
+          sudo systemctl restart docker
+
+      - name: Build the curl example
+        run: |
+          go build -o snowglobe ./cmd/snowglobe
+          ./snowglobe build examples/curl --out dist/curl
+
+      - name: Run it piped
+        run: |
+          out=$(printf 'uname -m\n' | ./snowglobe run dist/curl)
+          echo "$out"
+          [ "$out" = aarch64 ]
+
+      - name: Detached, exec, HTTP(S) out of the guest
+        run: |
+          ./snowglobe run dist/curl --name smoke --detach -p 18000:8000
+          ./snowglobe exec smoke 'nproc' | tee nproc.txt
+          [ "$(cat nproc.txt)" = 1 ]
+          ./snowglobe exec smoke 'curl -sS -o /dev/null -w "%{http_code}" https://api.github.com/zen' | tee https.txt
+          [ "$(cat https.txt)" = 200 ]
+          ./snowglobe exec smoke 'curl -sS -o /dev/null -w "%{http_code}" http://example.com/' | tee http.txt
+          [ "$(cat http.txt)" = 200 ]
+
+      - name: Port forwarding into the guest
+        run: |
+          ./snowglobe exec smoke '(while true; do printf "HTTP/1.0 200 OK\r\n\r\nhello from the guest\n" | nc -l -p 8000; done) >/dev/null 2>&1 &'
+          for i in 1 2 3 4 5; do
+            body=$(curl -sS -m 20 http://127.0.0.1:18000/ || true)
+            [ "$body" = "hello from the guest" ] && break
+            sleep 2
+          done
+          echo "$body"
+          [ "$body" = "hello from the guest" ]
+
+      - name: Attach and detach
+        run: |
+          out=$( (sleep 2; printf 'echo attached-$((40+2))\n'; sleep 3; printf '\035') | ./snowglobe attach smoke)
+          echo "$out"
+          echo "$out" | grep -q attached-42
+          ./snowglobe ps | grep -q smoke
+
+      - name: Clean up
+        if: always()
+        run: ./snowglobe stop smoke || true

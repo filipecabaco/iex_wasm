@@ -194,9 +194,9 @@
         for (const [k, v] of Object.entries({ autocapitalize: "off", autocorrect: "off", autocomplete: "off", spellcheck: "false" })) field.setAttribute(k, v);
         field.setAttribute("enterkeyhint", "send");
       }
-      // Size the terminal to the screen before showing anything, so the replayed screen wraps at
-      // the width the visitor actually has, then tell the guest: what the app prints from here
-      // wraps to it, and full-screen apps redraw for it
+      // Replay the app's screen at the size it was drawn at, so the terminal is exactly what the
+      // app (a full-screen UI, a line editor) last drew; then fit it to the window and tell the
+      // guest, and the app redraws for the new size as it would in any resized terminal
       if (matchMedia("(max-width: 640px)").matches) term.options.fontSize = 13;
       const fit = new FitAddon.FitAddon();
       term.loadAddon(fit);
@@ -204,7 +204,11 @@
         fit.fit();
         emulator.console_resize(term.cols, term.rows);
       };
+      {{- if .ConsoleCols}}
+      term.resize({{.ConsoleCols}}, {{.ConsoleRows}});
+      {{- else}}
       fit.fit();
+      {{- end}}
       const replay = await screen;
       if (replay) term.write(new Uint8Array(replay));
       emulator.on("console", (bytes) => term.write(bytes));

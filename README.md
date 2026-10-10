@@ -20,7 +20,8 @@ snowglobe pool sites              # several sites under one host share a single 
 
 > [!NOTE]
 > This is an experiment. Everything runs on an emulated 64-bit ARM CPU (translated to WebAssembly as
-> it runs), so expect it to be slower than native.
+> it runs), so expect it to be slower than native. A site can have up to 8 CPUs (`--cpus`), which
+> helps programs that use them: the Elixir demo runs CPU-bound tasks about 4× faster on 4.
 
 ## What you need
 
@@ -174,6 +175,32 @@ Piped stdin is typed in one line at a time, each waiting until the app goes quie
 only what the command printed (no echo, no prompt) and plain text when its output isn't a
 terminal, which suits scripts and agents. Each instance starts fresh from the snapshot.
 
+### Two more examples, for `snowglobe run`
+
+Two examples in [`examples/`](examples) aren't on the demo site:
+
+- **[`apk`](examples/apk)** installs Alpine packages into the running machine (`apk add figlet`).
+  Alpine's mirrors don't allow CORS, so this only works under `snowglobe run`, where the guest's
+  requests go out from the host.
+- **[`supabase`](examples/supabase)** runs the Supabase CLI's native local stack (Postgres,
+  PostgREST and Auth as plain processes, no Docker) inside the guest, on 4 CPUs, with `notes`, a
+  small app on it: users sign up through Auth, notes go through the REST API, and row level
+  security keeps each user's notes their own. The stack's services are glibc programs, so the
+  image carries Debian's glibc next to Alpine's musl. At about 250 MB of files it's too big for the
+  demo site, but it runs in a browser tab like the others (`snowglobe serve`).
+
+```console
+$ snowglobe build examples/supabase --out dist/supabase
+$ snowglobe run dist/supabase
+supa:~/app$ notes signup ada@example.com lovelace-1815
+signed in as ada@example.com (0941bc18)
+supa:~/app$ notes add first program, for the analytical engine
+#1 added
+supa:~/app$ notes signup grace@example.com hopper-1906 && notes ls
+signed in as grace@example.com (66973d17)
+grace@example.com: 0 note(s)
+```
+
 ## The warm cache
 
 The guest's files are fetched on demand: the first time the guest reads a file, it waits on one
@@ -192,13 +219,13 @@ bytes). What the demos show:
 
 | Demo | Boot | First commands | Never read | What dominates |
 |------|-----:|---------------:|-----------:|----------------|
-| Elixir + Postgres | 24.7 MB | 0 | 23.9 MB | a release in embedded mode loads every module at startup, and Postgres reads its catalog as it starts |
-| Python + Rich | 8.5 MB | 0.1 MB | 36.9 MB | the startup file imports Rich, so its modules are boot reads |
-| TypeScript + Zod | 25.8 MB | 4.1 MB | 22.2 MB | the `node` binary, then tsx/esbuild and Zod's modules on first use |
-| Go + Bubble Tea | 5.4 MB | 0 | 18.1 MB | one static binary, read at boot |
-| Rust + clap | 4.0 MB | 0.5 MB | 18.1 MB | `jtab` is read on first use; the shell is all that boots |
-| Java + Gson | 39.2 MB | 0 | 91.1 MB | the JDK's 30 MB `lib/modules` image, opened at boot |
-| curl + jq | 4.1 MB | 2.4 MB | 17.9 MB | `curl`, its TLS and `jq` load on the first request |
+| Elixir + Postgres | 23.8 MB | 0 | 30.6 MB | a release in embedded mode loads every module at startup, and Postgres reads its catalog as it starts |
+| Python + Rich | 8.3 MB | 0.1 MB | 43.5 MB | the startup file imports Rich, so its modules are boot reads |
+| TypeScript + Zod | 25.6 MB | 3.8 MB | 29.1 MB | the `node` binary, then tsx/esbuild and Zod's modules on first use |
+| Go + Bubble Tea | 5.4 MB | 0 | 25.1 MB | one static binary, read at boot |
+| Rust + clap | 4.0 MB | 0.4 MB | 25.1 MB | `jtab` is read on first use; the shell is all that boots |
+| Java + Gson | 48.2 MB | 0 | 115.4 MB | the JDK's `lib/modules` image, opened at boot |
+| curl + jq | 4.1 MB | 2.3 MB | 24.9 MB | `curl`, its TLS and `jq` load on the first request |
 
 Whatever a program loads lazily needs exercises to warm well (TypeScript's compile path, Zod,
 first-use tools); whatever it loads up front (a release in embedded mode, a startup file's imports,

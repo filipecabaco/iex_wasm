@@ -66,12 +66,21 @@ func (i *Image) CopySite(out string) error {
 	return i.run(out, nil, "cp", "-R", "/tools/site/.", "/out/")
 }
 
+// The console size the guest boots and is snapshotted with. The page replays the snapshot's
+// screen at this size before fitting the terminal to the window, so full-screen apps and line
+// editors find the screen exactly as they left it, then get a resize like any other.
+const (
+	ConsoleCols = 90
+	ConsoleRows = 30
+)
+
 // Snapshot boots <out>/system and writes the state, console replay and reads.json there.
 //
 // After the snapshot it types each exercise command into the app and records what it reads.
 func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string, network string, cpus int) error {
 	args := []string{VM, "snapshot", "/out/system",
-		"--memory", fmt.Sprint(memoryMB), "--network", network, "--cpus", fmt.Sprint(cpus)}
+		"--memory", fmt.Sprint(memoryMB), "--network", network, "--cpus", fmt.Sprint(cpus),
+		"--cols", fmt.Sprint(ConsoleCols), "--rows", fmt.Sprint(ConsoleRows)}
 	if ready != "" {
 		args = append(args, "--ready", ready)
 	}
