@@ -228,6 +228,8 @@ jobs:
 
   deploy:
     needs: assemble
+    # main-demo is skipped on main, and a skip upstream would skip this too
+    if: ${{ !cancelled() && needs.assemble.result == 'success' }}
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
