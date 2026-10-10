@@ -6,7 +6,7 @@ fi
 export SUPABASE_EXPERIMENTAL_STACK=1 SUPABASE_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 CI=1
 
 echo "Starting Supabase's native stack: Postgres, PostgREST and Auth (no Docker) ..."
-supabase stack start --runtime native \
+supabase stack start --runtime native --eager \
   -x realtime -x storage -x functions -x studio -x mail -x analytics -x pooler </dev/null 2>&1 |
   grep -v -e "new version of Supabase CLI" -e "recommend updating" || exit 1
 # API_URL, DB_URL, ANON_KEY, SERVICE_ROLE_KEY, ... for the shell (the stack picks its own ports)
