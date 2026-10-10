@@ -44,12 +44,21 @@ jobs:
       - name: Detached, exec, HTTP(S) out of the guest
         run: |
           ./snowglobe run dist/curl --name smoke --detach -p 18000:8000
+          # Each check says what it got (annotations are readable without the log)
+          expect() {
+            if [ "$(cat "$1")" != "$2" ]; then
+              echo "::error title=$3::expected '$2', got '$(head -c 600 "$1" | tr '\n\r%' ';;_')'"
+              return 1
+            fi
+          }
+          status=0
           ./snowglobe exec smoke 'nproc' | tee nproc.txt
-          [ "$(cat nproc.txt)" = 1 ]
+          expect nproc.txt 1 nproc || status=1
           ./snowglobe exec smoke 'curl -sS -o /dev/null -w "%{http_code}" https://api.github.com/zen' | tee https.txt
-          [ "$(cat https.txt)" = 200 ]
+          expect https.txt 200 "HTTPS out of the guest" || status=1
           ./snowglobe exec smoke 'curl -sS -o /dev/null -w "%{http_code}" http://example.com/' | tee http.txt
-          [ "$(cat http.txt)" = 200 ]
+          expect http.txt 200 "HTTP out of the guest" || status=1
+          exit $status
 
       - name: Port forwarding into the guest
         run: |
