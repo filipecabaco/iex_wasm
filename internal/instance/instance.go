@@ -1,6 +1,6 @@
 // Package instance runs a built site headlessly in a sandboxed container: the guest is restored
-// from its snapshot in v86 under Node, and its app console is connected to the terminal (or to a
-// pipe, or left running for `exec` and `attach`).
+// from its snapshot in armless (natively, snowglobe-vm), and its app console is connected to the
+// terminal (or to a pipe, or left running for `exec` and `attach`).
 package instance
 
 import (
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -101,7 +102,14 @@ func Run(o Options, version string) error {
 		}
 		args = append(args, "--network", "none")
 	}
-	command := []string{"node", "/tools/run.mjs", "/site"}
+	hostNetwork := false
+	if run.Network == "fetch" {
+		// Out the way the host goes out: its proxy and CA bundle, if it has them
+		net := tools.NetworkArgs()
+		hostNetwork = slices.Contains(net, "host")
+		args = append(args, net...)
+	}
+	command := []string{tools.VM, "run", "/site"}
 
 	// The container runs unprivileged, so it listens on high ports and forwards each to its guest port
 	for i, spec := range o.Publish {
@@ -109,9 +117,14 @@ func Run(o Options, version string) error {
 		if err != nil {
 			return err
 		}
-		inner := 20000 + i
-		args = append(args, "-p", fmt.Sprintf("%s:%d:%d", p.IP, p.Host, inner))
-		command = append(command, "--forward", fmt.Sprintf("%d:%d", inner, p.Guest))
+		if hostNetwork {
+			// Sharing the host's network: listen on the host port itself
+			command = append(command, "--forward", fmt.Sprintf("%s:%d:%d", p.IP, p.Host, p.Guest))
+		} else {
+			inner := 20000 + i
+			args = append(args, "-p", fmt.Sprintf("%s:%d:%d", p.IP, p.Host, inner))
+			command = append(command, "--forward", fmt.Sprintf("%d:%d", inner, p.Guest))
+		}
 		fmt.Fprintf(os.Stderr, "forwarding %s:%d to the guest's port %d\n", p.IP, p.Host, p.Guest)
 	}
 
@@ -150,7 +163,7 @@ func Run(o Options, version string) error {
 
 // Exec types one command into a running instance and prints what it printed.
 func Exec(name string, command []string) error {
-	return docker.Attached(append([]string{"exec", "--interactive", name, "node", "/tools/client.mjs", "exec"}, command...)...)
+	return docker.Attached(append([]string{"exec", "--interactive", name, tools.VM, "exec"}, command...)...)
 }
 
 // Attach joins a running instance's session; ctrl-] detaches.
@@ -159,7 +172,7 @@ func Attach(name string) error {
 	if isTerminal(os.Stdin) {
 		args = append(args, "--tty")
 	}
-	return docker.Attached(append(args, name, "node", "/tools/client.mjs", "attach")...)
+	return docker.Attached(append(args, name, tools.VM, "attach")...)
 }
 
 // Stop throws an instance away.

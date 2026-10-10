@@ -6,6 +6,17 @@
 // content hash and a new build gets a new cache, so cached files never go stale.
 const CACHE = "__CACHE__";
 const SHELL = __SHELL__;
+// Several CPUs share memory between Web Workers, which needs a cross-origin isolated page: add
+// the headers for that to the page (static hosts can't send them)
+const ISOLATE = __ISOLATE__;
+
+function isolate(response) {
+  if (!ISOLATE || !response || response.type === "opaqueredirect") return response;
+  const headers = new Headers(response.headers);
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -47,9 +58,9 @@ self.addEventListener("fetch", (event) => {
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE).then((cache) => cache.put(request, copy));
-          return response;
+          return isolate(response);
         })
-        .catch(() => caches.match(request, { ignoreSearch: true }).then((hit) => hit || caches.match("./"))),
+        .catch(() => caches.match(request, { ignoreSearch: true }).then((hit) => isolate(hit) || caches.match("./").then(isolate))),
     );
     return;
   }

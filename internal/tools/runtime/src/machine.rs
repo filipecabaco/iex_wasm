@@ -6,7 +6,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use armless::dev::{DeviceConfig, Event};
-use armless::native::{HostOptions, NativeHost};
+use armless::native::{Egress, HostOptions, NativeHost};
 use armless::platform::{Clock, NativePlatform};
 use armless::vm::{Config, Vm};
 
@@ -36,6 +36,12 @@ pub fn new_vm(spec: &Spec, system: &Path) -> Result<(Vm<NativePlatform>, Arc<Clo
     let (vm, clock) = armless::runner::new_vm(config)?;
     let json = std::fs::read(system.join("filesystem.json")).map_err(|e| format!("filesystem.json: {e}"))?;
     vm.board.load_filesystem(&json)?;
+    // With a network, the guest's HTTPS ends in the machine's web relay, with certificates from
+    // the CA made for this site (which the guest trusts); its requests then go out from here
+    if spec.network == "fetch" {
+        let tls = std::fs::read(system.join("tls.json")).map_err(|e| format!("tls.json: {e}"))?;
+        vm.board.set_tls(&tls)?;
+    }
     Ok((vm, clock))
 }
 
@@ -143,7 +149,10 @@ impl Activity {
                 }
                 self.touch();
             },
-            Event::TcpOpen { id, .. } | Event::TcpConnected { id } => {
+            Event::TcpOpen { id, .. }
+            | Event::TcpConnected { id }
+            | Event::HttpRequest { id, .. }
+            | Event::WsOpen { id, .. } => {
                 self.connections.lock().unwrap().insert(*id);
                 self.touch();
             },
@@ -151,7 +160,9 @@ impl Activity {
                 self.connections.lock().unwrap().remove(id);
                 self.touch();
             },
-            Event::TcpData { .. } | Event::TcpEof { .. } => self.touch(),
+            Event::TcpData { .. } | Event::TcpEof { .. } | Event::WsMessage { .. } | Event::WsClose { .. } => {
+                self.touch()
+            },
         }
     }
 
@@ -179,7 +190,10 @@ pub fn host(board: &Arc<armless::Board>, blobs: PathBuf, network: &str, activity
         board.clone(),
         HostOptions {
             blobs: Some(blobs),
-            nat: network == "fetch",
+            network: network == "fetch",
+            // Direct, or through the proxy the environment names: sandboxes that only let HTTPS
+            // out through a (TLS-intercepting) proxy work too
+            egress: Egress::from_env(),
         },
         Box::new(move |e| a.observe(e)),
     )

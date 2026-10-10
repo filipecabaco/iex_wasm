@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>{{.Title}}</title>
-  <meta name="description" content="{{.Title}}: a real program on Linux, running on an x86 CPU emulated in WebAssembly in this browser tab. Built with snowglobe; no server.">
+  <meta name="description" content="{{.Title}}: a real program on Linux, running on a 64-bit ARM CPU emulated in WebAssembly in this browser tab. Built with snowglobe; no server.">
   <meta property="og:type" content="website">
   <meta property="og:title" content="{{.Title}}">
-  <meta property="og:description" content="A real program on Linux, running on an x86 CPU emulated in WebAssembly in your browser tab. No server.">
+  <meta property="og:description" content="A real program on Linux, running on a 64-bit ARM CPU emulated in WebAssembly in your browser tab. No server.">
   <meta name="twitter:card" content="summary">
   <link rel="stylesheet" href="xterm/xterm.css">
   <style>
@@ -64,10 +64,7 @@
   </style>
   <script src="xterm/xterm.js"></script>
   <script src="xterm/addon-fit.js"></script>
-  <script src="v86/libv86.js"></script>
-  {{- if eq .Network "fetch"}}
-  <script src="https-bridge.js"></script>
-  {{- end}}
+  <script src="armless/armless.js"></script>
 </head>
 <body>
   <header id="strip">
@@ -102,36 +99,40 @@
     viewport?.addEventListener("scroll", trackViewport);
     trackViewport();
 
-    // Rendered by snowglobe. Everything below must match build-state.mjs:
-    // the snapshot is only valid for the same RAM size and devices
-    const emulator = new V86({
-      wasm_path: "v86/v86.wasm",
-      memory_size: {{.MemoryMB}} * 1024 * 1024,
-      vga_memory_size: 8 * 1024 * 1024,
-      bios: { url: "bios/seabios.bin" },
-      vga_bios: { url: "bios/vgabios.bin" },
-      filesystem: {
-        basefs: "system/filesystem.json",
-        baseurl: "system/filesystem/",
-      },
-      initial_state: { url: "system/state.bin.zst" },
-      {{- if eq .Network "fetch"}}
-      // The guest's HTTP requests become this page's fetch() calls; https-bridge.js does HTTPS
-      net_device: { type: "virtio", relay_url: "fetch" },
-      {{- end}}
-      // The app runs on the virtio console (hvc0), rendered with xterm.js
-      virtio_console: {
-        type: "xtermjs",
-        container: document.getElementById("terminal"),
-        xterm_lib: Terminal,
-      },
-      disable_speaker: true,
-      autostart: true,
-    });
+    // Several CPUs share memory between Web Workers, which needs a cross-origin isolated page:
+    // sw.js adds the headers for that, once it controls the page (one reload, the first time)
+    const cpus = {{.CPUs}};
+    let isolationNeeded = cpus > 1 && !crossOriginIsolated;
+    if (isolationNeeded) {
+      let tried = false;
+      try { tried = sessionStorage.getItem("snowglobe-isolate") === "1"; } catch {}
+      if ("serviceWorker" in navigator && !tried) {
+        try { sessionStorage.setItem("snowglobe-isolate", "1"); } catch {}
+        navigator.serviceWorker.register("sw.js")
+          .then(() => navigator.serviceWorker.ready)
+          .then(() => location.reload(), () => {});
+      }
+    } else {
+      try { sessionStorage.removeItem("snowglobe-isolate"); } catch {}
+    }
 
-    {{- if eq .Network "fetch"}}
-    SnowglobeHTTPS.attach(emulator, "system/tls.json");
-    {{- end}}
+    // Rendered by snowglobe. Everything below must match the snapshot (snowglobe-vm snapshot):
+    // the same RAM size, CPUs and devices
+    const emulator = isolationNeeded ? null : new Armless({
+      wasm: "armless/armless.wasm",
+      wasm_smp: "armless/armless-smp.wasm",
+      memory_mb: {{.MemoryMB}},
+      cpus,
+      filesystem: { json: "system/filesystem.json", baseurl: "system/filesystem/" },
+      initial_state: "system/state.bin.zst",
+      {{- if eq .Network "fetch"}}
+      // The guest's HTTP(S) and WebSockets end in the machine (HTTPS with a CA made for this
+      // site) and go out as this page's own fetch() and WebSocket
+      network: { tls: "system/tls.json" },
+      {{- end}}
+      // The terminal is set up (and the screen replayed) before the guest runs
+      autostart: false,
+    });
 
     const embedded = new URLSearchParams(location.search).has("embed");
     if (embedded) document.documentElement.classList.add("embed");
@@ -164,22 +165,29 @@
       announce();
     };
 
-    emulator.add_listener("download-progress", (e) => {
-      if (e.file_name.endsWith("state.bin.zst") && e.lengthComputable) {
+    if (isolationNeeded) {
+      setStatus("loading", "isolating");
+      if (!("serviceWorker" in navigator)) setStatus("error", "needs a browser with service workers");
+    }
+
+    emulator?.on("progress", (e) => {
+      if (e.file.endsWith("state.bin.zst") && e.total) {
         run.progress = Math.round((e.loaded / e.total) * 100);
         setStatus("loading", `loading ${run.progress}%`);
       }
     });
+    emulator?.on("error", (error) => setStatus("error", `failed: ${error.message || error}`));
+    emulator?.on("stop", ({ reason }) => setStatus("stopped", reason === "poweroff" ? "powered off" : `stopped (${reason})`));
 
     // The app's console output up to the snapshot, so the terminal shows what it printed
     const screen = fetch("system/console.bin").then((r) => (r.ok ? r.arrayBuffer() : null));
 
-    emulator.add_listener("emulator-started", async () => {
+    emulator?.ready.then(async () => {
       run.readyAt = Date.now();
-      setStatus("ready", "running");
       document.documentElement.classList.add("running");
 
-      const term = emulator.virtio_console_adapter.term;
+      const term = new Terminal({ cursorBlink: true, scrollback: 5000, allowProposedApi: false });
+      term.open(document.getElementById("terminal"));
       // A terminal is not prose: no autocorrect, capitals or suggestions from touch keyboards
       const field = term.textarea;
       if (field) {
@@ -194,19 +202,21 @@
       term.loadAddon(fit);
       const resize = () => {
         fit.fit();
-        // v86 0.5.462 forwards this pair as-is into Linux's resize message, which is
-        // rows-first, so pass rows first for the guest to see the right size
-        emulator.bus.send("virtio-console0-resize", [term.rows, term.cols]);
+        emulator.console_resize(term.cols, term.rows);
       };
       fit.fit();
       const replay = await screen;
       if (replay) term.write(new Uint8Array(replay));
+      emulator.on("console", (bytes) => term.write(bytes));
       window.addEventListener("resize", resize);
       viewport?.addEventListener("resize", resize);
       resize();
 
-      queueInput(term);
+      // Input is queued in the machine until the guest takes it: nothing typed or pasted is lost
+      term.onData((data) => emulator.console_input(withCtrl(data)));
       keyBar(term);
+      emulator.run();
+      setStatus("ready", "running");
       term.focus();
 
       preloadWarmPack();
@@ -214,16 +224,8 @@
 
     // The guest's files are fetched one blocking request at a time the first time each is read.
     // warm.pack bundles the files the app is most likely to need so they arrive in a single
-    // background download and land in v86's file cache before the guest asks for them.
+    // background download and are in the machine before the guest asks for them.
     async function preloadWarmPack() {
-      const storage = emulator.fs9p?.storage;
-      if (!storage?.cache || !storage.storage?.read) return; // v86 internals changed: skip
-
-      // v86 evicts a file from its cache whenever the guest closes it, so every reopen (BEAM
-      // reading docs, a new process loading a .so) goes back to the network. Blobs are immutable
-      // and the set the guest touches is small, so keep them for the whole session.
-      storage.uncache = () => {};
-
       const response = await fetch("system/warm.pack");
       if (!response.ok) return;
       const pack = new Uint8Array(await response.arrayBuffer());
@@ -231,27 +233,14 @@
       const index = JSON.parse(new TextDecoder().decode(pack.subarray(4, 4 + indexSize)));
 
       let offset = 4 + indexSize;
-      for (const [name, size, length] of index) {
+      for (const [name, , length] of index) {
         const blob = pack.subarray(offset, offset + length);
         offset += length;
-        if (await storage.storage.read(name, 0, 0)) continue; // the guest already loaded it
-        await storage.cache(name, new Uint8Array(storage.zstd_decompress(size, blob)));
+        if (emulator.has_blob(name)) continue; // the guest already loaded it
+        emulator.provide_blob(name, blob);
         // Yield between files so typing stays responsive while the cache fills
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
-    }
-
-    // v86 (0.5.462) drops console input when the guest has no receive buffer queued, which loses
-    // keystrokes when typing fast or pasting. Queue input here and only send it when one is free.
-    const encoder = new TextEncoder();
-    let pending = [];
-    let rx = null;
-
-    function queueInput(term) {
-      rx = emulator.v86?.cpu?.devices?.virtio_console?.virtio?.queues?.[0];
-      if (!rx) return; // internals moved in a newer v86: keep its default (lossy) input
-      emulator.virtio_console_adapter.on_data_disposable.dispose();
-      term.onData((data) => sendInput(encoder.encode(withCtrl(data))));
     }
 
     // The touch key bar. ctrl is sticky: it applies to the next key typed on the keyboard
@@ -272,7 +261,7 @@
         if (!button) return;
         event.preventDefault(); // keep focus (and the keyboard) on the terminal
         if (button.hasAttribute("data-ctrl")) return arm(!ctrlArmed);
-        sendInput(encoder.encode(keys[button.dataset.send]()));
+        emulator.console_input(keys[button.dataset.send]());
         arm(false);
         term.focus();
       });
@@ -287,18 +276,6 @@
       return code >= 64 && code <= 95 ? String.fromCharCode(code - 64) : data;
     }
 
-    function sendInput(bytes) {
-      // One guest buffer per send; keep chunks small so each fits
-      for (let i = 0; i < bytes.length; i += 64) pending.push(bytes.subarray(i, i + 64));
-      pump();
-    }
-
-    function pump() {
-      while (pending.length && (!rx || rx.has_request())) {
-        emulator.bus.send("virtio-console0-input-bytes", pending.shift());
-      }
-      if (pending.length) setTimeout(pump, 5);
-    }
   </script>
 </body>
 </html>

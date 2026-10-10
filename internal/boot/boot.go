@@ -1,4 +1,4 @@
-// Package boot adds the layer that makes an image bootable in v86: kernel, 9p initramfs and
+// Package boot adds the layer that makes an image bootable in armless: kernel, 9p initramfs and
 // consoles, plus the script that runs the app on the browser terminal.
 package boot
 
@@ -22,9 +22,9 @@ type Console struct {
 	Command string // a shell command line
 }
 
-// Build builds the boot layer on top of base for platform (linux/386 or linux/arm64) and tags it
-// as tag. network is "none" or a v86 network backend ("fetch"); anything but "none" configures
-// DHCP on the guest's NIC and trusts caPEM, the CA the page signs HTTPS certificates with.
+// Build builds the boot layer on top of base for platform (linux/arm64) and tags it as tag.
+// network is "none" or "fetch"; "fetch" configures DHCP on the guest's NIC and trusts caPEM, the
+// CA the machine's web relay signs HTTPS certificates with.
 func Build(base, tag, platform string, console Console, network string, caPEM []byte) error {
 	context, err := os.MkdirTemp("", "snowglobe-boot-")
 	if err != nil {

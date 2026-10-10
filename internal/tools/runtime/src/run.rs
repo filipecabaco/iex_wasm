@@ -150,11 +150,16 @@ pub fn main(args: &Args) -> Result<u8, String> {
     // Port forwarding: host -> container -> guest. Each connection becomes a TCP connection from
     // the guest's router to the guest port, through the same network the guest's own requests use
     for spec in args.all("forward") {
-        let (listen, guest) = spec
+        // [ADDRESS:]PORT:GUEST_PORT (all addresses by default)
+        let (addr, rest) = match spec.matches(':').count() {
+            2 => spec.split_once(':').map(|(a, r)| (a.to_string(), r.to_string())).unwrap(),
+            _ => ("0.0.0.0".to_string(), spec.clone()),
+        };
+        let (listen, guest) = rest
             .split_once(':')
             .and_then(|(l, g)| Some((l.parse::<u16>().ok()?, g.parse::<u16>().ok()?)))
-            .ok_or_else(|| format!("--forward {spec}: use PORT:GUEST_PORT"))?;
-        let l = TcpListener::bind(("0.0.0.0", listen)).map_err(|e| format!("port {listen}: {e}"))?;
+            .ok_or_else(|| format!("--forward {spec}: use [ADDRESS:]PORT:GUEST_PORT"))?;
+        let l = TcpListener::bind((addr.as_str(), listen)).map_err(|e| format!("{addr}:{listen}: {e}"))?;
         let host = host.clone();
         std::thread::spawn(move || {
             for stream in l.incoming().flatten() {

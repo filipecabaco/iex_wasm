@@ -1,10 +1,9 @@
-# Boot layer snowglobe adds on top of an app image so v86 can run it: a kernel, an initramfs
-# that mounts the root filesystem over 9p, OpenRC, and consoles. Based on upstream v86's
-# tools/docker/alpine.
+# Boot layer snowglobe adds on top of an app image so armless can run it: a kernel, an initramfs
+# that mounts the root filesystem over 9p, OpenRC, and consoles.
 #
-# BASE is the app image, i386 or arm64 Alpine; snowglobe always passes it, and builds this for
-# the same platform. On arm64 linux-virt's kernel is an EFI zboot image, which armless unpacks.
-ARG BASE=i386/alpine:3.24.2
+# BASE is the app image (arm64 Alpine); snowglobe always passes it, and builds this for
+# linux/arm64. linux-virt's kernel is an EFI zboot image, which armless unpacks.
+ARG BASE=alpine:3.24.2
 FROM ${BASE}
 
 RUN apk add --no-cache openrc alpine-base agetty linux-virt linux-firmware-none
@@ -28,8 +27,8 @@ RUN for i in devfs dmesg mdev hwdrivers; do rc-update add $i sysinit; done && \
     for i in modules sysctl hostname bootmisc; do rc-update add $i boot; done && \
     rc-update add killprocs shutdown
 
-# Networking, only when the site asks for it: DHCP on the virtio NIC, which v86's backend answers.
-# HTTPS is terminated by the page with certificates from a CA made for this build: trust it in the
+# Networking, only when the site asks for it: DHCP on the virtio NIC, which armless answers.
+# HTTPS is terminated by armless's web relay with certificates from a CA made for this build: trust it in the
 # system bundle and in the runtimes that keep their own (Node, Python's requests, Java).
 ARG NETWORK=none
 COPY snowglobe-ca.crt /usr/local/share/ca-certificates/snowglobe-sandbox.crt

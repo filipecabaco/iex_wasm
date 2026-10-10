@@ -11,8 +11,8 @@ import (
 //go:embed index.html.tmpl
 var page string
 
-//go:embed https-bridge.js
-var httpsBridge []byte
+//go:embed isolate.js
+var isolateWorker []byte
 
 var tmpl = template.Must(template.New("index").Parse(page))
 
@@ -20,9 +20,8 @@ var tmpl = template.Must(template.New("index").Parse(page))
 type Page struct {
 	Title    string
 	MemoryMB int    // must match the snapshot
-	Network  string // "none" or a v86 network backend; must match the snapshot
-	Arch     string // "x86" or "arm64"; must match the snapshot
-	CPUs     int    // arm64: must match the snapshot; more than one needs cross-origin isolation
+	Network  string // "none" or "fetch"; must match the snapshot
+	CPUs     int    // must match the snapshot; more than one needs cross-origin isolation
 }
 
 // Render writes <out>/index.html and marks the site for GitHub Pages.
@@ -38,8 +37,9 @@ func Render(out string, p Page) error {
 	if err := os.WriteFile(filepath.Join(out, ".nojekyll"), nil, 0o644); err != nil {
 		return err
 	}
-	if p.Network == "fetch" {
-		if err := os.WriteFile(filepath.Join(out, "https-bridge.js"), httpsBridge, 0o644); err != nil {
+	// Several CPUs need a cross-origin isolated page: sw.js makes it one
+	if p.CPUs > 1 {
+		if err := os.WriteFile(filepath.Join(out, "sw.js"), isolateWorker, 0o644); err != nil {
 			return err
 		}
 	}

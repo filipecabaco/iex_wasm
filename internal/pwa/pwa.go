@@ -39,8 +39,8 @@ const (
 
 // The files a run can't start without; everything else is cached as the page fetches it
 var shell = []string{"./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png",
-	"v86/libv86.js", "v86/v86.wasm", "xterm/xterm.js", "xterm/xterm.css", "xterm/addon-fit.js",
-	"bios/seabios.bin", "bios/vgabios.bin", "https-bridge.js"}
+	"armless/armless.js", "armless/armless.wasm", "armless/armless-smp.wasm",
+	"xterm/xterm.js", "xterm/xterm.css", "xterm/addon-fit.js"}
 
 // Run writes the PWA files into the site and ties them into index.html. Running it again
 // replaces what an earlier run wrote.
@@ -49,6 +49,7 @@ func Run(o Options) error {
 	var run struct {
 		Title   string    `json:"title"`
 		BuiltAt time.Time `json:"built_at"`
+		CPUs    int       `json:"cpus"`
 	}
 	data, err := os.ReadFile(filepath.Join(site, "run.json"))
 	if err != nil {
@@ -101,6 +102,8 @@ func Run(o Options) error {
 	sw := strings.NewReplacer(
 		"__CACHE__", "snowglobe-"+run.BuiltAt.UTC().Format("20060102T150405"),
 		"__SHELL__", string(shellJSON),
+		// Several CPUs need a cross-origin isolated page (see internal/site/isolate.js)
+		"__ISOLATE__", fmt.Sprint(run.CPUs > 1),
 	).Replace(serviceWorker)
 	if err := os.WriteFile(filepath.Join(site, "sw.js"), []byte(sw), 0o644); err != nil {
 		return err

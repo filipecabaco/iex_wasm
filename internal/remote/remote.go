@@ -193,9 +193,10 @@ var siteFiles = []struct {
 	path     string
 	optional bool
 }{
-	{"run.json", false}, {"index.html", false}, {"bios/seabios.bin", false}, {"bios/vgabios.bin", false},
+	{"run.json", false}, {"index.html", false},
 	{"system/filesystem.json", false}, {"system/state.bin.zst", false}, {"system/console.bin", true},
-	{"system/tls.json", true}, {"https-bridge.js", true},
+	// The site's CA: with a network, the guest's HTTPS ends in the machine with it
+	{"system/tls.json", true},
 }
 
 func mirror(source, dir string) error {

@@ -1,30 +1,43 @@
-# Build-time tools for snowglobe, so the host only needs Docker: Node (to boot the guest in v86
-# and snapshot it) and the browser runtime that gets copied into every site. Runs on the host's
-# native architecture.
-FROM alpine:3.24.2
+# Build-time tools for snowglobe, so the host only needs Docker: snowglobe-vm (the armless arm64
+# machine, natively, to boot the guest, snapshot it and run built sites) and the browser runtime
+# that gets copied into every site. Runs on the host's native architecture.
 
-RUN apk add --no-cache nodejs npm
+# snowglobe-vm, from runtime/ (a Rust crate on the armless library, pinned in Cargo.lock)
+FROM rust:1.90-alpine3.22 AS runtime
+RUN apk add --no-cache musl-dev git
+WORKDIR /src
+COPY runtime/ .
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/src/target \
+    cargo build --release --locked && \
+    cp target/release/snowglobe-vm /snowglobe-vm && strip /snowglobe-vm
+
+FROM alpine:3.24.2
 
 WORKDIR /tools
 
-# v86 and xterm.js, pinned and integrity-checked by the lockfile
-COPY package.json package-lock.json ./
-RUN npm ci --no-audit --no-fund
-
-# The BIOS isn't on npm; take it from the exact upstream commit the npm build of v86 was made from
-ADD --checksum=sha256:73e3f359102e3a9982c35fce98eb7cd08f18303ac7f1ba6ebfbe6cdc1c244d98 \
-    https://raw.githubusercontent.com/copy/v86/5f9a90f2be01243dd0ea4fe014cce12686cf3ced/bios/seabios.bin site/bios/seabios.bin
-ADD --checksum=sha256:a4bc0d80cc3ca028c73dafa8fee396b8d054ce87ebd8abfbd31b06b437607880 \
-    https://raw.githubusercontent.com/copy/v86/5f9a90f2be01243dd0ea4fe014cce12686cf3ced/bios/vgabios.bin site/bios/vgabios.bin
+# The browser runtime, pinned and integrity-checked: armless (armless.js, armless.wasm,
+# armless-smp.wasm) from its release, and xterm.js from npm
+ADD --checksum=sha256:7ad6bd4ba78acf93e07d48a85a2e294cfea86894a18c16faac782a7070afc8f2 \
+    https://github.com/filipecabaco/armless/releases/download/armless-v0.2.0/armless-web.tar.gz /tmp/armless-web.tar.gz
+ADD --checksum=sha256:908e66e04af6c8dc6b00dd3b54de088e2e81e5ed866284fd6c2fb3c2d1c7a3f6 \
+    https://registry.npmjs.org/@xterm/xterm/-/xterm-6.0.0.tgz /tmp/xterm.tgz
+ADD --checksum=sha256:26003b4517a132b64e4ff228fd88a5fda3fff5e606c76093f6dcff772e9ecec0 \
+    https://registry.npmjs.org/@xterm/addon-fit/-/addon-fit-0.11.0.tgz /tmp/addon-fit.tgz
 
 # Everything a site serves besides the page itself and the guest's files
-RUN mkdir -p site/v86 site/xterm && \
-    cp node_modules/v86/build/libv86.js node_modules/v86/build/v86.wasm \
-       node_modules/v86/build/v86-fallback.wasm site/v86/ && \
-    cp node_modules/@xterm/xterm/lib/xterm.js node_modules/@xterm/xterm/css/xterm.css \
-       node_modules/@xterm/addon-fit/lib/addon-fit.js site/xterm/ && \
+RUN mkdir -p site/armless site/xterm /tmp/x && \
+    tar -xzf /tmp/armless-web.tar.gz -C /tmp/x && \
+    cp /tmp/x/armless-web/armless.js /tmp/x/armless-web/armless.wasm /tmp/x/armless-web/armless-smp.wasm \
+       /tmp/x/armless-web/LICENSE site/armless/ && \
+    tar -xzf /tmp/xterm.tgz -C /tmp/x && cp /tmp/x/package/lib/xterm.js /tmp/x/package/css/xterm.css site/xterm/ && \
+    rm -rf /tmp/x/package && \
+    tar -xzf /tmp/addon-fit.tgz -C /tmp/x && cp /tmp/x/package/lib/addon-fit.js site/xterm/ && \
+    rm -rf /tmp/x /tmp/*.tgz /tmp/*.tar.gz && \
     chmod -R a+rX site
 
-COPY build-state.mjs run.mjs client.mjs ./
+COPY --from=runtime /snowglobe-vm /tools/snowglobe-vm
 
 ENV HOME=/tmp

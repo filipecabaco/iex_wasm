@@ -4,18 +4,23 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-func site(t *testing.T) string {
+func siteWith(t *testing.T, cpus int) string {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "run.json"), []byte(`{"title":"Go + Bubble Tea in the browser","built_at":"2026-10-09T12:00:00Z"}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "run.json"), []byte(`{"title":"Go + Bubble Tea in the browser","built_at":"2026-10-09T12:00:00Z","cpus":`+
+		strconv.Itoa(cpus)+`}`), 0o644)
 	os.WriteFile(filepath.Join(dir, "index.html"), []byte("<html><head><title>x</title></head><body></body></html>"), 0o644)
-	os.MkdirAll(filepath.Join(dir, "v86"), 0o755)
-	os.WriteFile(filepath.Join(dir, "v86", "libv86.js"), nil, 0o644)
+	os.MkdirAll(filepath.Join(dir, "armless"), 0o755)
+	os.WriteFile(filepath.Join(dir, "armless", "armless.js"), nil, 0o644)
+	os.WriteFile(filepath.Join(dir, "armless", "armless.wasm"), nil, 0o644)
 	return dir
 }
+
+func site(t *testing.T) string { return siteWith(t, 1) }
 
 func TestRun(t *testing.T) {
 	dir := site(t)
@@ -33,16 +38,30 @@ func TestRun(t *testing.T) {
 	}
 
 	sw, _ := os.ReadFile(filepath.Join(dir, "sw.js"))
-	if !strings.Contains(string(sw), `"snowglobe-20261009T120000"`) || !strings.Contains(string(sw), `"v86/libv86.js"`) {
+	if !strings.Contains(string(sw), `"snowglobe-20261009T120000"`) || !strings.Contains(string(sw), `"armless/armless.wasm"`) {
 		t.Error("sw.js should name the build's cache and precache the shell files that exist")
 	}
-	if strings.Contains(string(sw), "https-bridge.js") {
+	if strings.Contains(string(sw), "armless-smp.wasm") {
 		t.Error("sw.js should skip shell files the site doesn't have")
+	}
+	if !strings.Contains(string(sw), "const ISOLATE = false;") {
+		t.Error("a one-CPU site needs no cross-origin isolation")
 	}
 	for _, icon := range []string{"icon-192.png", "icon-512.png"} {
 		if _, err := os.Stat(filepath.Join(dir, icon)); err != nil {
 			t.Error(err)
 		}
+	}
+}
+
+func TestIsolatesSeveralCPUs(t *testing.T) {
+	dir := siteWith(t, 4)
+	if err := Run(Options{Site: dir}); err != nil {
+		t.Fatal(err)
+	}
+	sw, _ := os.ReadFile(filepath.Join(dir, "sw.js"))
+	if !strings.Contains(string(sw), "const ISOLATE = true;") {
+		t.Error("a site with several CPUs must stay cross-origin isolated under the PWA worker")
 	}
 }
 
