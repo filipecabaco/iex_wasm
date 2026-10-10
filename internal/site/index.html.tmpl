@@ -183,7 +183,20 @@
         setStatus("loading", `loading ${run.progress}%`);
       }
     });
-    emulator?.on("error", (error) => setStatus("error", `failed: ${error.message || error}`));
+    emulator?.on("error", (error) => {
+      // A stale copy (an offline cache from an earlier build, served by an older service worker)
+      // doesn't match this page: start over from the network, once
+      let retried = false;
+      try { retried = sessionStorage.getItem("snowglobe-refreshed") === "1"; } catch {}
+      if (!retried) {
+        try { sessionStorage.setItem("snowglobe-refreshed", "1"); } catch {}
+        setStatus("loading", "refreshing");
+        forgetAndReload({ keepSession: true });
+        return;
+      }
+      setStatus("error", `failed: ${error.message || error}`);
+    });
+    emulator?.on("started", () => { try { sessionStorage.removeItem("snowglobe-refreshed"); } catch {} });
     emulator?.on("stop", ({ reason }) => setStatus("stopped", reason === "poweroff" ? "powered off" : `stopped (${reason})`));
 
     // The app's console output up to the snapshot, so the terminal shows what it printed
@@ -301,11 +314,20 @@
       clearTimeout(armed);
       reset.disabled = true;
       reset.textContent = "resetting…";
+      forgetAndReload();
+    });
+
+    async function forgetAndReload({ keepSession = false } = {}) {
       try { for (const key of await caches.keys()) if (key.startsWith("snowglobe-")) await caches.delete(key); } catch {}
       try { for (const r of (await navigator.serviceWorker?.getRegistrations()) ?? []) await r.unregister(); } catch {}
-      try { localStorage.clear(); sessionStorage.clear(); } catch {}
+      try {
+        localStorage.clear();
+        if (!keepSession) sessionStorage.clear();
+        // The isolating worker is gone too: let the page register it again
+        sessionStorage.removeItem("snowglobe-isolate");
+      } catch {}
       location.reload();
-    });
+    }
   </script>
 </body>
 </html>

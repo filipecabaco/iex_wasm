@@ -44,5 +44,5 @@ CMD ["/app/start.sh"]
 
 LABEL snowglobe.title="Elixir + Postgres in the browser" \
       snowglobe.ready="iex(1)> " \
-      snowglobe.memory="640" snowglobe.cpus="4" \
+      snowglobe.memory="640" snowglobe.cpus="2" \
       snowglobe.exercise='["sql \"SHOW server_version\"", "sql \"SELECT app, count(*) AS modules, pg_size_pretty(sum(bytes)) AS size FROM modules GROUP BY app ORDER BY sum(bytes) DESC LIMIT 8\"", "Repo.all(from m in ModuleRow, where: m.app == \"postgrex\", order_by: [desc: m.functions], limit: 5, select: {m.name, m.functions})", "sql \"SELECT app, name, functions, rank() OVER (PARTITION BY app ORDER BY functions DESC) FROM modules WHERE app IN (\u0027ecto\u0027, \u0027postgrex\u0027) ORDER BY 4, 1 LIMIT 6\"", "h Ecto.Query.from"]'

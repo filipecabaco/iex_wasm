@@ -19,5 +19,5 @@ CMD ["jshell", "--execution", "local", "--class-path", "/opt/lib/gson.jar", "-J-
 
 LABEL snowglobe.title="Java + Gson in the browser" \
       snowglobe.ready="jshell> " \
-      snowglobe.memory="768" snowglobe.cpus="4" \
+      snowglobe.memory="768" snowglobe.cpus="2" \
       snowglobe.exercise='["gson.toJson(new Planet(\"Mars\", 0.107, 2))", "gson.fromJson(\"{\\\"name\\\": \\\"Jupiter\\\", \\\"massEarths\\\": 317.8}\", Planet.class)", "JsonParser.parseString(\"{\\\"a\\\": [1, 2, 3]}\").getAsJsonObject().get(\"a\")", "java.time.LocalDate.now().plusDays(30)"]'

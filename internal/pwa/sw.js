@@ -1,9 +1,9 @@
 // snowglobe's service worker: the site keeps working offline once it has run.
 //
-// The shell (page, emulator, terminal, BIOS) is cached on install. Everything else (the snapshot,
-// the warm pack, the guest's file blobs, including a pooled ../blobs store) is cached the first
-// time the page fetches it, so installing doesn't download it a second time. Blobs are named by
-// content hash and a new build gets a new cache, so cached files never go stale.
+// The shell (page, machine, terminal) is cached on install. Everything else (the snapshot, the warm
+// pack, the guest's file blobs) is cached the first time the page fetches it, so installing doesn't
+// download it a second time. Blobs are named by their content and served from the cache first;
+// the rest changes with every build, so it comes from the network first and the cache offline.
 const CACHE = "__CACHE__";
 const SHELL = __SHELL__;
 // Several CPUs share memory between Web Workers, which needs a cross-origin isolated page: add
@@ -70,18 +70,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Everything else is immutable for this build: the cache first, then the network, kept
-  event.respondWith(
-    caches.match(request, { ignoreSearch: true }).then(
-      (hit) =>
-        hit ||
-        fetch(request).then((response) => {
-          if (response.ok && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        }),
-    ),
-  );
+  const keep = (response) => {
+    if (response.ok && response.status === 200) {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(request, copy));
+    }
+    return response;
+  };
+
+  // The guest's file blobs are named by their content, so they never change: the cache first
+  if (blob(request.url)) {
+    event.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then(keep)));
+    return;
+  }
+
+  // Everything else (the snapshot, the warm pack, the filesystem tree, the runtime) changes with
+  // each build and must match the page: the network first, the cache when offline
+  event.respondWith(fetch(request).then(keep).catch(() => caches.match(request, { ignoreSearch: true })));
 });
+
+function blob(url) {
+  return (BLOBS && url.startsWith(BLOBS)) || /\/(system\/filesystem|blobs)\/[^/]+$/.test(new URL(url).pathname);
+}

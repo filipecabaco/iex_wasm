@@ -21,7 +21,8 @@ snowglobe pool sites              # several sites under one host share a single 
 > [!NOTE]
 > This is an experiment. Everything runs on an emulated 64-bit ARM CPU (translated to WebAssembly as
 > it runs), so expect it to be slower than native. A site can have up to 8 CPUs (`--cpus`), which
-> helps programs that use them: the Elixir demo runs CPU-bound tasks about 4× faster on 4.
+> helps programs that use them (the Elixir demo runs CPU-bound tasks about 4× faster on 4); the
+> demos use 2, to stay light on phones.
 
 ## What you need
 
@@ -180,7 +181,7 @@ terminal, which suits scripts and agents. Each instance starts fresh from the sn
 Two examples go further:
 
 - **[`supabase`](examples/supabase)** (on the demo site) runs the Supabase CLI's native local stack
-  (Postgres, PostgREST and Auth as plain processes, no Docker) inside the guest, on 4 CPUs, with
+  (Postgres, PostgREST and Auth as plain processes, no Docker) inside the guest, on 2 CPUs, with
   `notes`, a small app on it: users sign up through Auth, notes go through the REST API, and row
   level security keeps each user's notes their own. The stack's services are glibc programs, so
   the image carries Debian's glibc next to Alpine's musl, and Postgres extensions the demo never
