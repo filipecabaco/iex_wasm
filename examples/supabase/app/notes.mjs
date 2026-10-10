@@ -5,7 +5,11 @@
 //   notes signup EMAIL PASSWORD     notes login EMAIL PASSWORD     notes whoami
 //   notes add TEXT...               notes ls                       notes rm ID
 //   notes logout
-import { createClient } from "@supabase/supabase-js";
+//
+// It speaks Auth's and PostgREST's HTTP APIs directly with node:http: on an emulated CPU, Node
+// takes seconds just to load its fetch() stack (which supabase-js needs), and this is a terminal
+// command people run one after another.
+import http from "node:http";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -18,71 +22,100 @@ if (!API_URL || !ANON_KEY) {
 
 // The signed-in user's session lives in a file, so each command is its own process
 const sessionFile = join(homedir(), ".notes-session.json");
-const storage = {
-  getItem: (key) => {
-    try { return JSON.parse(readFileSync(sessionFile, "utf8"))[key] ?? null; } catch { return null; }
-  },
-  setItem: (key, value) => writeFileSync(sessionFile, JSON.stringify({ [key]: value })),
-  removeItem: () => rmSync(sessionFile, { force: true }),
+const load = () => {
+  try { return JSON.parse(readFileSync(sessionFile, "utf8")); } catch { return null; }
 };
-const supabase = createClient(API_URL, ANON_KEY, {
-  auth: { storage, persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
-});
+const save = (s) => writeFileSync(sessionFile, JSON.stringify(s), { mode: 0o600 });
+
+function request(method, path, { token, body, prefer } = {}) {
+  const url = new URL(path, API_URL);
+  const data = body === undefined ? undefined : JSON.stringify(body);
+  const headers = { apikey: ANON_KEY, Authorization: `Bearer ${token || ANON_KEY}` };
+  if (data !== undefined) headers["Content-Type"] = "application/json";
+  if (prefer) headers.Prefer = prefer;
+  return new Promise((resolve, reject) => {
+    const req = http.request(url, { method, headers }, (res) => {
+      let text = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => (text += chunk));
+      res.on("end", () => {
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch {}
+        if (res.statusCode >= 400) {
+          reject(new Error(json?.msg || json?.message || json?.error_description || json?.error || `HTTP ${res.statusCode}`));
+        } else resolve(json);
+      });
+    });
+    req.on("error", reject);
+    req.end(data);
+  });
+}
 
 const fail = (error) => {
   console.error("notes:", error.message ?? error);
-  process.exit(1);
-};
-const signedIn = async () => {
-  const { data } = await supabase.auth.getUser();
-  if (!data.user) fail("not signed in: notes signup EMAIL PASSWORD, or notes login EMAIL PASSWORD");
-  return data.user;
+  process.exitCode = 1;
 };
 
-const [command, ...args] = process.argv.slice(2);
-switch (command) {
-  case "signup":
-  case "login": {
-    const [email, password] = args;
-    if (!email || !password) fail(`usage: notes ${command} EMAIL PASSWORD`);
-    const { data, error } = command === "signup"
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
-    if (error) fail(error);
-    console.log(`signed in as ${data.user.email} (${data.user.id.slice(0, 8)})`);
-    break;
+// Auth answers signup and login with a session: the user, an access token (a JWT the REST API
+// checks, and row level security reads the user from) and a refresh token
+const keep = (s) => {
+  if (!s?.access_token) throw new Error("no session (does Auth want the email confirmed?)");
+  save({ access_token: s.access_token, refresh_token: s.refresh_token, expires_at: s.expires_at, user: s.user });
+  console.log(`signed in as ${s.user.email} (${s.user.id.slice(0, 8)})`);
+};
+
+// The saved session, refreshed when its access token is about to expire
+async function session() {
+  const s = load();
+  if (!s) throw new Error("not signed in: notes signup EMAIL PASSWORD, or notes login EMAIL PASSWORD");
+  if (s.expires_at && s.expires_at - 30 < Date.now() / 1000) {
+    const fresh = await request("POST", "/auth/v1/token?grant_type=refresh_token", { body: { refresh_token: s.refresh_token } });
+    save({ ...s, ...fresh, user: fresh.user || s.user });
+    return load();
   }
-  case "whoami": {
-    const user = await signedIn();
-    console.log(`${user.email} (${user.id.slice(0, 8)})`);
-    break;
-  }
-  case "add": {
-    await signedIn();
-    const { data, error } = await supabase.from("notes").insert({ body: args.join(" ") }).select().single();
-    if (error) fail(error);
-    console.log(`#${data.id} added`);
-    break;
-  }
-  case "ls": {
-    const user = await signedIn();
-    const { data, error } = await supabase.from("notes").select("id, body, created_at").order("id");
-    if (error) fail(error);
-    console.log(`${user.email}: ${data.length} note(s)`);
-    for (const n of data) console.log(`  #${n.id}  ${n.created_at.slice(11, 19)}  ${n.body}`);
-    break;
-  }
-  case "rm": {
-    await signedIn();
-    const { data, error } = await supabase.from("notes").delete().eq("id", Number(args[0])).select();
-    if (error) fail(error);
-    console.log(data.length ? `#${args[0]} removed` : `no note #${args[0]} of yours`);
-    break;
-  }
-  case "logout":
-    await supabase.auth.signOut({ scope: "local" });
-    console.log("signed out");
-    break;
-  default:
-    console.log("usage: notes signup|login EMAIL PASSWORD · whoami · add TEXT · ls · rm ID · logout");
+  return s;
 }
+
+async function main(command, args) {
+  switch (command) {
+    case "signup":
+    case "login": {
+      const [email, password] = args;
+      if (!email || !password) throw new Error(`usage: notes ${command} EMAIL PASSWORD`);
+      const path = command === "signup" ? "/auth/v1/signup" : "/auth/v1/token?grant_type=password";
+      return keep(await request("POST", path, { body: { email, password } }));
+    }
+    case "whoami": {
+      const { user } = await session();
+      return console.log(`${user.email} (${user.id.slice(0, 8)})`);
+    }
+    case "add": {
+      const { access_token: token } = await session();
+      const [note] = await request("POST", "/rest/v1/notes", { token, body: { body: args.join(" ") }, prefer: "return=representation" });
+      return console.log(`#${note.id} added`);
+    }
+    case "ls": {
+      const { access_token: token, user } = await session();
+      const notes = await request("GET", "/rest/v1/notes?select=id,body,created_at&order=id", { token });
+      console.log(`${user.email}: ${notes.length} note(s)`);
+      for (const n of notes) console.log(`  #${n.id}  ${n.created_at.slice(11, 19)}  ${n.body}`);
+      return;
+    }
+    case "rm": {
+      const { access_token: token } = await session();
+      const id = Number(args[0]);
+      const gone = await request("DELETE", `/rest/v1/notes?id=eq.${id}`, { token, prefer: "return=representation" });
+      return console.log(gone.length ? `#${id} removed` : `no note #${id} of yours`);
+    }
+    case "logout": {
+      const s = load();
+      if (s) await request("POST", "/auth/v1/logout", { token: s.access_token }).catch(() => {});
+      rmSync(sessionFile, { force: true });
+      return console.log("signed out");
+    }
+    default:
+      console.log("usage: notes signup|login EMAIL PASSWORD · whoami · add TEXT · ls · rm ID · logout");
+  }
+}
+
+main(process.argv[2], process.argv.slice(3)).catch(fail);

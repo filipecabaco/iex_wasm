@@ -51,8 +51,6 @@ RUN supabase init --yes >/dev/null && \
 
 # notes, a small app on the stack: Auth for users, PostgREST for the table, row level security
 # in Postgres keeping each user's notes their own. The migration is applied when the stack starts.
-COPY --chown=supa app/package.json ./
-RUN npm install --no-audit --no-fund && npm cache clean --force
 COPY --chown=supa app/notes.mjs ./
 COPY --chown=supa app/supabase/migrations supabase/migrations
 
