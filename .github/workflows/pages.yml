@@ -46,8 +46,36 @@ jobs:
       - name: Test
         run: mise run test
 
+  # The tools image (snowglobe-vm, compiled from Rust, and the page runtime) is built once and
+  # loaded by every demo job, instead of compiled nine times; it's cached until its sources change
+  tools:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - uses: actions/cache@v6
+        id: cache
+        with:
+          path: tools.tar.zst
+          key: snowglobe-tools-${{ hashFiles('internal/tools/Dockerfile', 'internal/tools/runtime/**') }}
+
+      - name: Build the tools image
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          go build -o snowglobe ./cmd/snowglobe
+          docker save "$(./snowglobe tools)" | zstd -T0 -3 -o tools.tar.zst
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tools-image
+          path: tools.tar.zst
+          retention-days: 1
+
   demo:
-    needs: setup
+    needs: [setup, tools]
     # Guests are arm64: arm64 runners build their images natively, no emulation needed
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 60
@@ -72,28 +100,43 @@ jobs:
           sudo systemctl restart docker
           docker info --format '{{.RegistryConfig.Mirrors}}'
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: tools-image
+
       - name: Build ${{ matrix.demo }}
         env:
           DEMO: ${{ matrix.demo }}
         run: |
+          zstd -dc tools.tar.zst | docker load && rm tools.tar.zst
           go build -o snowglobe ./cmd/snowglobe
           ./snowglobe build "examples/$DEMO" --out "dist/$DEMO"
 
-      # The headless runtime, on the site just built: exec into it and check what it prints
+      # The headless runtime, on the site just built: type into the app in its own language and
+      # check what it prints (the Go demo is a full-screen app with no prompt: it only has to run)
       - name: Run ${{ matrix.demo }} headlessly
         env:
           DEMO: ${{ matrix.demo }}
         run: |
           ./snowglobe run "dist/$DEMO" --name smoke --detach
-          # exec waits for the instance to finish restoring
-          out=$(./snowglobe exec smoke 'echo snowglobe-$((6*7))' || true)
-          ./snowglobe stop smoke
-          echo "$out"
           case "$DEMO" in
-            # Not shells: their prompts evaluate other languages
-            iex|elixir|python|typescript|java|go|postgres) ;;
-            *) echo "$out" | grep -q snowglobe-42 ;;
+            iex|elixir) check='IO.puts("snowglobe-#{6 * 7}")' ;;
+            python)     check='print(f"snowglobe-{6 * 7}")' ;;
+            typescript) check='console.log("snowglobe-" + 6 * 7)' ;;
+            java)       check='System.out.println("snowglobe-" + 6 * 7)' ;;
+            postgres)   check="SELECT 'snowglobe-' || 6 * 7;" ;;
+            go)         check= ;;
+            *)          check='echo snowglobe-$((6 * 7))' ;;
           esac
+          if [ -n "$check" ]; then
+            out=$(./snowglobe exec smoke "$check" || true)
+            echo "$out"
+            echo "$out" | grep -q snowglobe-42 || { echo "::error title=$DEMO::expected snowglobe-42"; ./snowglobe stop smoke; exit 1; }
+          else
+            sleep 20
+            ./snowglobe ps | grep -q smoke || { echo "::error title=$DEMO::the instance stopped"; exit 1; }
+          fi
+          ./snowglobe stop smoke
 
       # Hidden files must come along: `snowglobe pool` looks for each build's .snowglobe marker
       - uses: actions/upload-artifact@v7
@@ -121,6 +164,7 @@ jobs:
 
       - name: Assemble site
         run: |
+          rm -rf dist/tools-image
           mise run assemble
           du -sh dist
 

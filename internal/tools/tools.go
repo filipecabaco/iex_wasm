@@ -4,7 +4,9 @@
 package tools
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"net/url"
@@ -29,6 +31,13 @@ func (i *Image) Tag() string { return i.tag }
 
 // Build builds (or reuses from Docker's cache) the tools image for this snowglobe version.
 func Build(version string) (*Image, error) {
+	// Named after what goes into it, so an image already there (built earlier, or loaded from
+	// a CI artifact) is used as is: building it compiles snowglobe-vm, which takes minutes
+	tag := "snowglobe-tools:" + Version()
+	if _, err := docker.Output("image", "inspect", "--format", "{{.Id}}", tag); err == nil {
+		return &Image{tag: tag}, nil
+	}
+
 	dir, err := os.MkdirTemp("", "snowglobe-tools-")
 	if err != nil {
 		return nil, err
@@ -52,7 +61,6 @@ func Build(version string) (*Image, error) {
 		return nil, err
 	}
 
-	tag := "snowglobe-tools:" + version
 	// Quiet unless it fails: `snowglobe run` keeps stdout for the session
 	if _, err := docker.Output("build", "--quiet", "--tag", tag, dir); err != nil {
 		return nil, err
@@ -147,4 +155,19 @@ func loopback(proxy string) bool {
 	}
 	h := u.Hostname()
 	return h == "localhost" || strings.HasPrefix(h, "127.") || h == "::1"
+}
+
+// Version identifies the tools image: a hash of the files it is built from.
+func Version() string {
+	h := sha256.New()
+	fs.WalkDir(context, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, _ := context.ReadFile(path)
+		fmt.Fprintf(h, "%s %d\n", path, len(data))
+		h.Write(data)
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:16]
 }
