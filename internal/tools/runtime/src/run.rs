@@ -33,6 +33,8 @@ const COMMAND_CAP: Duration = Duration::from_secs(300);
 struct Session {
     board: Arc<Board>,
     runner: Arc<Runner>,
+    /// The app's prompt, as exec last saw it on a line of its own
+    prompt: Mutex<Option<String>>,
     activity: Arc<Activity>,
     /// The console output saved with the snapshot
     persisted: Vec<u8>,
@@ -63,12 +65,16 @@ impl Session {
     /// the prompt left waiting after it are the terminal's, not the command's, so they're cut.
     fn exec(&self, command: &str) -> Vec<u8> {
         let _one_at_a_time = self.exec_lock.lock().unwrap();
-        // The prompt the command is typed after: the screen's last line so far (right after a
-        // restore, that's in the console saved with the snapshot)
+        // The app's prompt: learned from the screen the snapshot left (a ready app waits at its
+        // prompt), then from the lines each command ends with
         let prompt = {
-            let screen = self.screen();
-            let line = screen.rsplit(|&b| b == b'\n').next().unwrap_or_default();
-            String::from_utf8_lossy(&text::plain(line)).trim().to_string()
+            let mut p = self.prompt.lock().unwrap();
+            if p.is_none() {
+                let screen = self.screen();
+                let line = screen.rsplit(|&b| b == b'\n').next().unwrap_or_default();
+                *p = Some(String::from_utf8_lossy(&text::plain(line)).trim().to_string());
+            }
+            p.clone().unwrap_or_default()
         };
         let from = self.activity.screen.lock().unwrap().total();
         self.board
@@ -98,11 +104,18 @@ impl Session {
             lines.drain(..cut);
         }
         // The prompt now waiting for the next command. Output that didn't end its line (printf,
-        // curl -w) shares that line: keep what comes before the prompt
+        // curl -w) shares that line: keep what comes before the prompt. A last line that doesn't
+        // end with the prompt is a new prompt (IEx counts, a shell shows the directory)
         if let Some(last) = lines.pop() {
             let last = String::from_utf8_lossy(&text::plain(last.as_bytes())).into_owned();
-            let rest = last.trim_end();
-            let rest = if prompt.is_empty() { "" } else { rest.strip_suffix(prompt.as_str()).unwrap_or("") };
+            let last = last.trim();
+            let rest = match last.strip_suffix(prompt.as_str()) {
+                Some(rest) if !prompt.is_empty() => rest,
+                _ => {
+                    *self.prompt.lock().unwrap() = Some(last.to_string());
+                    ""
+                },
+            };
             if !rest.is_empty() {
                 let mut out = lines.join("\n");
                 if !out.is_empty() {
@@ -156,6 +169,7 @@ pub fn main(args: &Args) -> Result<u8, String> {
     let session = Arc::new(Session {
         board: board.clone(),
         runner: runner.clone(),
+        prompt: Mutex::new(None),
         activity: activity.clone(),
         persisted: std::fs::read(system.join("console.bin")).unwrap_or_default(),
         exec_lock: Mutex::new(()),
