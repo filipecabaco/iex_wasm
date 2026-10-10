@@ -13,7 +13,36 @@ permissions:
   contents: read
 
 jobs:
+  # The tools image (snowglobe-vm, compiled from Rust, and the page runtime) is built once and
+  # loaded by the jobs below, instead of compiled in each; it's cached until its sources change
+  tools:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - uses: actions/cache@v6
+        id: cache
+        with:
+          path: tools.tar.zst
+          key: snowglobe-tools-${{ hashFiles('internal/tools/Dockerfile', 'internal/tools/runtime/**') }}
+
+      - name: Build the tools image
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          go build -o snowglobe ./cmd/snowglobe
+          docker save "$(./snowglobe tools)" | zstd -T0 -3 -o tools.tar.zst
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tools-image
+          path: tools.tar.zst
+          retention-days: 1
+
   smoke:
+    needs: tools
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
@@ -30,8 +59,13 @@ jobs:
           sudo mv "$config.new" "$config"
           sudo systemctl restart docker
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: tools-image
+
       - name: Build the curl example
         run: |
+          zstd -dc tools.tar.zst | docker load && rm tools.tar.zst
           go build -o snowglobe ./cmd/snowglobe
           ./snowglobe build examples/curl --out dist/curl
 
@@ -72,3 +106,70 @@ jobs:
       - name: Clean up
         if: always()
         run: ./snowglobe stop smoke || true
+
+  # The examples that aren't on the demo site (DEMOS) are built and driven here instead
+  examples:
+    needs: tools
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Packages installed into the running machine, from Alpine's mirrors
+          - example: apk
+            commands: |
+              apk add figlet >/dev/null 2>&1; echo "apk exit=$?"
+              figlet -w 60 armless
+            expect: |
+              apk exit=0
+              __ _ _ __ _ __ ___
+          # The Supabase CLI's native stack, and the notes app on it: Grace can't see Ada's note
+          - example: supabase
+            commands: |
+              notes signup ada@example.com lovelace-1815
+              notes add first program, for the analytical engine
+              notes ls
+              notes signup grace@example.com hopper-1906
+              notes ls
+            expect: |
+              #1 added
+              ada@example.com: 1 note(s)
+              grace@example.com: 0 note(s)
+    steps:
+      - uses: actions/checkout@v7
+
+      # Installs Go from mise.toml (cached between runs)
+      - uses: jdx/mise-action@v5
+
+      - name: Use a Docker Hub mirror
+        run: |
+          config=/etc/docker/daemon.json
+          [ -s "$config" ] || echo '{}' | sudo tee "$config" > /dev/null
+          sudo jq '. + {"registry-mirrors": ["https://mirror.gcr.io"]}' "$config" | sudo tee "$config.new" > /dev/null
+          sudo mv "$config.new" "$config"
+          sudo systemctl restart docker
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: tools-image
+
+      - name: Build the ${{ matrix.example }} example
+        env:
+          EXAMPLE: ${{ matrix.example }}
+        run: |
+          zstd -dc tools.tar.zst | docker load && rm tools.tar.zst
+          go build -o snowglobe ./cmd/snowglobe
+          ./snowglobe build "examples/$EXAMPLE" --out "dist/$EXAMPLE"
+
+      - name: Run it
+        env:
+          EXAMPLE: ${{ matrix.example }}
+          COMMANDS: ${{ matrix.commands }}
+          EXPECT: ${{ matrix.expect }}
+        run: |
+          printf '%s' "$COMMANDS" | ./snowglobe run "dist/$EXAMPLE" | tee out.txt
+          printf '%s' "$EXPECT" | while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            grep -qF -- "$line" out.txt || { echo "::error title=$EXAMPLE::expected a line with: $line"; exit 1; }
+          done

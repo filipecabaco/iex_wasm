@@ -16,6 +16,7 @@ import (
 	"github.com/filipecabaco/snowglobe/internal/pwa"
 	"github.com/filipecabaco/snowglobe/internal/remote"
 	"github.com/filipecabaco/snowglobe/internal/serve"
+	"github.com/filipecabaco/snowglobe/internal/tools"
 )
 
 // Set at release time with -ldflags "-X main.version=..."
@@ -47,6 +48,7 @@ Usage:
   snowglobe attach <name>                            join a running instance (ctrl-] detaches)
   snowglobe stop <name>                              throw a running instance away
   snowglobe ps                                       list running instances
+  snowglobe tools                                    build the tools image (or find it) and print its tag
   snowglobe version
 
 Build flags:
@@ -119,6 +121,12 @@ func main() {
 		}
 	case "ps":
 		err = instance.List()
+	case "tools":
+		// Build (or find) the tools image and print its tag, e.g. to build it once in CI
+		var t *tools.Image
+		if t, err = tools.Build(version); err == nil {
+			fmt.Println(t.Tag())
+		}
 	case "version", "--version":
 		fmt.Println("snowglobe", version)
 	case "help", "-h", "--help":
