@@ -14,11 +14,11 @@ func image(labels map[string]string, cmd ...string) *docker.Image {
 }
 
 func TestResolveDefaults(t *testing.T) {
-	s, err := Resolve(Options{Source: "i386/alpine"}, image(nil, "/bin/sh"))
+	s, err := Resolve(Options{Source: "alpine"}, image(nil, "/bin/sh"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.Command != "'/bin/sh'" || s.Ready != "" || s.Memory != 512 || s.Title != "i386/alpine" || s.Warm != nil {
+	if s.Command != "'/bin/sh'" || s.Ready != "" || s.Memory != 512 || s.Title != "alpine" || s.Warm != nil {
 		t.Errorf("%+v", s)
 	}
 }

@@ -22,6 +22,8 @@ type Page struct {
 	MemoryMB int    // must match the snapshot
 	Network  string // "none" or "fetch"; must match the snapshot
 	CPUs     int    // must match the snapshot; more than one needs cross-origin isolation
+	// The console size the snapshot was taken at: its screen is replayed at this size
+	ConsoleCols, ConsoleRows int
 }
 
 // Render writes <out>/index.html and marks the site for GitHub Pages.

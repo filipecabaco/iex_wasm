@@ -33,8 +33,8 @@ const QUIET: Duration = Duration::from_secs(5);
 /// long (or after the cap): a runtime can go quiet while it loads modules.
 const EXERCISE_QUIET: Duration = Duration::from_millis(2500);
 const EXERCISE_CAP: Duration = Duration::from_secs(180);
-/// The console size the app starts with: fits an embedded panel or a small window, so
-/// screens drawn at startup (and replayed from the snapshot) don't wrap apart.
+/// The console size the app starts with, unless --cols/--rows say otherwise: fits an embedded
+/// panel or a small window. The page replays the snapshot's screen at this size, then resizes.
 const COLS: u16 = 90;
 const ROWS: u16 = 30;
 
@@ -50,7 +50,9 @@ pub fn main(args: &Args) -> Result<u8, String> {
     let blobs = system.join("filesystem");
 
     let (mut vm, clock) = machine::new_vm(&spec, &system)?;
-    vm.board.console_resize(COLS, ROWS);
+    let cols = args.get("cols").map_or(Ok(COLS), str::parse).map_err(|_| "--cols: not a number")?;
+    let rows = args.get("rows").map_or(Ok(ROWS), str::parse).map_err(|_| "--rows: not a number")?;
+    vm.board.console_resize(cols, rows);
 
     eprintln!("Booting, please stand by ...");
     let started = Instant::now();
@@ -142,11 +144,16 @@ pub fn main(args: &Args) -> Result<u8, String> {
         eprint!("\nExercising: {command}");
         board.console_input(format!("{command}\r").as_bytes());
         activity.touch();
-        while (activity.idle_for() < EXERCISE_QUIET
-            || activity.connected())
-            && begun.elapsed() < EXERCISE_CAP
-        {
+        // Done once it has printed nothing, fetched nothing and computed nothing for a while
+        let mut load = machine::Load::new(&runner);
+        loop {
             std::thread::sleep(Duration::from_millis(250));
+            if load.busy(&runner) {
+                activity.touch();
+            }
+            if !(activity.idle_for() < EXERCISE_QUIET || activity.connected()) || begun.elapsed() >= EXERCISE_CAP {
+                break;
+            }
         }
         let reads = activity.reads.lock().unwrap().take().unwrap_or_default();
         eprint!(" ({} files, {:.1}s)", reads.len(), begun.elapsed().as_secs_f64());

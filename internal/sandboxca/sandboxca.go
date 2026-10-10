@@ -1,8 +1,8 @@
 // Package sandboxca makes the certificate authority a networked guest trusts for HTTPS.
 //
-// The browser can't open raw TCP connections, so the page terminates the guest's TLS itself
-// (https-bridge.js), signs a certificate for each host the guest asks for, and replays the request
-// with fetch(). The CA is made fresh for every build and is only ever trusted inside that guest;
+// The browser can't open raw TCP connections, so the machine (armless's web relay) terminates the
+// guest's TLS itself, signs a certificate for each host the guest asks for, and the page or
+// snowglobe-vm replays the request. The CA is made fresh for every build and is only ever trusted inside that guest;
 // its private key ships with the site, so it must never be trusted anywhere else.
 package sandboxca
 

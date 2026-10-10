@@ -27,14 +27,17 @@ RUN for i in devfs dmesg mdev hwdrivers; do rc-update add $i sysinit; done && \
     for i in modules sysctl hostname bootmisc; do rc-update add $i boot; done && \
     rc-update add killprocs shutdown
 
+# Loopback always: programs talk to themselves over 127.0.0.1 with or without a network (the
+# Supabase example's services do, on a site built without one).
+RUN printf 'auto lo\niface lo inet loopback\n' > /etc/network/interfaces && rc-update add networking boot
+
 # Networking, only when the site asks for it: DHCP on the virtio NIC, which armless answers.
 # HTTPS is terminated by armless's web relay with certificates from a CA made for this build: trust it in the
 # system bundle and in the runtimes that keep their own (Node, Python's requests, Java).
 ARG NETWORK=none
 COPY snowglobe-ca.crt /usr/local/share/ca-certificates/snowglobe-sandbox.crt
 RUN if [ "$NETWORK" = none ]; then rm /usr/local/share/ca-certificates/snowglobe-sandbox.crt; else \
-      printf 'auto lo\niface lo inet loopback\n\nauto eth0\niface eth0 inet dhcp\n' > /etc/network/interfaces && \
-      rc-update add networking boot && \
+      printf '\nauto eth0\niface eth0 inet dhcp\n' >> /etc/network/interfaces && \
       mkdir -p /etc/ssl/certs && \
       cat /usr/local/share/ca-certificates/snowglobe-sandbox.crt >> /etc/ssl/certs/ca-certificates.crt && \
       { echo 'export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt'; \

@@ -137,7 +137,8 @@ func Run(o Options, version string) error {
 				return err
 			}
 		}
-		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs})
+		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs,
+			ConsoleCols: tools.ConsoleCols, ConsoleRows: tools.ConsoleRows})
 	}); err != nil {
 		return err
 	}

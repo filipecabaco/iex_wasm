@@ -47,6 +47,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.running = true
 			return m, m.schedule()
 		}
+		// Bubble Tea's renderer can shift lines off the bottom when the screen grows (the help
+		// line vanished): draw the new size on a clean screen
+		return m, tea.ClearScreen
 	case tick:
 		if msg.id != m.tickID || !m.running {
 			return m, nil
