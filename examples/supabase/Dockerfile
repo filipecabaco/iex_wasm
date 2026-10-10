@@ -63,6 +63,6 @@ ENV LANG=C.UTF-8
 CMD ["/usr/local/bin/supabase-demo"]
 
 LABEL snowglobe.title="Supabase in the browser" \
-      snowglobe.memory="1536" snowglobe.cpus="4" \
+      snowglobe.memory="640" snowglobe.cpus="4" \
       snowglobe.ready="supa:~/app$ " \
       snowglobe.exercise='["notes signup ada@example.com lovelace-1815", "notes add first program, for the analytical engine", "notes ls", "notes signup grace@example.com hopper-1906", "notes ls", "psql \"$DB_URL\" -c \"select u.email, count(n.id) from auth.users u left join notes n on n.user_id = u.id group by 1\""]'
