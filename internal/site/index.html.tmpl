@@ -24,6 +24,10 @@
     #strip .name { font-weight: 700; }
     #strip .facts { color: #5a5a57; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     #status { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #strip .end { display: inline-flex; align-items: baseline; gap: .6rem; white-space: nowrap; }
+    #reset { font: inherit; color: inherit; opacity: .6; background: none; border: 0; padding: 0; cursor: pointer;
+      text-decoration: underline; text-underline-offset: 2px; }
+    #reset:hover, #reset:focus-visible { opacity: 1; }
     /* Narrow: name and status share the first line, the facts take the second */
     @media (max-width: 640px) {
       #strip { grid-template-columns: minmax(0, 1fr) auto; }
@@ -70,7 +74,10 @@
   <header id="strip">
     <span class="name">{{.Title}}</span>
     <span class="facts">sandboxed in this tab · no server · {{if eq .Network "fetch"}}HTTP(S) through your browser{{else}}no network{{end}}</span>
-    <span id="status" role="status" data-state="loading">loading 0%</span>
+    <span class="end">
+      <span id="status" role="status" data-state="loading">loading 0%</span>
+      <button id="reset" type="button" title="Forget what this browser keeps for these demos (offline copies, the service worker, storage) and load a fresh copy">reset</button>
+    </span>
   </header>
   <div id="terminal"></div>
   <div id="keys" role="toolbar" aria-label="Keys missing from touch keyboards">
@@ -280,6 +287,25 @@
       return code >= 64 && code <= 95 ? String.fromCharCode(code - 64) : data;
     }
 
+
+    // Reset: forget what this browser keeps for these demos (the offline cache, the service
+    // worker, storage) and load a fresh copy. Two clicks, so a stray one doesn't end a run
+    const reset = document.getElementById("reset");
+    let armed = null;
+    reset.addEventListener("click", async () => {
+      if (!armed) {
+        reset.textContent = "reset? click again";
+        armed = setTimeout(() => { armed = null; reset.textContent = "reset"; }, 3000);
+        return;
+      }
+      clearTimeout(armed);
+      reset.disabled = true;
+      reset.textContent = "resetting…";
+      try { for (const key of await caches.keys()) if (key.startsWith("snowglobe-")) await caches.delete(key); } catch {}
+      try { for (const r of (await navigator.serviceWorker?.getRegistrations()) ?? []) await r.unregister(); } catch {}
+      try { localStorage.clear(); sessionStorage.clear(); } catch {}
+      location.reload();
+    });
   </script>
 </body>
 </html>

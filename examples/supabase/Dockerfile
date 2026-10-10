@@ -36,7 +36,18 @@ USER supa
 WORKDIR /home/supa/app
 ENV SUPABASE_EXPERIMENTAL_STACK=1 SUPABASE_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1
 RUN supabase init --yes >/dev/null && \
-    supabase stack prepare --runtime native --capability database --capability rest --capability auth
+    supabase stack prepare --runtime native --capability database --capability rest --capability auth && \
+    # Postgres ships every extension Supabase offers; drop the big ones this demo never loads (none
+    # is preloaded, and the CLI only checks its own binaries): Wrappers, PostGIS and its geometry
+    # libraries, PL/Perl, PGroonga, and the charset converters for iconv
+    cd ~/.supabase/cache/stack/slim-services/postgres/*/linux-arm64 && \
+    rm -rf lib/wrappers-*.so share/postgresql/extension/wrappers* \
+           lib/postgis*.so lib/address_standardizer*.so lib/libgdal* lib/libSFCGAL* lib/libproj* lib/libgeos* \
+           share/postgresql/extension/postgis* share/postgresql/extension/address_standardizer* \
+           lib/perl5 lib/plperl*.so lib/libperl.so share/postgresql/extension/plperl* \
+           lib/pgroonga*.so lib/libgroonga* share/postgresql/extension/pgroonga* \
+           lib/gconv && \
+    du -sh .
 
 # notes, a small app on the stack: Auth for users, PostgREST for the table, row level security
 # in Postgres keeping each user's notes their own. The migration is applied when the stack starts.

@@ -2,9 +2,9 @@
 go = "1.27.1"
 
 [env]
-DEMOS = "iex postgres elixir python typescript go rust java curl"
+DEMOS = "iex postgres elixir python typescript go rust java curl supabase"
 # Examples built and checked in CI but not on the site (too big, or need the host's network)
-EXAMPLES = "apk supabase"
+EXAMPLES = "apk"
 
 [tasks.build]
 description = "Build every example into dist/<language>, then assemble the site"

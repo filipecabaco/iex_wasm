@@ -21,7 +21,7 @@ People who might package their own project with snowglobe are secondary; the rep
 
 snowglobe is a Go CLI that packages a Docker image (arm64 Alpine) into a static website that runs
 it in the browser: real Linux on a 64-bit ARM CPU emulated in WebAssembly (armless), restored from a
-snapshot taken once the app was ready. The demo page showcases nine such runs, one per language plus a shell of ordinary tools,
+snapshot taken once the app was ready. The demo page showcases ten such runs, one per language, a shell of ordinary tools and the Supabase stack,
 each a small project with a real dependency.
 
 ## Positioning
@@ -56,7 +56,7 @@ The repo's voice is candid ("this is an experiment"); claims stay honest.
 
 ## Evidence on Hand
 
-- The nine live demos, and per-demo measurements produced by the build (`warm-report.json`, run
+- The ten live demos, and per-demo measurements produced by the build (`warm-report.json`, run
   metadata). No users, testimonials, stars, adopters or benchmarks against other tools exist; never
   fabricate them.
 

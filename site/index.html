@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="snowglobe">
   <meta property="og:title" content="snowglobe: real programs, sandboxed in your browser">
-  <meta property="og:description" content="Docker images as static sites: Linux on a 64-bit ARM CPU emulated in WebAssembly, restored from a snapshot. Nine live runs, from Elixir + Postgres to curl + jq. No server.">
+  <meta property="og:description" content="Docker images as static sites: Linux on a 64-bit ARM CPU emulated in WebAssembly, restored from a snapshot. Ten live runs, from Elixir + Postgres to Supabase. No server.">
   <meta property="og:url" content="https://filipecabaco.github.io/snowglobe/">
   <meta property="og:image" content="https://filipecabaco.github.io/snowglobe/og.png">
   <meta property="og:image:width" content="1200">
@@ -18,10 +18,10 @@
   <meta property="og:image:alt" content="snowglobe: real programs, sandboxed in your browser, with a terminal showing Postgres, curl and jq output recorded at build">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="snowglobe: real programs, sandboxed in your browser">
-  <meta name="twitter:description" content="Docker images as static sites: Linux on an emulated ARM CPU in WebAssembly. Nine live runs. No server.">
+  <meta name="twitter:description" content="Docker images as static sites: Linux on an emulated ARM CPU in WebAssembly. Ten live runs. No server.">
   <meta name="twitter:image" content="https://filipecabaco.github.io/snowglobe/og.png">
   <meta name="twitter:image:alt" content="snowglobe: real programs, sandboxed in your browser">
-  <meta name="description" content="Nine sandboxed runs in your browser: real programs on Linux, emulated in WebAssembly, packaged from Dockerfiles by snowglobe.">
+  <meta name="description" content="Ten sandboxed runs in your browser: real programs on Linux, emulated in WebAssembly, packaged from Dockerfiles by snowglobe.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d0d0d'/%3E%3Ccircle cx='8' cy='8' r='3.2' fill='%23d6300c'/%3E%3C/svg%3E">
   <link rel="preload" href="fonts/Switzer-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="xterm/xterm.css">
@@ -516,6 +516,7 @@ $ snowglobe exec py 'sum(range(10))'
       { dir: "rust", name: "Rust + clap", stack: "jtab, a CLI rendering JSON as tables: clap, serde_json, comfy-table.", show: [1, 2], command: "sh, with jtab on the PATH and sample data in ./data" },
       { dir: "java", name: "Java + Gson", stack: "jshell on OpenJDK 11 with Gson on the classpath.", show: [0, 1, 2, 3] },
       { dir: "curl", name: "curl + jq", stack: "Plain Alpine packages in a shell, online through your browser: curl against live APIs, piped into jq.", show: [0, 1, 2, 3], command: "sh, with curl and jq from Alpine's packages" },
+      { dir: "supabase", name: "Supabase", stack: "The Supabase CLI's native stack (Postgres, PostgREST and Auth as plain processes, no Docker) on 4 CPUs, and a small notes app on it: Auth for users, the REST API for notes, row level security keeping each user's notes their own.", show: [0, 1, 2, 3, 4, 5], command: "bash, with the stack running and notes on the PATH", card: false },
     ];
 
     const $ = (sel, root = document) => root.querySelector(sel);
@@ -541,7 +542,9 @@ $ snowglobe exec py 'sum(range(10))'
       win.addEventListener("click", (event) => openWindow(event, demo));
       const play = $(".play", node);
       play.setAttribute("aria-label", `Run ${demo.name} here`);
-      play.addEventListener("click", () => toggleInline(entry));
+      // Several CPUs need a cross-origin isolated page, which a frame in this page can't be:
+      // those runs open in a window of their own
+      play.addEventListener("click", (event) => (entry.cpus > 1 ? openWindow(event, demo) : toggleInline(entry)));
       $(".panel", node).style.viewTransitionName = "panel-" + demo.dir;
       $("#runs").append(node);
       return entry;
@@ -554,7 +557,8 @@ $ snowglobe exec py 'sum(range(10))'
       return [d.dir, row];
     }));
 
-    await Promise.all(entries.map(async ({ demo, node }) => {
+    await Promise.all(entries.map(async (entry) => {
+      const { demo, node } = entry;
       const [run, warm] = await Promise.all([getJSON(demo.dir + "/run.json"), getJSON(demo.dir + "/warm-report.json")]);
       const specs = $("dl.specs", node);
       const spec = (label, value, unit) => specs.append(el("div", {}, el("dt", { textContent: label }), el("dd", {}, value, " ", el("small", { textContent: unit }))));
@@ -565,15 +569,17 @@ $ snowglobe exec py 'sum(range(10))'
         cold = warm.cold.bytes;
       }
       if (run) {
+        entry.cpus = run.cpus || 1;
+        if (entry.cpus > 1) $(".play", node).setAttribute("aria-label", `Run ${demo.name} in a new window (${entry.cpus} CPUs)`);
         spec("Snapshot to restore", mb(run.snapshot_bytes), "MB");
         spec("Ready at build", run.boot_seconds.toFixed(1), "s");
         spec("Preloaded", mb(pre), "MB");
         spec("On demand", mb(cold), "MB");
         $(".command", node).append("Runs ", el("code", { textContent: demo.command || run.command.replaceAll("'", "") }),
-          ` · ${run.memory_mb} MB RAM · ${run.network === "fetch" ? "network through your browser" : "no network"} · no server · `,
-          // Each run has an X player card at card/<dir>/: the post itself boots the run
-          el("a", { href: "https://x.com/intent/post?url=" + encodeURIComponent(new URL(`card/${demo.dir}/`, location.href).href),
-            target: "_blank", rel: "noopener", textContent: "Share on X" }));
+          ` · ${run.memory_mb} MB RAM · ${run.cpus > 1 ? run.cpus + " CPUs · " : ""}${run.network === "fetch" ? "network through your browser" : "no network"} · no server`,
+          // Most runs have an X player card at card/<dir>/: the post itself boots the run
+          ...(demo.card === false ? [] : [" · ", el("a", { href: "https://x.com/intent/post?url=" + encodeURIComponent(new URL(`card/${demo.dir}/`, location.href).href),
+            target: "_blank", rel: "noopener", textContent: "Share on X" })]));
         const labels = ["", "Snapshot", "Ready", "Preloaded", "On demand", "Files"];
         summaryRows.get(demo.dir).append(...[demo.name, mb(run.snapshot_bytes) + " MB", run.boot_seconds.toFixed(1) + " s",
           mb(pre) + " MB", mb(cold) + " MB", run.files.toLocaleString("en")].map((t, i) => {
@@ -717,7 +723,11 @@ $ snowglobe exec py 'sum(range(10))'
       const w = Math.min(1100, screen.availWidth - 80), h = Math.min(720, screen.availHeight - 80);
       const offset = (opened++ % 6) * 28;
       const win = window.open(demo.dir + "/", `snowglobe-${demo.dir}-${Date.now()}`, `popup,width=${w},height=${h},left=${80 + offset},top=${60 + offset}`);
-      if (!win) return; // popups blocked: the link opens a new tab instead
+      if (!win) {
+        // Popups blocked: the link opens a new tab by itself; a button has to ask for one
+        if (event.currentTarget?.tagName !== "A") window.open(demo.dir + "/", "_blank");
+        return;
+      }
       event.preventDefault();
       pending.push({ path: demo.dir + "/", win });
     }

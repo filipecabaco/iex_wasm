@@ -9,8 +9,6 @@
   <style>
     #install { margin-left: .5rem; font: inherit; color: inherit; background: none; border: 1px solid currentColor;
       border-radius: 999px; padding: .1rem .7rem; cursor: pointer; }
-    #strip:has(#install) { grid-template-columns: auto minmax(0, 1fr) auto auto; }
-    @media (max-width: 640px) { #strip:has(#install) { grid-template-columns: minmax(0, 1fr) auto auto; } }
     @media (display-mode: standalone) { #install { display: none; } }
   </style>
   <script>

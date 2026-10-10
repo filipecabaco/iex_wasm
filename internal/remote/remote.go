@@ -241,7 +241,12 @@ func mirror(source, dir string) error {
 	if m := baseurlPattern.FindSubmatch(page); m != nil {
 		blobBase = string(m[1])
 	}
-	blobURL := site.ResolveReference(&url.URL{Path: blobBase})
+	// Relative to the site, or elsewhere altogether (the live site serves blobs from GitHub)
+	ref, err := url.Parse(blobBase)
+	if err != nil {
+		return fmt.Errorf("blob store %q: %w", blobBase, err)
+	}
+	blobURL := site.ResolveReference(ref)
 	blobDir := filepath.Join(dir, "system", "filesystem")
 
 	names, err := BlobNames(filepath.Join(dir, "system", "filesystem.json"))

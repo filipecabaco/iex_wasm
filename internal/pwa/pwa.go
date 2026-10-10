@@ -99,11 +99,20 @@ func Run(o Options) error {
 		}
 	}
 	shellJSON, _ := json.Marshal(present)
+	// A blob store on another origin (an absolute baseurl in the page) is cached as well
+	blobsJSON := `""`
+	if page, err := os.ReadFile(filepath.Join(site, "index.html")); err == nil {
+		if m := baseurl.FindSubmatch(page); m != nil && (bytes.HasPrefix(m[1], []byte("https://")) || bytes.HasPrefix(m[1], []byte("http://"))) {
+			b, _ := json.Marshal(string(m[1]))
+			blobsJSON = string(b)
+		}
+	}
 	sw := strings.NewReplacer(
 		"__CACHE__", "snowglobe-"+run.BuiltAt.UTC().Format("20060102T150405"),
 		"__SHELL__", string(shellJSON),
 		// Several CPUs need a cross-origin isolated page (see internal/site/isolate.js)
 		"__ISOLATE__", fmt.Sprint(run.CPUs > 1),
+		"__BLOBS__", blobsJSON,
 	).Replace(serviceWorker)
 	if err := os.WriteFile(filepath.Join(site, "sw.js"), []byte(sw), 0o644); err != nil {
 		return err
@@ -116,6 +125,8 @@ func Run(o Options) error {
 func ShortName(name string) string {
 	return strings.TrimSpace(strings.TrimSuffix(name, " in the browser"))
 }
+
+var baseurl = regexp.MustCompile(`baseurl:\s*"([^"]+)"`)
 
 var block = regexp.MustCompile(`(?s)\s*<!-- ` + marker + ` -->.*?<!-- /` + marker + ` -->`)
 

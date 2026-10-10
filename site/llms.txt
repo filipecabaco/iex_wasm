@@ -6,8 +6,8 @@
 > works); no server runs the program. Guests must be arm64 Alpine images (FROM alpine, built for
 > arm64, or FROM arm64v8/alpine). Docker is the only requirement.
 
-Live demos: https://filipecabaco.github.io/snowglobe/ (Elixir + Postgres, Python + Rich,
-TypeScript + Zod, Go + Bubble Tea, Rust + clap, Java + Gson, curl + jq).
+Live demos: https://filipecabaco.github.io/snowglobe/ (Elixir IEx, PostgreSQL, Elixir + Postgres,
+Python + Rich, TypeScript + Zod, Go + Bubble Tea, Rust + clap, Java + Gson, curl + jq, Supabase).
 Source and README: https://github.com/filipecabaco/snowglobe
 
 ## Commands

@@ -79,3 +79,22 @@ func TestRunTwiceKeepsOneBlock(t *testing.T) {
 		t.Error("the second run's short name should win")
 	}
 }
+
+func TestBlobsElsewhereAreCached(t *testing.T) {
+	dir := site(t)
+	os.WriteFile(filepath.Join(dir, "index.html"), []byte(`<html><head></head><body><script>filesystem: { json: "system/filesystem.json", baseurl: "https://raw.githubusercontent.com/o/r/abc/" }</script></body></html>`), 0o644)
+	if err := Run(Options{Site: dir}); err != nil {
+		t.Fatal(err)
+	}
+	sw, _ := os.ReadFile(filepath.Join(dir, "sw.js"))
+	if !strings.Contains(string(sw), `const BLOBS = "https://raw.githubusercontent.com/o/r/abc/";`) {
+		t.Error("sw.js should cache the blob store on GitHub")
+	}
+
+	same := site(t)
+	Run(Options{Site: same})
+	sw, _ = os.ReadFile(filepath.Join(same, "sw.js"))
+	if !strings.Contains(string(sw), `const BLOBS = "";`) {
+		t.Error("a site with its own blobs caches nothing from other origins")
+	}
+}

@@ -9,6 +9,11 @@ const SHELL = __SHELL__;
 // Several CPUs share memory between Web Workers, which needs a cross-origin isolated page: add
 // the headers for that to the page (static hosts can't send them)
 const ISOLATE = __ISOLATE__;
+// Where the guest's file blobs come from when that isn't this site (the live demos fetch theirs
+// from GitHub): those are cached too. Nothing else from other origins is: the guest's own
+// requests must reach the network.
+const BLOBS = __BLOBS__;
+const cacheable = (url) => new URL(url).origin === location.origin || (BLOBS && url.startsWith(BLOBS));
 
 function isolate(response) {
   if (!ISOLATE || !response || response.type === "opaqueredirect") return response;
@@ -37,7 +42,7 @@ self.addEventListener("message", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
       Promise.all(urls.map(async (url) => {
-        if (new URL(url).origin !== location.origin || (await cache.match(url, { ignoreSearch: true }))) return;
+        if (!cacheable(url) || (await cache.match(url, { ignoreSearch: true }))) return;
         try {
           const response = await fetch(url);
           if (response.ok && response.status === 200) await cache.put(url, response);
@@ -49,7 +54,7 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
-  if (request.method !== "GET" || url.origin !== location.origin || request.headers.has("range")) return;
+  if (request.method !== "GET" || !cacheable(request.url) || request.headers.has("range")) return;
 
   // The page itself: the network first, so a new build shows up; the cache when offline
   if (request.mode === "navigate") {

@@ -10,7 +10,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # contents: write pushes the blob store (refs/snowglobe/blobs) from main's runs
+  contents: write
   pages: write
   id-token: write
 
@@ -211,10 +212,45 @@ jobs:
           pattern: site-*
           path: dist
 
-      - name: Assemble site
+      # The demos share one blob store (`snowglobe pool`). It goes to git instead of Pages (whose
+      # sites are capped at 1 GB): a commit on refs/snowglobe/blobs, outside refs/heads so clones
+      # don't fetch it, chained on the last one so only new blobs are pushed and older pages
+      # (installed apps, cached copies) keep finding theirs. raw.githubusercontent.com serves it
+      # at that commit, with CORS. The rest of each site (pages, snapshots, warm packs) is Pages'.
+      - name: Assemble site, and publish the blob store
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
+          set -e
           for d in dist/site-*; do mv "$d" "dist/${d#dist/site-}"; done
-          mise run assemble
+          go build -o snowglobe ./cmd/snowglobe
+          ./snowglobe pool dist
+
+          export GIT_INDEX_FILE="$RUNNER_TEMP/blobs.index"
+          git -C dist/blobs --git-dir="$GITHUB_WORKSPACE/.git" --work-tree=. add -A .
+          tree=$(git write-tree)
+          parent=
+          if git fetch --quiet --depth=1 origin +refs/snowglobe/blobs:refs/snowglobe/blobs; then
+            parent="-p $(git rev-parse refs/snowglobe/blobs)"
+          fi
+          commit=$(git commit-tree "$tree" $parent -m "Blobs for $GITHUB_SHA")
+          git push --quiet origin "$commit:refs/snowglobe/blobs"
+          unset GIT_INDEX_FILE
+          url="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$commit/"
+          echo "blob store: $url ($(du -sh dist/blobs | cut -f1))"
+          for page in dist/*/index.html; do
+            sed -i "s#baseurl: \"../blobs/\"#baseurl: \"$url\"#" "$page"
+            grep -q "baseurl: \"$url\"" "$page" || { echo "::error::$page doesn't point at the blob store"; exit 1; }
+          done
+          rm -rf dist/blobs
+
+          # The rest of `mise run assemble`: every demo an installable app, and the index page
+          for demo in $DEMOS; do ./snowglobe pwa "dist/$demo"; done
+          cp -R site/. dist/
+          cp -R dist/elixir/xterm dist/xterm
           du -sh dist
 
       - uses: actions/configure-pages@v6

@@ -7,7 +7,7 @@ static files. Visitors
 get your program running in their tab in about a second, with no server behind it.
 
 **[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir IEx, PostgreSQL, Elixir + Postgres, Python + Rich, TypeScript + Zod,
-Go + Bubble Tea, Rust + clap, Java + Gson, and curl + jq (plain Alpine tools, online through your browser), each a small
+Go + Bubble Tea, Rust + clap, Java + Gson, curl + jq (plain Alpine tools, online through your browser), and Supabase (its native stack and a small app on it), each a small
 project in [`examples/`](examples) running in the browser.
 
 [![CI and Pages](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml)
@@ -175,19 +175,19 @@ Piped stdin is typed in one line at a time, each waiting until the app goes quie
 only what the command printed (no echo, no prompt) and plain text when its output isn't a
 terminal, which suits scripts and agents. Each instance starts fresh from the snapshot.
 
-### Two more examples, for `snowglobe run`
+### Supabase, and packages from Alpine
 
-Two examples in [`examples/`](examples) aren't on the demo site:
+Two examples go further:
 
+- **[`supabase`](examples/supabase)** (on the demo site) runs the Supabase CLI's native local stack
+  (Postgres, PostgREST and Auth as plain processes, no Docker) inside the guest, on 4 CPUs, with
+  `notes`, a small app on it: users sign up through Auth, notes go through the REST API, and row
+  level security keeps each user's notes their own. The stack's services are glibc programs, so
+  the image carries Debian's glibc next to Alpine's musl, and Postgres extensions the demo never
+  loads (Wrappers, PostGIS, PL/Perl, PGroonga) are left out.
 - **[`apk`](examples/apk)** installs Alpine packages into the running machine (`apk add figlet`).
   Alpine's mirrors don't allow CORS, so this only works under `snowglobe run`, where the guest's
-  requests go out from the host.
-- **[`supabase`](examples/supabase)** runs the Supabase CLI's native local stack (Postgres,
-  PostgREST and Auth as plain processes, no Docker) inside the guest, on 4 CPUs, with `notes`, a
-  small app on it: users sign up through Auth, notes go through the REST API, and row level
-  security keeps each user's notes their own. The stack's services are glibc programs, so the
-  image carries Debian's glibc next to Alpine's musl. At about 250 MB of files it's too big for the
-  demo site, but it runs in a browser tab like the others (`snowglobe serve`).
+  requests go out from the host; CI builds and checks it, but it isn't on the demo site.
 
 ```console
 $ snowglobe build examples/supabase --out dist/supabase
@@ -262,7 +262,7 @@ flowchart LR
 ```sh
 mise install       # Go, pinned in mise.toml
 mise run test
-mise run build     # build all nine examples into dist/ (a few minutes)
+mise run build     # build all ten demos into dist/ (a few minutes)
 mise run serve
 ```
 
