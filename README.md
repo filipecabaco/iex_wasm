@@ -6,8 +6,8 @@ machine compiled to WebAssembly, snapshots it once your app is ready, and writes
 static files. Visitors
 get your program running in their tab in about a second, with no server behind it.
 
-**[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Elixir IEx, PostgreSQL, Elixir + Postgres, Python + Rich, TypeScript + Zod,
-Go + Bubble Tea, Rust + clap, Java + Gson, curl + jq (plain Alpine tools, online through your browser), and Supabase (its native stack and a small app on it), each a small
+**[▶ Try the demos](https://filipecabaco.github.io/snowglobe/)**: Supabase (its native stack and a small app on it), Elixir IEx, PostgreSQL, Elixir + Postgres, Python + Rich, TypeScript + Zod,
+Go + Bubble Tea, Rust + clap, Java + Gson, and curl + jq (plain Alpine tools, online through your browser), each a small
 project in [`examples/`](examples) running in the browser.
 
 [![CI and Pages](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml/badge.svg)](https://github.com/filipecabaco/snowglobe/actions/workflows/pages.yml)

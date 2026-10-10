@@ -2,7 +2,7 @@
 go = "1.27.1"
 
 [env]
-DEMOS = "iex postgres elixir python typescript go rust java curl supabase"
+DEMOS = "supabase iex postgres elixir python typescript go rust java curl"
 # Examples built and checked in CI but not on the site (too big, or need the host's network)
 EXAMPLES = "apk"
 

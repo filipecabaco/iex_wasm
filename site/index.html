@@ -10,7 +10,7 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="snowglobe">
   <meta property="og:title" content="snowglobe: real programs, sandboxed in your browser">
-  <meta property="og:description" content="Docker images as static sites: Linux on a 64-bit ARM CPU emulated in WebAssembly, restored from a snapshot. Ten live runs, from Elixir + Postgres to Supabase. No server.">
+  <meta property="og:description" content="Docker images as static sites: Linux on a 64-bit ARM CPU emulated in WebAssembly, restored from a snapshot. Ten live runs, from the Supabase stack to curl + jq. No server.">
   <meta property="og:url" content="https://filipecabaco.github.io/snowglobe/">
   <meta property="og:image" content="https://filipecabaco.github.io/snowglobe/og.png">
   <meta property="og:image:width" content="1200">
@@ -507,6 +507,7 @@ $ snowglobe exec py 'sum(range(10))'
   <script src="xterm/xterm.js" defer></script>
   <script type="module">
     const demos = [
+      { dir: "supabase", name: "Supabase", stack: "The Supabase CLI's native stack (Postgres, PostgREST and Auth as plain processes, no Docker) on 4 CPUs, and a small notes app on it: Auth for users, the REST API for notes, row level security keeping each user's notes their own.", show: [0, 1, 2, 3, 4, 5], command: "bash, with the stack running and notes on the PATH", card: false },
       { dir: "iex", name: "Elixir IEx", stack: "Just IEx, from Alpine's Elixir and Erlang packages: processes, tasks and docs, in a tab.", show: [0, 2, 3, 4] },
       { dir: "postgres", name: "PostgreSQL", stack: "A Postgres 18 server from Alpine's packages, with psql attached and a small planets table to query.", show: [0, 1, 2, 3] },
       { dir: "elixir", name: "Elixir + Postgres", stack: "A Mix release with Ecto and Postgrex, talking to a PostgreSQL 18 server running in the same tab.", show: [0, 1, 2, 3] },
@@ -516,7 +517,6 @@ $ snowglobe exec py 'sum(range(10))'
       { dir: "rust", name: "Rust + clap", stack: "jtab, a CLI rendering JSON as tables: clap, serde_json, comfy-table.", show: [1, 2], command: "sh, with jtab on the PATH and sample data in ./data" },
       { dir: "java", name: "Java + Gson", stack: "jshell on OpenJDK 11 with Gson on the classpath.", show: [0, 1, 2, 3] },
       { dir: "curl", name: "curl + jq", stack: "Plain Alpine packages in a shell, online through your browser: curl against live APIs, piped into jq.", show: [0, 1, 2, 3], command: "sh, with curl and jq from Alpine's packages" },
-      { dir: "supabase", name: "Supabase", stack: "The Supabase CLI's native stack (Postgres, PostgREST and Auth as plain processes, no Docker) on 4 CPUs, and a small notes app on it: Auth for users, the REST API for notes, row level security keeping each user's notes their own.", show: [0, 1, 2, 3, 4, 5], command: "bash, with the stack running and notes on the PATH", card: false },
     ];
 
     const $ = (sel, root = document) => root.querySelector(sel);
