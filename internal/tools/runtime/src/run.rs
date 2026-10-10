@@ -29,6 +29,18 @@ const DETACH_KEY: u8 = 0x1d; // ctrl-]
 /// open for this long
 const QUIET: Duration = Duration::from_millis(1200);
 const COMMAND_CAP: Duration = Duration::from_secs(300);
+/// Once the prompt is back, how long the app must stay quiet for the command to count as done
+const PROMPT_SETTLE: Duration = Duration::from_millis(250);
+
+/// How long a command that should end at a prompt may stay silent before it counts as done anyway
+const QUIET_AWAITING_PROMPT: Duration = Duration::from_secs(10);
+
+/// What every prompt of an app ends with: its last word, numbers blanked out. A shell's
+/// "~ $" and "/tmp $" are both "$", IEx's iex(1)> and iex(2)> both "iex(#)>"
+fn prompt_shape(s: &str) -> String {
+    let last = s.split_whitespace().last().unwrap_or_default();
+    last.chars().map(|c| if c.is_ascii_digit() { '#' } else { c }).collect()
+}
 
 struct Session {
     board: Arc<Board>,
@@ -49,13 +61,39 @@ impl Session {
         text::since_last_clear(&all).to_vec()
     }
 
-    fn quiet(&self) {
+    /// Wait for the command to finish: its prompt is back and nothing is printing. Without a
+    /// prompt to go by, once the app has printed, fetched and computed nothing for a while.
+    fn quiet(&self, prompt: &str, from: usize) {
         let begun = Instant::now();
+        let shape = prompt_shape(prompt);
+        // With a prompt to wait for, silence alone (sleep, a slow request) isn't the end
+        let quiet = if shape.is_empty() { QUIET } else { QUIET_AWAITING_PROMPT };
         let mut load = machine::Load::new(&self.runner);
         loop {
             std::thread::sleep(Duration::from_millis(100));
             let busy = load.busy(&self.runner);
-            if !(busy || self.activity.connected() || self.activity.idle_for() < QUIET) || begun.elapsed() >= COMMAND_CAP {
+            if begun.elapsed() >= COMMAND_CAP {
+                break;
+            }
+            let idle = self.activity.idle_for();
+            if self.activity.connected() || idle < PROMPT_SETTLE {
+                continue;
+            }
+            if !shape.is_empty() {
+                let screen = self.activity.screen.lock().unwrap();
+                let printed = screen.since(from);
+                let line = printed.rsplit(|&b| b == b'\n').next().unwrap_or_default();
+                // The command's own echo ends with the prompt too: only a line after it counts
+                let line: String = String::from_utf8_lossy(&text::plain(line))
+                    .trim()
+                    .chars()
+                    .map(|c| if c.is_ascii_digit() { '#' } else { c })
+                    .collect();
+                if printed.contains(&b'\n') && line.ends_with(&shape) {
+                    break;
+                }
+            }
+            if !busy && idle >= quiet {
                 break;
             }
         }
@@ -80,7 +118,7 @@ impl Session {
         self.board
             .console_input(format!("{}\r", command.trim_end_matches('\n')).as_bytes());
         self.activity.touch();
-        self.quiet();
+        self.quiet(&prompt, from);
         let output = text::without_queries(self.activity.screen.lock().unwrap().since(from));
         let output = String::from_utf8_lossy(&output).into_owned();
         // Line editors echo the command (wrapped at the terminal's width when it is long) and
