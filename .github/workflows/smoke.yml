@@ -58,6 +58,13 @@ jobs:
           expect https.txt 200 "HTTPS out of the guest" || status=1
           ./snowglobe exec smoke 'curl -sS -o /dev/null -w "%{http_code}" http://example.com/' | tee http.txt
           expect http.txt 200 "HTTP out of the guest" || status=1
+          ./snowglobe exec smoke 'time curl -sv -m 40 -o /dev/null -w "code=%{http_code}\n" http://example.com/ 2>&1; echo diag-done' > diag.txt 2>&1 || true
+          echo "::error title=diag1::$(tail -c 900 diag.txt | tr '\n\r%' ';;_')"
+          ./snowglobe exec smoke 'curl -s -m 40 -o /dev/null -w "code=%{http_code}\n" http://example.com/; echo diag-done' > diag2.txt 2>&1 || true
+          echo "::error title=diag2::$(tail -c 300 diag2.txt | tr '\n\r%' ';;_')"
+          ./snowglobe exec smoke 'curl -s -m 40 -o /dev/null -w "code=%{http_code}\n" https://example.com/; echo diag-done' > diag3.txt 2>&1 || true
+          echo "::error title=diag3::$(tail -c 300 diag3.txt | tr '\n\r%' ';;_')"
+          docker ps -a --format '{{.Names}} {{.Image}}' ; for c in $(docker ps -q); do docker logs --tail 30 "$c" 2>&1 | tail -30 > dl.txt; echo "::error title=logs::$(tr '\n\r%' ';;_' < dl.txt | tail -c 900)"; done
           exit $status
 
       - name: Port forwarding into the guest
