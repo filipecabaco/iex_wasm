@@ -6,6 +6,8 @@ fi
 export SUPABASE_EXPERIMENTAL_STACK=1 SUPABASE_TELEMETRY_DISABLED=1 DO_NOT_TRACK=1 CI=1
 
 echo "Starting Supabase's native stack: Postgres, PostgREST and Auth (no Docker) ..."
+# --runtime native: plain processes, no Docker. --eager: every service is up before this returns
+# (they're in the snapshot) and none is stopped when idle, so a visitor never waits for a restart.
 supabase stack start --runtime native --eager \
   -x realtime -x storage -x functions -x studio -x mail -x analytics -x pooler </dev/null 2>&1 |
   grep -v -e "new version of Supabase CLI" -e "recommend updating" || exit 1
@@ -17,11 +19,10 @@ sb-auth() { curl -sS -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $S
 export -f sb-auth
 
 # Warm everything a visitor's first commands go through, so it's done in the snapshot rather than
-# on their clock: Auth and PostgREST start on their first request; a first signup also loads
-# Auth's sign-up path (bcrypt, JWT signing) and opens its database connections; a first insert
-# fills PostgREST's schema cache and plans the row level security policies; notes' first run
-# reads Bun in. A throwaway user does all of it, then it's removed and the counter reset, so
-# visitors start from an empty app.
+# on their clock: a first signup loads Auth's sign-up path (bcrypt, JWT signing) and opens its
+# database connections; a first insert fills PostgREST's schema cache and plans the row level
+# security policies; notes' first run reads Bun in. A throwaway user does all of it, then it's
+# removed and the counter reset, so visitors start from an empty app.
 curl -sS -o /dev/null "$API_URL/auth/v1/health"
 curl -sS -o /dev/null -H "apikey: $ANON_KEY" "$API_URL/rest/v1/"
 notes signup warmup@example.com warmup-password >/dev/null 2>&1 &&
