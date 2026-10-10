@@ -24,11 +24,18 @@ COPY --from=glibc /out/etc/ld.so.cache /etc/ld.so.cache
 RUN ln -s /usr/glibc/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1 && \
     ln -s /bin/sh /usr/bin/sh
 
-# The CLI (its linux-arm64-musl build, through npm), and what the stack's scripts need
-RUN apk add --no-cache nodejs npm bash tar curl jq postgresql-client && \
-    ln -sf /bin/bash /usr/bin/bash && \
-    npm install --global --no-audit --no-fund supabase@2.118.0-beta.90 && \
-    npm cache clean --force
+# What the stack's scripts need, and the C++ runtime the CLI (Bun) links against
+RUN apk add --no-cache bash tar curl jq postgresql-client libstdc++ libgcc && \
+    ln -sf /bin/bash /usr/bin/bash
+
+# The Supabase CLI: its linux-arm64-musl build, a single Bun-compiled binary, straight from npm's
+# registry (no Node). It also runs notes: with BUN_BE_BUN=1 it is Bun. The package's other binary,
+# supabase-go (the older Go CLI, for commands not yet moved over), isn't needed here.
+ADD --checksum=sha256:e2ea546b73b7835234489beed4a90b9788cca81c4635781baab4ae689c766cc3 \
+    https://registry.npmjs.org/@supabase/cli-linux-arm64-musl/-/cli-linux-arm64-musl-2.118.0-beta.90.tgz /tmp/cli.tgz
+RUN tar -xzf /tmp/cli.tgz -C /tmp package/bin/supabase && \
+    install -m 755 /tmp/package/bin/supabase /usr/local/bin/supabase && \
+    rm -rf /tmp/package /tmp/cli.tgz
 
 # Postgres won't run as root, and the CLI starts everything as whoever runs it
 RUN adduser -D -s /bin/bash supa
@@ -49,18 +56,20 @@ RUN supabase init --yes >/dev/null && \
            lib/gconv && \
     du -sh .
 
-# notes, a small app on the stack: Auth for users, PostgREST for the table, row level security
-# in Postgres keeping each user's notes their own. The migration is applied when the stack starts.
-COPY --chown=supa app/notes.mjs ./
+# notes, a small app on the stack: Auth for users, the Data API (PostgREST) for the notes, row
+# level security in Postgres keeping each user's notes their own. The migration is applied when
+# the stack starts.
+COPY --chown=supa app/notes.ts ./
 COPY --chown=supa app/supabase/migrations supabase/migrations
 
 USER root
 COPY --chmod=755 start.sh /usr/local/bin/supabase-demo
-RUN chmod 755 /home/supa/app/notes.mjs && ln -s /home/supa/app/notes.mjs /usr/local/bin/notes
+RUN printf '#!/bin/sh\n# notes on the Bun inside the Supabase CLI\nBUN_BE_BUN=1 exec supabase run /home/supa/app/notes.ts "$@"\n' > /usr/local/bin/notes && \
+    chmod 755 /usr/local/bin/notes
 ENV LANG=C.UTF-8
 CMD ["/usr/local/bin/supabase-demo"]
 
 LABEL snowglobe.title="Supabase in the browser" \
       snowglobe.memory="640" snowglobe.cpus="2" \
       snowglobe.ready="supa:~/app$ " \
-      snowglobe.exercise='["notes signup ada@example.com lovelace-1815", "notes add first program, for the analytical engine", "notes ls", "notes signup grace@example.com hopper-1906", "notes ls", "psql \"$DB_URL\" -c \"select u.email, count(n.id) from auth.users u left join notes n on n.user_id = u.id group by 1\""]'
+      snowglobe.exercise='["notes signup ada@example.com lovelace-1815", "notes add first program, for the analytical engine", "notes search engine", "notes ls", "notes signup grace@example.com hopper-1906", "notes ls", "psql \"$DB_URL\" -c \"select u.email, count(n.id) from auth.users u left join notes n on n.user_id = u.id group by 1\""]'

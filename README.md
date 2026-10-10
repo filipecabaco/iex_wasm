@@ -182,10 +182,12 @@ Two examples go further:
 
 - **[`supabase`](examples/supabase)** (on the demo site) runs the Supabase CLI's native local stack
   (Postgres, PostgREST and Auth as plain processes, no Docker) inside the guest, on 2 CPUs, with
-  `notes`, a small app on it: users sign up through Auth, notes go through the REST API, and row
-  level security keeps each user's notes their own. The stack's services are glibc programs, so
-  the image carries Debian's glibc next to Alpine's musl, and Postgres extensions the demo never
-  loads (Wrappers, PostGIS, PL/Perl, PGroonga) are left out.
+  `notes`, a small app on it (90 lines of TypeScript): users sign up through Auth, notes are
+  stored and searched through the Data API, and row level security keeps each user's notes their
+  own. It runs on the Bun inside the Supabase CLI (`BUN_BE_BUN=1`), so the image carries no Node,
+  and a command takes well under a second. The stack's services are glibc programs, so the image
+  carries Debian's glibc next to Alpine's musl, and Postgres extensions the demo never loads
+  (Wrappers, PostGIS, PL/Perl, PGroonga) are left out.
 - **[`apk`](examples/apk)** installs Alpine packages into the running machine (`apk add figlet`).
   Alpine's mirrors don't allow CORS, so this only works under `snowglobe run`, where the guest's
   requests go out from the host; CI builds and checks it, but it isn't on the demo site.
