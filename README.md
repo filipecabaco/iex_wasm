@@ -206,6 +206,26 @@ for the full workflow and concurrency/permission limits, plus instructions for
 [enabling working folders in another example](examples/editor/README.md#enable-working-folders-in-another-example)
 and [public HTTPS deployment](examples/editor/README.md#public-https-deployment).
 
+## Full-stack Svelte projects in a local editor
+
+**[`fullstack-supabase-svelte`](examples/fullstack-supabase-svelte)** combines the native
+Supabase example with stable Svelte 5, SvelteKit, shadcn-svelte and Tailwind. In desktop
+Chrome/Edge, choose a trusted working folder, optionally create the notes starter in an empty
+folder, and edit ordinary source files in your own local editor. **Sync & preview** imports
+current disk sources and compiles a client-side SvelteKit SPA inside the VM; **Open preview**
+opens it in a panel alongside the VM terminal, keeping the VM foreground. Sync never writes disk
+files. Dependencies use a mutable VM cache, not your computer's `node_modules`. Run `npm install`/`uninstall` in `/workspace`, then explicitly
+**Save package manifests to disk** before syncing to preserve those changes in your local project.
+
+A service worker forwards the private preview's HTML/assets and Supabase Auth/REST requests to
+the owning tab over Armless's existing virtual TCP transport. No server listens on your computer
+and no backend runs on the static host. Keep the VM page open and foreground: hidden tabs can
+be throttled enough to exceed Auth deadlines. After editing, sync and reopen the preview panel.
+This first version uses static builds rather than Vite HMR and supports trusted projects, not
+isolated execution of untrusted web code. **Save now** separately preserves the VM/database.
+See the [example guide](examples/fullstack-supabase-svelte/README.md) for pinned versions, bounds,
+networking/security limits and deployment instructions.
+
 ## Share a run as a post
 
 Selected demos have an X player card at `card/<demo>/` (e.g.
@@ -307,12 +327,12 @@ grace@example.com: 0 note(s)
 
 ## Development checks
 
-Run `go test ./...` and `node --test internal/site/*.test.cjs examples/editor/bridge.test.mjs`
-(Node 22+; no npm packages needed), or `mise run test`. To exercise real IndexedDB transactions,
+Run `go test ./...` and `node --test internal/site/*.test.cjs examples/editor/bridge.test.mjs examples/fullstack-supabase-svelte/*.test.mjs`
+(Node 24+ for native TypeScript support; no npm packages needed), or `mise run test`. To exercise real IndexedDB transactions,
 Web Locks and filesystem writable streams, serve the repository on localhost and open
-`internal/site/sessions.browser.html` and `internal/site/working-folder.browser.html` in visible
-tabs; their results are displayed on the pages. The automatic-saving check requires its tab to
-remain visible, just like the demos. Full session restore and the editor's disk-folder → VPS
+`internal/site/sessions.browser.html`, `internal/site/working-folder.browser.html`, and
+`internal/site/preview-fixture/` in visible tabs; their results are displayed on the pages. The
+automatic-saving check requires its tab to remain visible, just like the demos. Full session restore and the editor's disk-folder → VPS
 flow should also be checked against built examples, since the browser regression pages
 substitute the VM and use disposable origin-private directories.
 

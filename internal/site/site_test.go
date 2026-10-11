@@ -1,6 +1,7 @@
 package site
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,5 +181,34 @@ func TestSeveralCPUsWithNetwork(t *testing.T) {
 		if !strings.Contains(string(sw), want) {
 			t.Errorf("sw.js lacks %q", want)
 		}
+	}
+}
+
+func TestProjectModeShipsDiskAndPrivatePreviewWithoutEditor(t *testing.T) {
+	p := Page{Title: "Full stack", MemoryMB: 1024, Network: "fetch", CPUs: 2}
+	// JSON keeps this regression test runnable before the new option exists.
+	if err := json.Unmarshal([]byte(`{"Project":true}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	page, dir := render(t, p)
+	for _, want := range []string{`id="project-choose"`, `id="project-sync"`, `id="project-init"`, `id="project-preview"`, `id="project-preview-pane"`, `id="project-preview-reload"`, `id="project-preview-close"`, `<iframe id="project-preview-frame" title="Your private Svelte application">`, `src="project-ui.js"`, `new SnowglobeProjectUI(sessions)`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("project page lacks %q", want)
+		}
+	}
+	if strings.Contains(page, `id="editor-content"`) {
+		t.Error("project mode must not add a browser editor")
+	}
+	if strings.Contains(page, `id="project-preview" target="_blank"`) {
+		t.Error("the preview must keep its VM owner foreground")
+	}
+	for _, name := range []string{"working-folder.js", "project-ui.js", "preview-worker.js"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("missing asset %s: %v", name, err)
+		}
+	}
+	sw, _ := os.ReadFile(filepath.Join(dir, "sw.js"))
+	if !strings.Contains(string(sw), `importScripts("preview-worker.js")`) {
+		t.Error("isolation worker must preserve private preview routing")
 	}
 }

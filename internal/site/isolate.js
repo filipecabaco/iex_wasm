@@ -8,6 +8,7 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+  if (self.snowglobePreviewRequest?.(request)) return;
   if (request.mode !== "navigate" || new URL(request.url).origin !== location.origin) return;
   event.respondWith(fetch(request).then(isolate));
 });

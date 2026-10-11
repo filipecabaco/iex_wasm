@@ -33,6 +33,12 @@ var workingFolderJS []byte
 //go:embed folder-ui.js
 var folderUIJS []byte
 
+//go:embed project-ui.js
+var projectUIJS []byte
+
+//go:embed preview-worker.js
+var previewWorkerJS []byte
+
 var tmpl = template.Must(template.Must(template.New("index").Parse(page)).New("editor").Parse(editorHTML))
 
 // Page holds what varies between sites.
@@ -43,6 +49,7 @@ type Page struct {
 	Network  string // "none" or "fetch"; must match the snapshot
 	CPUs     int    // must match the snapshot; more than one needs cross-origin isolation
 	Editor   bool   // opt-in text editor; image must run the /workspace bridge on port 8090
+	Project  bool   // external-editor working folder + private preview; bridges on 8090/8091
 	// The console size the snapshot was taken at: its screen is replayed at this size
 	ConsoleCols, ConsoleRows int
 }
@@ -90,9 +97,15 @@ func Render(out string, p Page) error {
 		}
 	}
 	assets := map[string][]byte{"sessions.js": sessionsJS, "session-ui.js": sessionUIJS}
-	if p.Editor {
+	if p.Editor || p.Project {
 		assets["working-folder.js"] = workingFolderJS
+	}
+	if p.Editor {
 		assets["folder-ui.js"] = folderUIJS
+	}
+	if p.Project {
+		assets["project-ui.js"] = projectUIJS
+		assets["preview-worker.js"] = previewWorkerJS
 	}
 	for name, source := range assets {
 		if err := os.WriteFile(filepath.Join(out, name), source, 0o644); err != nil {
@@ -111,8 +124,12 @@ func Render(out string, p Page) error {
 		return err
 	}
 	// Several CPUs need a cross-origin isolated page: sw.js makes it one
-	if p.CPUs > 1 {
-		if err := os.WriteFile(filepath.Join(out, "sw.js"), isolateWorker, 0o644); err != nil {
+	if p.CPUs > 1 || p.Project {
+		worker := append([]byte{}, isolateWorker...)
+		if p.Project {
+			worker = append([]byte("importScripts(\"preview-worker.js\");\n"), worker...)
+		}
+		if err := os.WriteFile(filepath.Join(out, "sw.js"), worker, 0o644); err != nil {
 			return err
 		}
 	}

@@ -252,3 +252,21 @@ check('guest transport rejects errors, disconnected guests and timeouts', async 
     const c = new EventEmitter(); c.abort = () => {}; return c;
   } }, 10).request({ op: 'reset' }), /timed out/i);
 });
+
+check('source scans skip explicitly excluded dependency and build directories before reading them', async t => {
+  const dir = await folder(t); const disk = new W.DiskFolder(dir);
+  await fs.mkdir(path.join(dir.location, 'node_modules'));
+  await fs.writeFile(path.join(dir.location, 'node_modules/large'), new Uint8Array(W.MAX_FILE_BYTES + 1));
+  await disk.write('src/main.ts', bytes('hello'), null);
+  const entries = await disk.scan({ exclude: ['node_modules'] });
+  assert.deepEqual(entries.map(e => e.path), ['src', 'src/main.ts']);
+  await assert.rejects(disk.scan(), /too large/i, 'ordinary editor imports retain their existing limits');
+});
+check('guest RPC can select a separate port and bounded larger responses without changing editor defaults', async () => {
+  const socket = new EventEmitter(); socket.abort = () => {}; socket.write = () => {};
+  let port;
+  const bridge = new W.GuestBridge({ connect: p => { port = p; return socket; } }, 100, { port: 8091, maxReply: 100000 });
+  const response = bridge.request({ op: 'starter' });
+  socket.emit('connect'); socket.emit('data', bytes(JSON.stringify({ result: 'x'.repeat(70000) }) + '\n'));
+  assert.equal((await response).length, 70000); assert.equal(port, 8091);
+});

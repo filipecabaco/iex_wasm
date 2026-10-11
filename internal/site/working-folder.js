@@ -78,12 +78,13 @@
         throw e;
       }
     }
-    async scan() {
+    async scan({ exclude = [] } = {}) {
       const entries = [];
       let total = 0;
       async function walk(directory, prefix = "") {
         for await (const [name, handle] of directory.entries()) {
           const path = prefix + name;
+          if (exclude.includes(name)) continue;
           parts(path);
           if (entries.length >= MAX_ENTRIES) throw new Error("Folder too large (limit 1,000 files and directories)");
           const entry = { path, kind: handle.kind };
@@ -101,7 +102,9 @@
     }
   }
   class GuestBridge {
-    constructor(vm, timeout = 30000) { this.vm = vm; this.timeout = timeout; }
+    constructor(vm, timeout = 30000, { port = 8090, maxReply = 65536 } = {}) {
+      this.vm = vm; this.timeout = timeout; this.port = port; this.maxReply = maxReply;
+    }
     request(request) {
       return new Promise((resolve, reject) => {
         let connection, settled = false, reply = "";
@@ -115,7 +118,7 @@
         };
         const timer = setTimeout(() => finish(new Error("VPS file bridge timed out; reload the folder to retry")), this.timeout);
         try {
-          connection = this.vm.connect(8090);
+          connection = this.vm.connect(this.port);
           connection.on("connect", () => {
             try { connection.write(JSON.stringify(request) + "\n"); }
             catch (e) { finish(e); }
@@ -124,7 +127,7 @@
           connection.on("data", chunk => {
             try {
               reply += decoder.decode(chunk, { stream: true });
-              if (reply.length > 65536) throw new Error("Invalid VPS file bridge response");
+              if (reply.length > this.maxReply) throw new Error("Invalid VPS file bridge response");
               const newline = reply.indexOf("\n");
               if (newline < 0) return;
               const response = JSON.parse(reply.slice(0, newline));

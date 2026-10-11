@@ -134,3 +134,19 @@ func TestBlobsElsewhereAreCached(t *testing.T) {
 		t.Error("a site with its own blobs caches nothing from other origins")
 	}
 }
+
+func TestProjectPreviewSurvivesPWAWithoutNetworkOrCacheFallback(t *testing.T) {
+	dir := site(t)
+	for _, name := range []string{"project-ui.js", "preview-worker.js"} {
+		os.WriteFile(filepath.Join(dir, name), nil, 0o644)
+	}
+	if err := Run(Options{Site: dir}); err != nil {
+		t.Fatal(err)
+	}
+	sw, _ := os.ReadFile(filepath.Join(dir, "sw.js"))
+	for _, want := range []string{`importScripts("preview-worker.js")`, `"project-ui.js"`, `"preview-worker.js"`, `self.snowglobePreviewRequest?.(request)`} {
+		if !strings.Contains(string(sw), want) {
+			t.Errorf("PWA preview lacks %s", want)
+		}
+	}
+}

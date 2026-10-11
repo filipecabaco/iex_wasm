@@ -58,6 +58,7 @@ type Settings struct {
 	CPUs      int
 	BuildCPUs int
 	Editor    bool
+	Project   bool
 	Console   boot.Console
 }
 
@@ -180,7 +181,7 @@ func Run(o Options, version string) error {
 		if err := writeRunInfo(out, o, s, fs, files, bytes, version); err != nil {
 			return err
 		}
-		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs, Editor: s.Editor,
+		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs, Editor: s.Editor, Project: s.Project,
 			ConsoleCols: tools.ConsoleCols, ConsoleRows: tools.ConsoleRows})
 	})
 }
@@ -337,6 +338,16 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 	}
 	if s.Editor && s.Network != "fetch" {
 		return nil, errors.New("the working-folder editor requires snowglobe.network=fetch for its guest file bridge")
+	}
+
+	if value := label("project"); value != "" {
+		if value != "true" && value != "false" {
+			return nil, errors.New("label snowglobe.project: use true or false")
+		}
+		s.Project = value == "true"
+	}
+	if s.Project && (s.Network != "fetch" || s.Editor) {
+		return nil, errors.New("project mode requires snowglobe.network=fetch and cannot be combined with the browser editor")
 	}
 
 	s.CPUs = o.CPUs

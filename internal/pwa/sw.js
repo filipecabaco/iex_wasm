@@ -13,7 +13,8 @@ const ISOLATE = __ISOLATE__;
 // from GitHub): those are cached too. Nothing else from other origins is: the guest's own
 // requests must reach the network.
 const BLOBS = __BLOBS__;
-const cacheable = (url) => new URL(url).origin === location.origin || (BLOBS && url.startsWith(BLOBS));
+const cacheable = (url) => !self.snowglobePreviewRequest?.({ url }) &&
+  (new URL(url).origin === location.origin || (BLOBS && url.startsWith(BLOBS)));
 
 function isolate(response) {
   if (!ISOLATE || !response || response.type === "opaqueredirect") return response;
@@ -53,6 +54,7 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+  if (self.snowglobePreviewRequest?.(request)) return;
   const url = new URL(request.url);
   if (request.method !== "GET" || !cacheable(request.url) || request.headers.has("range")) return;
 

@@ -3,7 +3,7 @@ go = "1.27.1"
 
 [env]
 # <example>-<n>cpu: examples/<example> built with --cpus <n>; supabase-1cpu is what its X card plays
-DEMOS = "supabase supabase-1cpu iex postgres elixir python typescript go rust java curl editor"
+DEMOS = "fullstack-supabase-svelte supabase supabase-1cpu iex postgres elixir python typescript go rust java curl editor"
 # Examples built and checked in CI but not published
 EXAMPLES = "apk"
 
@@ -45,4 +45,4 @@ run = "go run ./cmd/snowglobe serve dist"
 
 [tasks.test]
 description = "Run the tests"
-run = "go test ./... && node --test internal/site/*.test.cjs examples/editor/bridge.test.mjs"
+run = "go test ./... && node --test internal/site/*.test.cjs examples/editor/bridge.test.mjs examples/fullstack-supabase-svelte/*.test.mjs"

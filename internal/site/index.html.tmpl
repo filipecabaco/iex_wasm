@@ -87,6 +87,17 @@
     #sessions select, #session-filename { width: 100%; min-width: 0; box-sizing: border-box; }
     #session-folder-location, #session-detail { overflow-wrap: anywhere; }
     #terminal-wrap { position: relative; display: flex; flex: 1; min-height: 0; }
+    {{if .Project}}
+    #project-preview-pane { display: flex; flex-direction: column; flex: 2; min-width: 0; border-left: 1px solid #444; }
+    #project-preview-pane header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px;
+      background: #161615; color: #eee; }
+    #project-preview-pane strong { flex: 1; }
+    #project-preview-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: white; }
+    @media (max-width: 800px) {
+      #terminal-wrap { flex-direction: column; }
+      #project-preview-pane { border-left: 0; border-top: 1px solid #444; }
+    }
+    {{end}}
     #session-paused { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px;
       background: #000b; color: #eee; text-align: center; z-index: 1; }
     #session-paused p { margin: 6px 0 0; }
@@ -124,9 +135,14 @@
   <script src="armless/armless.js"></script>
   <script src="sessions.js"></script>
   <script src="session-ui.js"></script>
-  {{- if .Editor}}
+  {{- if or .Editor .Project}}
   <script src="working-folder.js"></script>
+  {{- end}}
+  {{- if .Editor}}
   <script src="folder-ui.js"></script>
+  {{- end}}
+  {{- if .Project}}
+  <script src="project-ui.js"></script>
   {{- end}}
 </head>
 <body{{if .Editor}} class="has-editor"{{end}}>
@@ -194,9 +210,33 @@
       </details>
     </div>
   </div>
+  {{if .Project}}
+  <section id="project" aria-label="Local Svelte project" style="padding:12px; background:#161615; color:#eee; border-bottom:1px solid #444">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <button id="project-choose" type="button" disabled>Choose working folder…</button>
+      <button id="project-reconnect" type="button" hidden>Reconnect folder</button>
+      <button id="project-init" type="button" disabled>Create starter in empty folder…</button>
+      <button id="project-sync" type="button" disabled>Sync &amp; preview</button>
+      <button id="project-manifests" type="button" disabled>Save package manifests to disk</button>
+      <button id="project-preview" type="button" hidden>Open preview</button>
+    </div>
+    <p id="project-location">No working folder selected.</p>
+    <p id="project-status" role="status" style="white-space:pre-wrap;max-height:160px;overflow:auto">Starting project environment…</p>
+    <p style="color:#aaa">Edit in your local editor. Run npm install/uninstall in /workspace, then Save package manifests to disk. Sync reads disk files; it does not write them. Preview is private to this VM tab, not a public server. Use only trusted projects: their code runs on this site’s origin.</p>
+  </section>
+  {{end}}
   <div id="terminal-wrap">
     {{if .Editor}}{{template "editor" .}}{{end}}
     <div id="terminal"></div>
+    {{if .Project}}
+    <section id="project-preview-pane" aria-label="Private application preview" hidden>
+      <header><strong>Private preview · keep this page foreground</strong>
+        <button id="project-preview-reload" type="button">Reload preview</button>
+        <button id="project-preview-close" type="button">Close preview</button>
+      </header>
+      <iframe id="project-preview-frame" title="Your private Svelte application"></iframe>
+    </section>
+    {{end}}
     <div id="session-paused" role="status" hidden><div><strong>Copying workspace…</strong><p>Terminal briefly paused. Please wait.</p></div></div>
   </div>
   <div id="keys" role="toolbar" aria-label="Keys missing from touch keyboards">
@@ -251,6 +291,7 @@
     // the same RAM size, CPUs and devices
     const sessions = new SnowglobeSessionUI({ build: {{.BuildID}}, memory: {{.MemoryMB}}, cpus, network: {{.Network}} });
     {{if .Editor}}const editor = new SnowglobeFolderUI(sessions);{{end}}
+    {{if .Project}}const project = new SnowglobeProjectUI(sessions);{{end}}
     if (!isolationNeeded && !await sessions.prepare()) {
       status.textContent = "workspace needs attention";
       status.dataset.state = "error";
@@ -267,7 +308,7 @@
       {{- if eq .Network "fetch"}}
       // The guest's HTTP(S) and WebSockets end in the machine (HTTPS with a CA made for this
       // site) and go out as this page's own fetch() and WebSocket
-      network: { tls: "system/tls.json" },
+      network: { tls: "system/tls.json"{{if .Project}}, fetch: SnowglobeProjectFetch{{end}} },
       {{- end}}
       // The terminal is set up (and the screen replayed) before the guest runs
       autostart: false,
@@ -400,6 +441,7 @@
       keyBar(term);
       emulator.run();
       {{if .Editor}}await editor.attach(emulator);{{end}}
+      {{if .Project}}await project.attach(emulator);{{end}}
       setStatus("ready", "running");
       term.focus();
       sessions.attach(emulator, term, () => { if (pendingResize) resize(); });

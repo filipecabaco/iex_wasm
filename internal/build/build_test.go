@@ -108,3 +108,18 @@ func TestResolveNetwork(t *testing.T) {
 		t.Error("an unknown backend should fail")
 	}
 }
+
+func TestProjectRequiresNetworkingAndExcludesEditor(t *testing.T) {
+	for _, labels := range []map[string]string{
+		{"snowglobe.project": "true"},
+		{"snowglobe.project": "maybe", "snowglobe.network": "fetch"},
+		{"snowglobe.project": "true", "snowglobe.editor": "true", "snowglobe.network": "fetch"},
+	} {
+		if _, err := Resolve(Options{}, image(labels, "sh")); err == nil {
+			t.Errorf("invalid project configuration accepted: %v", labels)
+		}
+	}
+	if _, err := Resolve(Options{}, image(map[string]string{"snowglobe.project": "true", "snowglobe.network": "fetch"}, "sh")); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Private preview service-worker regression tests</title>
+<h1>Private preview service-worker regression tests</h1>
+<pre id="results">Starting…</pre>
+<script type="module">
+const results = document.querySelector('#results');
+const tests = [];
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+try {
+  await navigator.serviceWorker.register('../preview-worker.js', { scope: './' });
+  await navigator.serviceWorker.ready;
+  if (!navigator.serviceWorker.controller) { location.reload(); await new Promise(() => {}); }
+  const id = await new Promise(resolve => {
+    const channel = new MessageChannel(); channel.port1.onmessage = event => { channel.port1.close(); resolve(event.data.id); };
+    navigator.serviceWorker.controller.postMessage({ type: 'preview-owner' }, [channel.port2]);
+  });
+  const observed = [];
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type !== 'preview-fetch') return;
+    observed.push(event.data);
+    const text = event.data.path === '/asset.js' ? 'export default 42' : JSON.stringify({ method: event.data.method, path: event.data.path,
+      body: event.data.body ? new TextDecoder().decode(event.data.body) : null });
+    const body = new TextEncoder().encode(text).buffer;
+    event.ports[0].postMessage({ status: event.data.path === '/empty' ? 204 : 200, headers: { 'Content-Type': 'text/plain' }, body }, [body]);
+  });
+  async function check(name, fn) { try { await fn(); tests.push({ name, ok: true }); } catch(error) { tests.push({ name, ok: false, error: error.message }); } }
+  const base = './__preview/' + id;
+  await check('actual service worker forwards POST body, query and method to its exact owner', async () => {
+    const response = await fetch(base + '/supabase/rest/v1/notes?select=*', { method: 'POST', body: '{"body":"Ada"}' });
+    assert(response.status === 200, 'POST status');
+    const data = await response.json();
+    assert(data.method === 'POST' && data.path === '/supabase/rest/v1/notes?select=*' && data.body === '{"body":"Ada"}', 'Request was not preserved');
+    assert(response.headers.get('Cache-Control') === 'no-store', 'Private response must not be cached');
+  });
+  await check('actual service worker forwards JavaScript assets and empty HTTP statuses', async () => {
+    assert(await (await fetch(base + '/asset.js')).text() === 'export default 42', 'Asset bytes changed');
+    assert((await fetch(base + '/empty')).status === 204, 'Empty status was lost');
+  });
+  await check('missing owners produce a local 503, not a host 404 or cached application', async () => {
+    const before = observed.length;
+    const response = await fetch('./__preview/not-an-owner/index.html');
+    assert(response.status === 503, 'Missing owner did not fail locally');
+    assert(observed.length === before, 'Missing owner reached another client');
+  });
+  results.textContent = JSON.stringify({ ok: tests.every(test => test.ok), tests }, null, 2);
+} catch(error) { results.textContent = JSON.stringify({ ok: false, error: error.message, tests }, null, 2); }
+</script>

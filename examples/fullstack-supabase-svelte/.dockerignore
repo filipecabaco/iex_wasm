@@ -1,0 +1,5 @@
+app/node_modules
+app/.svelte-kit
+app/build
+*.test.mjs
+README.md
