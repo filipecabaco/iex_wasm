@@ -40,7 +40,7 @@ const (
 // The files a run can't start without; everything else is cached as the page fetches it
 var shell = []string{"./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png",
 	"armless/armless.js", "armless/armless.wasm", "armless/armless-smp.wasm",
-	"xterm/xterm.js", "xterm/xterm.css", "xterm/addon-fit.js"}
+	"xterm/xterm.js", "xterm/xterm.css", "xterm/addon-fit.js", "sessions.js", "session-ui.js"}
 
 // Run writes the PWA files into the site and ties them into index.html. Running it again
 // replaces what an earlier run wrote.

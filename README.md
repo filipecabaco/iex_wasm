@@ -110,6 +110,65 @@ to a home screen or dock and keeps working offline once it has run. Chromium sho
 **Install app** button in the status strip; on iOS, use Share → Add to Home Screen. A new build
 gets a new cache. Run it after `snowglobe pool`; every demo on the live site is installable.
 
+## Keep your workspace
+
+Every newly built run remembers your work locally. The save bar always shows the **save
+location**, **last-save time**, **current activity**, and **Save now**. **Save / restore** opens
+an overlay without shrinking the terminal. Saves include the whole emulated machine—RAM,
+processes and guest-written files—plus the terminal replay. This preserves TypeScript REPL
+variables as well as Supabase's database and running services. No checkpoint is sent to a server.
+
+The menu offers three clearly separated methods:
+
+- **Browser — automatic** is the default: no setup, just Save now. Saves stay in this browser.
+- **Backup file** lets you choose a filename and download or restore a `.snowglobe` file.
+  This is an extra portable copy, not a change of automatic-save location. Autosave never updates
+  a downloaded backup file. The browser handles the actual download and any existing filename.
+  Restored backups are validated and become separate workspaces rather than overwriting existing
+  ones. Backups may contain passwords, tokens, database contents and other guest memory; they are
+  not encrypted. Keep them private and restore only files you trust.
+- **Folder — automatic** is available on browsers with `showDirectoryPicker()` (principally
+  desktop Chrome/Edge), and greyed out otherwise. Choose a folder; the save bar shows its name
+  and dedicated `snowglobe-…` subdirectory. Browsers do not expose the full OS path. Two alternating
+  files retain the previous valid save if a write fails or the newest file is corrupt. This is
+  **session-bundle storage**, not a live guest filesystem mount. Reopening may require **Reconnect
+  folder** permission. Switching storage copies current work and keeps old saves. A failed folder
+  mount never silently switches to browser storage; choosing Browser offers an explicit switch.
+
+Autosave defaults to **1 minute** while the page is visible. Its menu control also offers
+**5 minutes**, **15 minutes**, and **Off — Save now only**; the preference survives refreshes and
+storage changes. Expensive captures lengthen the interval. During capture, an overlay and status
+say **Terminal briefly paused** and prevent input. The guest then resumes, the overlay disappears,
+and compression/writing display **You can keep working. Keep this tab open until finished.**
+The busy indicator remains until the checkpoint is committed (or an error is reported).
+
+Refresh resumes the **last completed save**, not necessarily the latest changes. There is no
+reliable unload-time save. Before leaving important work, use the visible **Save now** button
+and wait for completion. **Unsaved changes** reflects observed input/terminal activity; it is a
+conservative indicator, not proof that background processes haven't changed machine state. New
+activity during compression/writing remains marked as unsaved after that checkpoint commits.
+
+**Saved workspaces** groups opening previous saves, **Start fresh…**, named workspace creation,
+and explicit deletion. Selecting a workspace does not open it until **Open selected workspace…**
+is pressed and confirmed. Starting fresh retains previous saves; only **Delete this saved
+workspace…** removes one. **Recovery** separately offers a reload that preserves saved work.
+Firefox/Safari can use browser storage and backup download/restore.
+
+Browser storage survives ordinary refreshes but is subject to quota, site-data clearing and
+possible eviction. The page requests persistent storage when supported; the browser can refuse.
+Checkpoint-write failures are shown, never reported as successful saves. A second tab on the
+same demo opens a temporary run rather than competing for the saved sessions; it can export a
+backup. Web Locks are required for automatic saving. Folder locking is local to this origin and
+browser profile: do not write the same session folder concurrently from different browsers.
+
+Checkpoints are tied to the exact base snapshot, filesystem, runtime and machine configuration.
+After an incompatible rebuild, older sessions are **kept for export**, not silently restored or
+replaced. Backups do not include the runtime or all original filesystem blobs: retain the
+original built site and its blob store if you need to restore those sessions later. This is
+checkpoint persistence, not a continuously durable Postgres volume or a database backup service.
+External HTTP/WebSocket connections may need reconnecting after restore. Capturing large guests
+uses additional memory and can briefly freeze the UI, especially on mobile devices.
+
 ## Share a run as a post
 
 Every demo has an X player card at `card/<demo>/` (e.g.
@@ -203,6 +262,15 @@ supa:~/app$ notes signup grace@example.com hopper-1906 && notes ls
 signed in as grace@example.com (66973d17)
 grace@example.com: 0 note(s)
 ```
+
+## Development checks
+
+Run `go test ./...` and `node --test internal/site/sessions.test.cjs` (Node 22+; no npm packages
+needed), or `mise run test`. To exercise real IndexedDB transactions, Web Locks and filesystem
+writable streams, serve the repository on localhost and open
+`internal/site/sessions.browser.html` in a visible tab; its results are displayed on the page.
+The automatic-saving check requires the tab to remain visible, just like the demos. Full session
+restore should also be checked against a built demo, since storage tests do not verify the VM.
 
 ## The warm cache
 

@@ -4,7 +4,7 @@
 // pack, the guest's file blobs) is cached the first time the page fetches it, so installing doesn't
 // download it a second time. Blobs are named by their content and served from the cache first;
 // the rest changes with every build, so it comes from the network first and the cache offline.
-const CACHE = "__CACHE__";
+const CACHE = "__CACHE__" + ":" + self.registration.scope;
 const SHELL = __SHELL__;
 // Several CPUs share memory between Web Workers, which needs a cross-origin isolated page: add
 // the headers for that to the page (static hosts can't send them)
@@ -30,7 +30,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("snowglobe-") && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("snowglobe-") && k.endsWith(":" + self.registration.scope) && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
