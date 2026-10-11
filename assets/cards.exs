@@ -1,6 +1,6 @@
 # Writes one X player card per demo from assets/cards.json:
 #
-#   site/card/<dir>/index.html   the page whose tags make the card (it embeds <dir>/?embed)
+#   site/card/<dir>/index.html   the page whose tags make the card (it embeds <dir>/?embed, or <player>/?embed when the card plays another build)
 #   assets/posters/<dir>.html the poster's source; capture each at 480x480, deviceScaleFactor 2,
 #                             into site/card/<dir>/poster.png
 #

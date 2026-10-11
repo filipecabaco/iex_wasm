@@ -3,6 +3,26 @@
   "note": "One X player card per demo: assets/cards.exs writes site/card/<dir>/index.html and the poster sources from this. Poster lines are real output from each demo's recorded run; a line starting with ! is bold, the demo's prompt is dimmed.",
   "cards": [
     {
+      "dir": "supabase",
+      "player": "supabase-1cpu",
+      "name": "Supabase",
+      "prompt": "supa:~/app$",
+      "about": "The Supabase CLI's native stack (Postgres, PostgREST and Auth) and a notes app on it",
+      "lines": [
+        "supa:~/app$ notes signup ada@example.com lovelace-1815",
+        "signed in as ada@example.com (a5f3d06a)",
+        "supa:~/app$ notes add first program, for the …",
+        "#1 added",
+        "supa:~/app$ notes search engine",
+        "1 note(s) matching \"engine\"",
+        "  #1  17:53:21  first program, for the analytical …",
+        "supa:~/app$ notes signup grace@example.com hopper-1906",
+        "signed in as grace@example.com (e54f926d)",
+        "supa:~/app$ notes ls",
+        "!grace@example.com: 0 note(s)"
+      ]
+    },
+    {
       "dir": "iex",
       "name": "Elixir IEx",
       "prompt": "iex(",

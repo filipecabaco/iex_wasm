@@ -214,6 +214,11 @@ each poster's lines are real output from that run; capture each poster at 480×4
 `site/card/<demo>/poster.png`. X caches cards for about a week, so re-share with a new query string
 after changing one.
 
+The frame inside a post can't be cross-origin isolated, so a card can only boot a one-CPU run. A
+demo on several CPUs gets a one-CPU build for its card: `supabase-1cpu` in `DEMOS` is
+`examples/supabase` built with `--cpus 1` (any `<example>-<n>cpu` works), and the card's `player`
+in `assets/cards.json` names it.
+
 ## Running a site headlessly
 
 A built site also runs without a browser, in a sandboxed container: the same snapshot, restored
