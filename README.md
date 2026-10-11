@@ -112,35 +112,47 @@ gets a new cache. Run it after `snowglobe pool`; every demo on the live site is 
 
 ## Keep your workspace
 
-Every newly built run remembers your work locally. A quiet status shows **Saving…**, **Saved
-on this device**, or **Saved to your folder**. The **Workspace** menu holds the less frequent
-actions; opening it does not shrink the terminal. Saves include the whole emulated machine—RAM,
+Every newly built run remembers your work locally. The save bar always shows the **save
+location**, **last-save time**, **current activity**, and **Save now**. **Save / restore** opens
+an overlay without shrinking the terminal. Saves include the whole emulated machine—RAM,
 processes and guest-written files—plus the terminal replay. This preserves TypeScript REPL
 variables as well as Supabase's database and running services. No checkpoint is sent to a server.
 
-- Automatic saving is always on, starting after 60 seconds while the page is visible; expensive
-  saves lengthen the interval. The guest pauses during capture, then resumes while the checkpoint
-  is compressed and committed. Older settings that disabled autosave are migrated to automatic saving.
-- Refresh resumes the workspace's **last completed save**, not necessarily its latest changes.
-  There is no reliable unload-time save. Before leaving important work, use **Workspace → Save
-  now** and wait for the saved status. The last-save time and size are under **More options**.
-  Console/input activity after capture is marked as newer; running processes can also change in
-  the background.
-- **Start fresh…** asks for one confirmation, starts from the demo's original snapshot, and keeps
-  the previous saves. **More options** contains saved workspaces, named workspace creation,
-  runtime reload and explicit deletion. Only **Delete this saved workspace…** removes a save;
-  starting fresh or reloading does not.
-- **Download backup / Restore backup…** use `.snowglobe` files. Restored backups are validated
-  and become separate workspaces rather than overwriting existing ones. These files can contain
-  passwords, tokens, database contents and other guest memory; keep them private. They are not
-  encrypted. Restore only backups you trust.
-- On browsers with `showDirectoryPicker()` (principally desktop Chrome/Edge), **Save to a
-  folder…** saves the current workspace into a dedicated `snowglobe-…` subdirectory of a
-  user-selected folder. Two alternating files retain the previous valid save if a write fails
-  or the newest file is corrupt. This is **session-bundle storage**, not a live guest filesystem
-  mount. Reopening may require **Reconnect folder** permission. Switching storage copies the
-  current work and keeps the old saves; if a folder cannot be opened, the menu offers starting
-  in this browser instead. Firefox/Safari can use browser storage and backup download/restore.
+The menu offers three clearly separated methods:
+
+- **Browser — automatic** is the default: no setup, just Save now. Saves stay in this browser.
+- **Backup file** lets you choose a filename and download or restore a `.snowglobe` file.
+  This is an extra portable copy, not a change of automatic-save location. Autosave never updates
+  a downloaded backup file. The browser handles the actual download and any existing filename.
+  Restored backups are validated and become separate workspaces rather than overwriting existing
+  ones. Backups may contain passwords, tokens, database contents and other guest memory; they are
+  not encrypted. Keep them private and restore only files you trust.
+- **Folder — automatic** is available on browsers with `showDirectoryPicker()` (principally
+  desktop Chrome/Edge), and greyed out otherwise. Choose a folder; the save bar shows its name
+  and dedicated `snowglobe-…` subdirectory. Browsers do not expose the full OS path. Two alternating
+  files retain the previous valid save if a write fails or the newest file is corrupt. This is
+  **session-bundle storage**, not a live guest filesystem mount. Reopening may require **Reconnect
+  folder** permission. Switching storage copies current work and keeps old saves. A failed folder
+  mount never silently switches to browser storage; choosing Browser offers an explicit switch.
+
+Autosave defaults to **1 minute** while the page is visible. Its menu control also offers
+**5 minutes**, **15 minutes**, and **Off — Save now only**; the preference survives refreshes and
+storage changes. Expensive captures lengthen the interval. During capture, an overlay and status
+say **Terminal briefly paused** and prevent input. The guest then resumes, the overlay disappears,
+and compression/writing display **You can keep working. Keep this tab open until finished.**
+The busy indicator remains until the checkpoint is committed (or an error is reported).
+
+Refresh resumes the **last completed save**, not necessarily the latest changes. There is no
+reliable unload-time save. Before leaving important work, use the visible **Save now** button
+and wait for completion. **Unsaved changes** reflects observed input/terminal activity; it is a
+conservative indicator, not proof that background processes haven't changed machine state. New
+activity during compression/writing remains marked as unsaved after that checkpoint commits.
+
+**Saved workspaces** groups opening previous saves, **Start fresh…**, named workspace creation,
+and explicit deletion. Selecting a workspace does not open it until **Open selected workspace…**
+is pressed and confirmed. Starting fresh retains previous saves; only **Delete this saved
+workspace…** removes one. **Recovery** separately offers a reload that preserves saved work.
+Firefox/Safari can use browser storage and backup download/restore.
 
 Browser storage survives ordinary refreshes but is subject to quota, site-data clearing and
 possible eviction. The page requests persistent storage when supported; the browser can refuse.

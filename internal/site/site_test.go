@@ -99,7 +99,7 @@ func TestOneCPUOffline(t *testing.T) {
 
 func TestSessionControlsAndSafeReload(t *testing.T) {
 	page, dir := render(t, Page{Title: "Session demo", MemoryMB: 256, Network: "none", CPUs: 1})
-	for _, want := range []string{`src="sessions.js"`, `src="session-ui.js"`, `id="sessions"`, `id="session-save"`, `id="session-export"`, `id="session-import"`, `id="session-folder"`, `id="session-delete"`, `SnowglobeSessionUI`, `await sessions.prepare()`, `sessions.initialState`, `sessions.attach(emulator, term`, `new ResizeObserver(resize)`} {
+	for _, want := range []string{`src="sessions.js"`, `src="session-ui.js"`, `id="sessions"`, `id="session-save"`, `id="session-export"`, `id="session-import"`, `id="session-folder"`, `id="session-delete"`, `SnowglobeSessionUI`, `await sessions.prepare()`, `sessions.initialState`, `sessions.attach(emulator, term`, `new ResizeObserver(resize)`, `sessions.message("Workspace could not start"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page lacks persistence integration %q", want)
 		}
@@ -116,25 +116,26 @@ func TestSessionControlsAndSafeReload(t *testing.T) {
 	}
 }
 
-func TestWorkspaceUsesProgressiveDisclosure(t *testing.T) {
+func TestWorkspaceShowsSaveControlsAndExplicitMethods(t *testing.T) {
 	page, _ := render(t, Page{Title: "Workspace demo", MemoryMB: 256, Network: "none", CPUs: 1})
-	for _, want := range []string{`id="workspace-bar"`, `>Workspace</summary>`, `id="session-fresh"`, `id="session-location"`, `id="session-advanced"`, `>More options</summary>`} {
+	for _, want := range []string{`id="workspace-bar"`, `>Save / restore</summary>`, `id="session-method"`,
+		`value="browser"`, `value="backup"`, `value="folder"`, `id="session-filename"`,
+		`id="session-autosave"`, `value="60000"`, `value="300000"`, `value="900000"`, `value="off"`,
+		`id="session-hint"`, `id="session-last-save"`, `id="session-changes"`, `id="session-paused"`,
+		`>Saved workspaces</summary>`, `>Recovery</summary>`, `id="session-open"`} {
 		if !strings.Contains(page, want) {
-			t.Errorf("compact workspace lacks %q", want)
+			t.Errorf("simple save UI lacks %q", want)
 		}
 	}
-	for _, unwanted := range []string{`id="session-autosave"`, `>Local session`, `>Capturing checkpoint`} {
+	for _, unwanted := range []string{`>More options</summary>`, `>Local session`, `>Capturing checkpoint`} {
 		if strings.Contains(page, unwanted) {
-			t.Errorf("workspace exposes implementation detail %q", unwanted)
+			t.Errorf("save UI exposes a vague or technical control %q", unwanted)
 		}
 	}
-	if strings.Index(page, `id="session-status"`) > strings.Index(page, `id="sessions"`) {
-		t.Error("save status must stay visible when the Workspace menu is closed")
-	}
-	advanced := strings.Index(page, `id="session-advanced"`)
-	for _, id := range []string{"session-list", "session-new", "session-delete", "reset"} {
-		if advanced < 0 || strings.Index(page, `id="`+id+`"`) < advanced {
-			t.Errorf("%s must be tucked under More options", id)
+	menu := strings.Index(page, `id="sessions"`)
+	for _, id := range []string{"session-status", "session-location", "session-save", "session-last-save", "session-hint"} {
+		if at := strings.Index(page, `id="`+id+`"`); at < 0 || at > menu {
+			t.Errorf("%s must remain visible with the save menu closed", id)
 		}
 	}
 }

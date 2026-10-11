@@ -39,40 +39,62 @@
     /* The terminal is as wide as the screen: the guest is told its size, so what the app prints
        from here wraps to it, and full-screen apps redraw for it */
     #terminal { flex: 1; min-height: 0; padding: 4px; overflow: hidden; }
-    /* One quiet status and a Workspace menu. Opening it never shrinks the terminal. */
-    #workspace-bar { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between;
-      gap: 8px; padding: 5px 8px; background: #101010; color: #e9e9e4; border-bottom: 1px solid #2b2b29; }
-    #workspace-bar [hidden] { display: none !important; }
-    #session-status { color: #aaa; min-width: 0; }
+    /* Location, save state and Save now never hide in a menu. The menu overlays the terminal. */
+    #workspace-bar { position: relative; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; padding: 10px 12px; background: #161615; color: #e9e9e4; border-bottom: 1px solid #3b3b39; }
+    [hidden] { display: none !important; }
+    .workspace-info { min-width: 0; flex: 1; }
+    .save-state, .save-meta, .workspace-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .save-state { margin-bottom: 3px; }
+    #session-status { font-weight: 600; }
     #session-status[data-error="true"], #session-help { color: #ff9e80; }
-    #sessions { position: relative; flex-shrink: 0; }
+    #session-status[data-working="true"]::before { content: ""; display: inline-block; width: .7em; height: .7em;
+      margin-right: .6em; border: 2px solid #555; border-top-color: #e9e9e4; border-radius: 50%;
+      vertical-align: -.1em; animation: saving .8s linear infinite; }
+    @keyframes saving { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { #session-status[data-working="true"]::before { animation: none; } }
+    #session-changes { color: #ffd18a; }
+    .save-meta, #session-hint { color: #aaa; font-size: 11px; overflow-wrap: anywhere; }
+    #session-last-save::before { content: "· "; }
+    #session-hint { margin: 3px 0 0; }
+    .workspace-toolbar { flex-shrink: 0; flex-wrap: nowrap; }
+    #sessions { position: relative; }
     #sessions summary { cursor: pointer; }
-    #sessions > summary { list-style: none; padding: 4px 8px; border: 1px solid #3b3b39; border-radius: 5px; }
+    #sessions > summary { list-style: none; padding: 7px 9px; border: 1px solid #3b3b39; border-radius: 4px; }
     #sessions > summary::-webkit-details-marker { display: none; }
     #sessions > summary::after { content: " ▾"; color: #aaa; }
     #sessions > summary:hover, #sessions[open] > summary { background: #252524; }
-    #session-controls { position: absolute; top: calc(100% + 8px); right: 0; width: 300px;
-      max-width: calc(100vw - 36px); max-height: min(70vh, 600px); overflow: auto;
+    #session-controls { position: absolute; top: calc(100% + 8px); right: 0; width: 310px;
+      max-width: calc(100vw - 52px); max-height: min(70vh, 600px); overflow: auto;
       padding: 14px; background: #161615; border: 1px solid #3b3b39; border-radius: 8px;
       box-shadow: 0 12px 36px #0009; }
-    #sessions p { margin: 0 0 12px; }
+    #sessions p { margin: 8px 0; }
     #sessions .note { color: #aaa; font-size: 11px; }
     .workspace-actions { display: grid; gap: 6px; }
-    #sessions button, #sessions select, .workspace-import { font: inherit; color: inherit; border: 1px solid #3b3b39;
-      background: #222221; border-radius: 4px; padding: 7px 9px; text-align: left; cursor: pointer; }
-    #sessions button:hover, .workspace-import:hover { background: #30302e; }
-    #sessions button:disabled, #sessions select:disabled { opacity: .45; cursor: default; }
-    #sessions :focus-visible, .workspace-import:focus-within { outline: 2px solid #e9e9e4; outline-offset: 2px; }
+    #workspace-bar button, #sessions select, #session-filename, .workspace-import { font: inherit; color: inherit;
+      border: 1px solid #3b3b39; background: #222221; border-radius: 4px; padding: 7px 9px; text-align: left; }
+    #workspace-bar button, #sessions select, .workspace-import { cursor: pointer; }
+    #session-save { background: #e9e9e4 !important; color: #161615 !important; }
+    #workspace-bar button:hover, .workspace-import:hover { filter: brightness(1.15); }
+    #workspace-bar :disabled, .workspace-import:has(input:disabled) { opacity: .45; cursor: default; }
+    #workspace-bar :focus-visible, .workspace-import:focus-within { outline: 2px solid #e9e9e4; outline-offset: 2px; }
     .workspace-import { position: relative; }
     .workspace-import input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
     #sessions .danger { color: #ff9e80; }
-    #session-advanced { margin-top: 12px; padding-top: 12px; border-top: 1px solid #3b3b39; }
-    #session-advanced > summary { color: #aaa; }
-    #session-advanced .workspace-actions { margin-top: 12px; }
-    #session-advanced label { display: grid; gap: 5px; color: #aaa; }
-    #session-advanced select { width: 100%; }
-    #session-detail { margin: 12px 0 0 !important; overflow-wrap: anywhere; }
-    #session-controls > .note { margin: 12px 0 0; }
+    .workspace-section { margin-top: 14px; padding-top: 12px; border-top: 1px solid #3b3b39; }
+    .workspace-section .workspace-actions { margin-top: 10px; }
+    #sessions label { display: grid; gap: 5px; color: #aaa; }
+    #sessions select, #session-filename { width: 100%; min-width: 0; box-sizing: border-box; }
+    #session-folder-location, #session-detail { overflow-wrap: anywhere; }
+    #terminal-wrap { position: relative; display: flex; flex: 1; min-height: 0; }
+    #session-paused { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px;
+      background: #000b; color: #eee; text-align: center; z-index: 1; }
+    #session-paused p { margin: 6px 0 0; }
+    @media (max-width: 640px) {
+      #workspace-bar { flex-wrap: wrap; gap: 8px; padding: 8px; }
+      .workspace-info { flex-basis: 100%; }
+      .workspace-toolbar { margin-left: auto; }
+    }
 
     /* The keys a phone keyboard lacks, for touch screens only. Pressing one never takes focus
        from the terminal, so the keyboard stays up */
@@ -112,36 +134,66 @@
     </span>
   </header>
   <div id="workspace-bar">
-    <span id="session-status" role="status">Opening workspace…</span>
-    <details id="sessions">
-      <summary>Workspace</summary>
-      <div id="session-controls">
-        <p id="session-location">Automatic saves stay in this browser.</p>
-        <p id="session-help" hidden></p>
-        <div class="workspace-actions">
-          <button id="session-save" type="button">Save now</button>
-          <button id="session-folder" type="button">Save to a folder…</button>
-          <button id="session-reconnect" type="button" hidden>Reconnect folder</button>
-          <button id="session-browser" type="button" hidden>Use this browser instead…</button>
-          <button id="session-export" type="button">Download backup</button>
-          <label class="workspace-import">Restore backup…<input id="session-import" type="file" accept=".snowglobe" aria-label="Restore backup"></label>
-          <button id="session-fresh" type="button">Start fresh…</button>
-        </div>
-        <details id="session-advanced">
-          <summary>More options</summary>
-          <div class="workspace-actions">
-            <label>Saved workspaces<select id="session-list" aria-label="Saved workspaces"></select></label>
-            <button id="session-new" type="button">New named workspace…</button>
-            <button id="reset" type="button" title="Reload without deleting saved work">Reload runtime…</button>
-            <button id="session-delete" class="danger" type="button">Delete this saved workspace…</button>
+    <div class="workspace-info">
+      <div class="save-state"><span id="session-status" role="status">Opening workspace…</span><span id="session-changes" hidden>Unsaved changes</span></div>
+      <div class="save-meta"><span id="session-location">Save location: This browser</span><span id="session-last-save">No save yet</span></div>
+      <p id="session-hint">Please wait while your workspace opens.</p>
+    </div>
+    <div class="workspace-toolbar">
+      <button id="session-save" type="button">Save now</button>
+      <details id="sessions">
+        <summary>Save / restore</summary>
+        <div id="session-controls">
+          <label>Save / restore method
+            <select id="session-method"><option value="browser">Browser — automatic</option><option value="backup">Backup file</option><option value="folder">Folder — automatic</option></select>
+          </label>
+          <p id="session-help" hidden></p>
+          <div id="session-browser-options" class="workspace-actions">
+            <p class="note">No setup needed. Use Save now for an immediate save.</p>
+            <button id="session-browser" type="button" hidden>Switch automatic saves to this browser…</button>
           </div>
+          <div id="session-backup-options" class="workspace-actions" hidden>
+            <p class="note">Portable copies. This does not change autosave or its location. Downloaded files are never updated automatically.</p>
+            <label>Backup filename<input id="session-filename" type="text" value="workspace.snowglobe" maxlength="120" autocomplete="off" spellcheck="false"></label>
+            <button id="session-export" type="button">Download backup</button>
+            <label class="workspace-import">Restore backup…<input id="session-import" type="file" accept=".snowglobe" aria-label="Restore backup"></label>
+            <p class="note">Backups can contain passwords and private data. Keep them safe and restore only trusted files.</p>
+          </div>
+          <div id="session-folder-options" class="workspace-actions" hidden>
+            <p id="session-folder-location">No folder selected.</p>
+            <button id="session-folder" type="button">Choose folder…</button>
+            <button id="session-reconnect" type="button" hidden>Reconnect folder</button>
+            <p class="note">Automatic saves use two alternating files in the Snowglobe subfolder. Browsers expose the folder name, not its full OS path.</p>
+          </div>
+          <div class="workspace-section">
+            <label>Autosave<select id="session-autosave"><option value="60000">1 minute (default)</option><option value="300000">5 minutes</option><option value="900000">15 minutes</option><option value="off">Off — Save now only</option></select></label>
+            <p class="note">Large saves may use a longer interval to keep the terminal responsive.</p>
+          </div>
+          <details class="workspace-section">
+            <summary>Saved workspaces</summary>
+            <div class="workspace-actions">
+              <label>Workspace<select id="session-list" aria-label="Saved workspaces"></select></label>
+              <button id="session-open" type="button">Open selected workspace…</button>
+              <button id="session-fresh" type="button">Start fresh…</button>
+              <button id="session-new" type="button">New named workspace…</button>
+              <button id="session-delete" class="danger" type="button">Delete this saved workspace…</button>
+            </div>
+            <p class="note">Starting fresh keeps previous saves. Only Delete removes one.</p>
+          </details>
+          <details class="workspace-section">
+            <summary>Recovery</summary>
+            <div class="workspace-actions"><button id="reset" type="button" title="Reload without deleting saved work">Reload without deleting saves…</button></div>
+            <p class="note">Reload if the demo stops responding. Changes since the last save may be lost.</p>
+          </details>
           <p id="session-detail" class="note">No saved version yet.</p>
-        </details>
-        <p class="note">Refresh returns to your last save. Backups may include passwords and private data; keep them safe.</p>
-      </div>
-    </details>
+        </div>
+      </details>
+    </div>
   </div>
-  <div id="terminal"></div>
+  <div id="terminal-wrap">
+    <div id="terminal"></div>
+    <div id="session-paused" role="status" hidden><div><strong>Copying workspace…</strong><p>Terminal briefly paused. Please wait.</p></div></div>
+  </div>
   <div id="keys" role="toolbar" aria-label="Keys missing from touch keyboards">
     <button type="button" data-send="esc">esc</button>
     <button type="button" data-send="tab">tab</button>
@@ -269,6 +321,7 @@
         return;
       }
       sessions.blocked = true;
+      sessions.message("Workspace could not start", true, "Your saves are kept. Choose Backup file to download a saved copy, or open Saved workspaces to start fresh.", error.message);
       sessions.controls();
       setStatus("error", `failed: ${error.message || error}`);
     });
@@ -349,6 +402,7 @@
       preloadWarmPack().catch(() => {});
     }).catch(error => {
       sessions.blocked = true;
+      sessions.message("Workspace could not start", true, "Your saves are kept. Choose Backup file to download a saved copy, or open Saved workspaces to start fresh.", error.message);
       sessions.controls();
       setStatus("error", `failed: ${error.message || error}`);
     });

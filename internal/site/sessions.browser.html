@@ -1,14 +1,23 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><title>Snowglobe session storage regression tests</title>
 <h1>Session storage regression tests</h1><pre id="results">Running…</pre>
-<span id="session-status"></span>
-<details id="sessions" hidden><summary>Workspace</summary>
-<p id="session-location"></p><p id="session-help" hidden></p><span id="session-detail"></span>
-<button id="session-fresh"></button><select id="session-list"></select>
-<button id="session-save"></button><button id="session-new"></button><button id="session-delete"></button>
-<button id="session-export"></button><input id="session-import" type="file">
-<button id="session-folder"></button><button id="session-reconnect"></button><button id="session-browser"></button>
-</details>
+<div id="workspace-bar">
+<span id="session-status"></span><span id="session-changes" hidden></span>
+<span id="session-location"></span><span id="session-last-save"></span><span id="session-hint"></span>
+<button id="session-save"></button>
+<details id="sessions" hidden><summary>Save / restore</summary>
+<select id="session-method"><option value="browser">Browser</option><option value="backup">Backup file</option><option value="folder">Folder</option></select>
+<select id="session-autosave"><option value="60000">1 minute</option><option value="300000">5 minutes</option><option value="900000">15 minutes</option><option value="off">Off</option></select>
+<div id="session-browser-options"><button id="session-browser"></button></div>
+<div id="session-backup-options" hidden><input id="session-filename" value="workspace.snowglobe">
+<button id="session-export"></button><input id="session-import" type="file"></div>
+<div id="session-folder-options" hidden><span id="session-folder-location"></span>
+<button id="session-folder"></button><button id="session-reconnect"></button></div>
+<p id="session-help" hidden></p><span id="session-detail"></span>
+<button id="session-fresh"></button><select id="session-list"></select><button id="session-open"></button>
+<button id="session-new"></button><button id="session-delete"></button>
+</details></div>
+<div id="terminal"></div><div id="keys"></div><div id="session-paused" hidden></div>
 <script src="sessions.js"></script>
 <script src="session-ui.js"></script>
 <script>
@@ -18,6 +27,9 @@
   const tests = [];
   let store, other, ui;
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
+  const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+  const fakeVM = () => { const vm = { running: true, stop: async () => { vm.running = false; },
+    save_state: async () => new Uint8Array([42]), run: () => { vm.running = true; } }; return vm; };
   async function test(name, fn) {
     try { await fn(); tests.push({ name, pass: true }); }
     catch (e) { tests.push({ name, pass: false, error: e.message }); }
@@ -128,12 +140,12 @@
       'Runtime trap allowed automatic retries or replaced the previous checkpoint');
     clearTimeout(ui.timer); await ui.release(); ui.browser.db.close();
   });
-  await test('automatic saves are always enabled, including older opt-out settings', async () => {
+  await test('automatic saves default to one minute', async () => {
     const browser = await S.BrowserStore.open(scope + '-auto');
-    await browser.settings({ autosave: false }); browser.db.close();
+    await browser.settings({}); browser.db.close();
     ui = new SnowglobeSessionUI(config); ui.scope = scope + '-auto';
     assert(await ui.prepare(), 'Workspace did not open');
-    assert(ui.settings.autosave === true, 'Old autosave opt-out left the workspace silently unsaved');
+    assert(ui.settings.autosave === true && ui.settings.autosaveInterval === 60000, 'Default automatic saving is not enabled at one minute');
     assert(!document.hidden, 'Run the automatic-saving browser test in a visible tab');
     const vm = { running: true, stop: async () => { vm.running = false; },
       save_state: async () => new Uint8Array([42]), run: () => { vm.running = true; } };
@@ -146,7 +158,7 @@
         ui.operation = async fn => { await operation(fn); resolve(); };
         ui.schedule(0);
       });
-      assert(ui.active.savedAt > 0 && ui.status.textContent === 'Saved on this device', 'Automatic save was not committed');
+      assert(ui.active.savedAt > 0 && ui.status.textContent === 'Saved', 'Automatic save was not committed');
     } finally { clearTimeout(timeout); }
   });
   await test('Start fresh needs one confirmation, never a name prompt, and preserves the old save', async () => {
@@ -287,6 +299,160 @@
     const open = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
     document.body.dispatchEvent(open);
     assert(!ui.panel.open && open.defaultPrevented, 'Escape could not dismiss the menu after focus left its controls');
+  });
+  await test('save method selection shows only relevant actions and disables unsupported folders', async () => {
+    const picker = window.showDirectoryPicker;
+    try {
+      window.showDirectoryPicker = undefined;
+      ui = new SnowglobeSessionUI(config);
+      const method = document.getElementById('session-method');
+      assert(method.value === 'browser' && method.querySelector('[value="folder"]').disabled, 'Default or unsupported method is unclear');
+      method.value = 'backup'; method.dispatchEvent(new Event('change'));
+      assert(!document.getElementById('session-backup-options').hidden && document.getElementById('session-browser-options').hidden,
+        'Backup actions are mixed with automatic storage controls');
+    } finally { window.showDirectoryPicker = picker; }
+  });
+  await test('the selected folder and dedicated subfolder are shown outside the menu', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-location';
+    const root = await navigator.storage.getDirectory();
+    const handle = await root.getDirectoryHandle(scope + '-my-project', { create: true });
+    const browser = await S.BrowserStore.open(ui.scope);
+    await browser.settings({ folderHandle: handle }); browser.db.close();
+    try {
+      assert(await ui.prepare(), 'Folder did not open');
+      const location = document.getElementById('session-location');
+      assert(!ui.panel.contains(location) && location.textContent.includes(handle.name) && location.textContent.includes(ui.store.directory.name),
+        'The actual folder location is missing from the save bar');
+    } finally { await root.removeEntry(handle.name, { recursive: true }); }
+  });
+  await test('terminal output marks unsaved activity without waiting for user input', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-dirty';
+    assert(await ui.prepare(), 'Workspace did not open');
+    ui.attach(fakeVM(), {}); await ui.operation(() => ui.save());
+    ui.record(new Uint8Array([65]));
+    assert(ui.status.textContent === 'Unsaved changes', 'Background terminal output left a misleading saved status');
+    assert(document.getElementById('session-last-save').textContent.includes('Last saved'), 'Unsaved activity hid the previous save time');
+    ui.message('Not saved', true, 'Storage is full'); ui.input();
+    assert(ui.status.textContent === 'Not saved' && !document.getElementById('session-changes').hidden, 'New input erased a save error or hid unsaved activity');
+  });
+  await test('saving paints the pause notice before capture and allows work during the write', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-progress';
+    assert(await ui.prepare(), 'Workspace did not open');
+    const vm = fakeVM(), term = { options: { disableStdin: false } };
+    const capturing = deferred(), capture = deferred(), writing = deferred(), write = deferred();
+    let painted = false;
+    requestAnimationFrame(() => { painted = true; });
+    vm.save_state = async () => {
+      capturing.resolve({ painted, text: ui.status.textContent, paused: !document.getElementById('session-paused').hidden,
+        disabled: term.options.disableStdin, hint: document.getElementById('session-hint').textContent });
+      await capture.promise; return new Uint8Array([42]);
+    };
+    const put = ui.store.put.bind(ui.store);
+    ui.store.put = async c => { writing.resolve(); await write.promise; await put(c); };
+    ui.attach(vm, term);
+    const saving = ui.operation(() => ui.save());
+    try {
+      const paused = await capturing.promise;
+      assert(paused.painted && paused.paused && paused.disabled && paused.hint.includes('paused') && paused.text.includes('Saving'),
+        'Capture began without a painted pause notice and disabled terminal input');
+      capture.resolve(); await writing.promise;
+      assert(vm.running && !term.options.disableStdin && document.getElementById('session-paused').hidden,
+        'Terminal stayed blocked during compression/storage');
+      assert(ui.status.textContent.includes('Saving') && document.getElementById('session-hint').textContent.includes('keep working') &&
+        document.getElementById('session-save').disabled, 'Write progress or working guidance disappeared before commit');
+      assert(ui.input(), 'Input was blocked during writing'); ui.record(new Uint8Array([66]));
+    } finally { capture.resolve(); write.resolve(); await saving; }
+    assert(ui.status.textContent === 'Unsaved changes' && ui.status.dataset.working !== 'true', 'Save completion hid activity newer than the checkpoint');
+  });
+  await test('a failed capture clears the pause indicator and restores terminal input', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-capture-error';
+    assert(await ui.prepare(), 'Workspace did not open');
+    const vm = fakeVM(), term = { options: { disableStdin: false } };
+    vm.save_state = async () => { throw new Error('capture failed'); };
+    ui.attach(vm, term); await ui.operation(() => ui.save());
+    assert(vm.running && !term.options.disableStdin && document.getElementById('session-paused').hidden && ui.status.dataset.working !== 'true',
+      'A failed save left the UI paused or working forever');
+  });
+  await test('backup downloads use the chosen filename and do not replace the automatic checkpoint', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-filename';
+    assert(await ui.prepare(), 'Workspace did not open');
+    ui.attach(fakeVM(), {}); await ui.operation(() => ui.save());
+    const savedAt = ui.active.savedAt, click = HTMLAnchorElement.prototype.click;
+    let filename;
+    try {
+      HTMLAnchorElement.prototype.click = function () { filename = this.download; };
+      document.getElementById('session-filename').value = 'My project';
+      await ui.operation(() => ui.exportSession());
+      assert(filename === 'My project.snowglobe', 'The chosen backup filename was ignored');
+      assert(ui.active.savedAt === savedAt && (await ui.store.get(ui.active.id)).savedAt === savedAt, 'Export replaced the automatic checkpoint');
+      assert(ui.status.textContent === 'Backup download started', 'UI claimed the browser download had already completed');
+    } finally { HTMLAnchorElement.prototype.click = click; }
+  });
+  await test('autosave interval and manual mode persist without disabling Save now', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-manual';
+    assert(await ui.prepare(), 'Workspace did not open'); ui.attach(fakeVM(), {});
+    assert(typeof ui.setAutosave === 'function', 'Autosave frequency control is missing');
+    await ui.setAutosave('300000');
+    assert(ui.settings.autosave && (await ui.browser.settings()).autosaveInterval === 300000, 'Autosave interval was not persisted');
+    await ui.setAutosave('off');
+    assert(!ui.timer && !(await ui.browser.settings()).autosave && !document.getElementById('session-save').disabled &&
+      document.getElementById('session-hint').textContent.includes('Autosave off'), 'Manual mode is unclear or also disabled Save now');
+    await ui.operation(() => ui.save());
+    assert(ui.active.savedAt > 0, 'Manual save did not commit');
+    await ui.release(); ui.browser.db.close(); ui.closed = true;
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-manual';
+    assert(await ui.prepare(), 'Manual workspace did not reopen'); ui.attach(fakeVM(), {});
+    assert(!ui.settings.autosave && !ui.timer, 'Reload silently enabled automatic saving again');
+  });
+  await test('choosing a saved workspace requires an explicit Open action', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-open';
+    const browser = await S.BrowserStore.open(ui.scope);
+    await browser.put(c); await browser.put({ ...c, id: 'other' }); await browser.settings({ active: c.id }); browser.db.close();
+    assert(await ui.prepare(), 'Workspace did not open');
+    const confirm = window.confirm;
+    let confirmations = 0;
+    try {
+      window.confirm = () => { confirmations++; return false; };
+      ui.select.value = 'other'; ui.select.dispatchEvent(new Event('change'));
+      await Promise.resolve();
+      assert(!confirmations && (await ui.browser.settings()).active === c.id, 'Selecting a workspace immediately tried to replace the current work');
+    } finally { window.confirm = confirm; }
+  });
+  await test('automatic capture restores terminal focus instead of silently swallowing the next keys', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-focus';
+    assert(await ui.prepare(), 'Workspace did not open');
+    const input = document.createElement('input'); document.getElementById('terminal').append(input);
+    const term = { options: { disableStdin: false }, focus: () => input.focus() };
+    try {
+      ui.attach(fakeVM(), term); input.focus();
+      await ui.operation(() => ui.save());
+      assert(document.activeElement === input, 'An automatic capture lost terminal keyboard focus');
+    } finally { input.remove(); }
+  });
+  await test('the autosave selector persists the selected value rather than resetting it to the old setting', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-auto-control';
+    assert(await ui.prepare(), 'Workspace did not open'); ui.attach(fakeVM(), {});
+    const autosave = document.getElementById('session-autosave');
+    autosave.value = '900000'; await autosave.onchange();
+    assert(ui.settings.autosaveInterval === 900000 && autosave.value === '900000', 'Busy controls reset the chosen interval before saving it');
+  });
+  await test('failed folder settings do not relabel subsequent browser saves as folder saves', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-folder-settings';
+    assert(await ui.prepare(), 'Workspace did not open'); ui.attach(fakeVM(), {});
+    const root = await navigator.storage.getDirectory();
+    const handle = await root.getDirectoryHandle(scope + '-settings-root', { create: true });
+    try {
+      ui.browser.settings = async () => { throw new Error('settings failed'); };
+      await ui.operation(() => ui.useFolder(handle), 'Folder not changed');
+      assert(ui.store === ui.browser && !ui.settings.folderHandle && document.getElementById('session-location').textContent.includes('This browser'),
+        'Failed folder selection silently redirected or mislabelled the active store');
+    } finally { await root.removeEntry(handle.name, { recursive: true }); }
+  });
+  await test('autosave cannot start a timer or accept changes before the guest is attached', async () => {
+    ui = new SnowglobeSessionUI(config); ui.scope = scope + '-loading-autosave';
+    assert(await ui.prepare(), 'Workspace did not open');
+    ui.schedule(0);
+    assert(!ui.timer && document.getElementById('session-autosave').disabled, 'Autosave could run against a guest that has not started');
   });
   await test('pagehide keeps the writer lock until document destruction and stops new work', async () => {
     ui = new SnowglobeSessionUI(config); ui.scope = scope + '-pagehide';
