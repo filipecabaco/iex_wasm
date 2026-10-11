@@ -2,8 +2,12 @@
 package site
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
+	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -14,11 +18,18 @@ var page string
 //go:embed isolate.js
 var isolateWorker []byte
 
+//go:embed sessions.js
+var sessionsJS []byte
+
+//go:embed session-ui.js
+var sessionUIJS []byte
+
 var tmpl = template.Must(template.New("index").Parse(page))
 
 // Page holds what varies between sites.
 type Page struct {
 	Title    string
+	BuildID  string // fingerprint of runtime, base filesystem and initial snapshot
 	MemoryMB int    // must match the snapshot
 	Network  string // "none" or "fetch"; must match the snapshot
 	CPUs     int    // must match the snapshot; more than one needs cross-origin isolation
@@ -26,8 +37,53 @@ type Page struct {
 	ConsoleCols, ConsoleRows int
 }
 
-// Render writes <out>/index.html and marks the site for GitHub Pages.
+// Fingerprint binds checkpoints to the exact machine and base assets. It is unchanged by pooling.
+func Fingerprint(out string, p Page) (string, error) {
+	h := sha256.New()
+	fmt.Fprintf(h, "snowglobe-session-v1:%d:%d:%s\n", p.MemoryMB, p.CPUs, p.Network)
+	files := []string{"system/filesystem.json", "system/state.bin.zst", "armless/armless.js"}
+	wasm := "armless/armless.wasm"
+	if p.CPUs > 1 {
+		wasm = "armless/armless-smp.wasm"
+	}
+	files = append(files, wasm)
+	if p.Network == "fetch" {
+		files = append(files, "system/tls.json")
+	}
+	for _, name := range files {
+		f, err := os.Open(filepath.Join(out, name))
+		if err != nil {
+			return "", err
+		}
+		info, err := f.Stat()
+		if err != nil {
+			f.Close()
+			return "", err
+		}
+		fmt.Fprintf(h, "%s:%d\n", name, info.Size())
+		_, err = io.Copy(h, f)
+		f.Close()
+		if err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// Render writes the page and session scripts and marks the site for GitHub Pages.
 func Render(out string, p Page) error {
+	if p.BuildID == "" {
+		var err error
+		p.BuildID, err = Fingerprint(out, p)
+		if err != nil {
+			return err
+		}
+	}
+	for name, source := range map[string][]byte{"sessions.js": sessionsJS, "session-ui.js": sessionUIJS} {
+		if err := os.WriteFile(filepath.Join(out, name), source, 0o644); err != nil {
+			return err
+		}
+	}
 	f, err := os.Create(filepath.Join(out, "index.html"))
 	if err != nil {
 		return err
