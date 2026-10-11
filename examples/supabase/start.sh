@@ -8,11 +8,20 @@ export SUPABASE_EXPERIMENTAL_STACK=1 SUPABASE_TELEMETRY_DISABLED=1 DO_NOT_TRACK=
 echo "Starting Supabase's native stack: Postgres, PostgREST and Auth (no Docker) ..."
 # --runtime native: plain processes, no Docker. --eager: every service is up before this returns
 # (they're in the snapshot) and none is stopped when idle, so a visitor never waits for a restart.
-supabase stack start --runtime native --eager \
-  -x realtime -x storage -x functions -x studio -x mail -x analytics -x pooler </dev/null 2>&1 |
-  grep -v -e "new version of Supabase CLI" -e "recommend updating" || exit 1
-# API_URL, DB_URL, ANON_KEY, SERVICE_ROLE_KEY, ... for the shell (the stack picks its own ports)
-eval "$(supabase status --env </dev/null 2>/dev/null)"
+# Postgres's first start (initdb, then the migrations) can outlast the CLI's 2 minute readiness wait
+# on one emulated CPU, so the build waits longer; a start that still gives up is resumed.
+export SUPABASE_DB_HEALTH_TIMEOUT=15m
+for attempt in 1 2 3; do
+  supabase stack start --runtime native --eager \
+    -x realtime -x storage -x functions -x studio -x mail -x analytics -x pooler </dev/null 2>&1 |
+    grep -v -e "new version of Supabase CLI" -e "recommend updating"
+  # API_URL, DB_URL, ANON_KEY, SERVICE_ROLE_KEY, ... for the shell (the stack picks its own ports)
+  eval "$(supabase status --env </dev/null 2>/dev/null)"
+  [ -n "$API_URL" ] && break
+  echo "The stack isn't up yet (attempt $attempt of 3), starting it again ..."
+done
+# Never reach the prompt (and so the snapshot) without the stack
+[ -n "$API_URL" ] || { echo "Supabase's stack didn't start."; exit 1; }
 export API_URL DB_URL ANON_KEY SERVICE_ROLE_KEY PUBLISHABLE_KEY SECRET_KEY
 # curl with the service role's key, for the REST API
 sb-auth() { curl -sS -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY" "$@"; }
