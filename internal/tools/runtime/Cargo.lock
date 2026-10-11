@@ -54,8 +54,8 @@ dependencies = [
 
 [[package]]
 name = "armless"
-version = "0.2.3"
-source = "git+https://github.com/filipecabaco/armless?tag=armless-v0.2.3#a89a660777d2953e9215f478ae7f58631b9556b0"
+version = "0.2.4"
+source = "git+https://github.com/filipecabaco/armless?tag=armless-v0.2.4#08ce1275c79590c10dba2f5134bae72c1db4352f"
 dependencies = [
  "aes-gcm",
  "hmac",

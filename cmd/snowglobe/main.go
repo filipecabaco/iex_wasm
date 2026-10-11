@@ -65,11 +65,14 @@ Build flags:
                   so they're preloaded too; repeatable. A warm-report.json explains the result
   --cpus N        guest CPUs, 1 to 8 (default: 1). More than one runs each CPU in its own Web
                   Worker; the page then makes itself cross-origin isolated with a service worker
+  --build-cpus N  CPUs to boot and warm up on before the snapshot (default: the larger of --cpus
+                  and 4); the extra ones go offline first, so build time doesn't depend on --cpus.
+                  Programs that size thread pools at start (the BEAM's schedulers) keep N
 
 An image can carry its own settings as labels, which flags override:
   LABEL snowglobe.ready="iex(1)> " snowglobe.title="My app" snowglobe.memory="256" \
         snowglobe.exercise='["h Enum.map", "Task.async(fn -> 1 end)"]'
-  LABEL snowglobe.network="fetch" snowglobe.cpus="2"
+  LABEL snowglobe.network="fetch" snowglobe.cpus="2" snowglobe.build-cpus="2"
 
 The image must be 64-bit ARM Alpine: FROM alpine (multi-arch; snowglobe builds it for arm64)
 or arm64v8/alpine. Docker is the only requirement. On an x86 host, building arm64 images needs
@@ -154,6 +157,7 @@ func runBuild(args []string) error {
 	fs.Func("exercise", "", func(v string) error { o.Exercise = append(o.Exercise, v); return nil })
 	fs.StringVar(&o.Network, "network", "", "")
 	fs.IntVar(&o.CPUs, "cpus", 0, "")
+	fs.IntVar(&o.BuildCPUs, "build-cpus", 0, "")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 
 	positional, err := parse(fs, args)

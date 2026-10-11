@@ -85,9 +85,10 @@ const (
 // Snapshot boots <out>/system and writes the state, console replay and reads.json there.
 //
 // After the snapshot it types each exercise command into the app and records what it reads.
-func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string, network string, cpus int) error {
+func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string, network string, cpus, buildCPUs int) error {
 	args := []string{VM, "snapshot", "/out/system",
-		"--memory", fmt.Sprint(memoryMB), "--network", network, "--cpus", fmt.Sprint(cpus),
+		"--memory", fmt.Sprint(memoryMB), "--network", network,
+		"--cpus", fmt.Sprint(cpus), "--build-cpus", fmt.Sprint(buildCPUs),
 		"--cols", fmt.Sprint(ConsoleCols), "--rows", fmt.Sprint(ConsoleRows)}
 	if ready != "" {
 		args = append(args, "--ready", ready)

@@ -9,7 +9,7 @@ echo "Starting Supabase's native stack: Postgres, PostgREST and Auth (no Docker)
 # --runtime native: plain processes, no Docker. --eager: every service is up before this returns
 # (they're in the snapshot) and none is stopped when idle, so a visitor never waits for a restart.
 # Postgres's first start (initdb, then the migrations) can outlast the CLI's 2 minute readiness wait
-# on one emulated CPU, so the build waits longer; a start that still gives up is resumed.
+# on a slow build machine, so the build waits longer; a start that still gives up is resumed.
 export SUPABASE_DB_HEALTH_TIMEOUT=15m
 for attempt in 1 2 3; do
   supabase stack start --runtime native --eager \

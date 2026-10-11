@@ -87,8 +87,7 @@ jobs:
   site:
     needs: [setup, tools]
     runs-on: ubuntu-24.04-arm
-    # The slowest build (Supabase on one CPU) boots for over 20 minutes before its snapshot
-    timeout-minutes: 90
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:

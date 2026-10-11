@@ -41,19 +41,23 @@ type Options struct {
 	Exercise []string
 	Network  string
 	CPUs     int // default 1
+	// BuildCPUs boots and warms the guest on more CPUs than it ships with; the snapshot keeps
+	// CPUs. Default: max(CPUs, DefaultBuildCPUs)
+	BuildCPUs int
 }
 
 // Settings are the resolved values a build runs with.
 type Settings struct {
-	Title    string
-	Command  string
-	Ready    string
-	Memory   int
-	Warm     *regexp.Regexp
-	Exercise []string
-	Network  string
-	CPUs     int
-	Console  boot.Console
+	Title     string
+	Command   string
+	Ready     string
+	Memory    int
+	Warm      *regexp.Regexp
+	Exercise  []string
+	Network   string
+	CPUs      int
+	BuildCPUs int
+	Console   boot.Console
 }
 
 // The guest is 64-bit ARM: the armless machine
@@ -61,6 +65,9 @@ const (
 	platform = "linux/arm64"
 	// MaxCPUs is the most CPUs a guest can have (armless's limit)
 	MaxCPUs = 8
+	// DefaultBuildCPUs is how many CPUs a guest boots on at build time, so a one-CPU site boots
+	// as fast as a four-CPU one; the extra CPUs go offline before the snapshot
+	DefaultBuildCPUs = 4
 )
 
 // Run builds the site.
@@ -93,8 +100,8 @@ func Run(o Options, version string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("    command: %s\n    ready:   %s\n    memory:  %d MB\n    network: %s\n    cpus:    %d\n",
-		s.Command, describeReady(s.Ready), s.Memory, s.Network, s.CPUs)
+	fmt.Printf("    command: %s\n    ready:   %s\n    memory:  %d MB\n    network: %s\n    cpus:    %d (booted on %d)\n",
+		s.Command, describeReady(s.Ready), s.Memory, s.Network, s.CPUs, s.BuildCPUs)
 
 	// With networking on, the page terminates the guest's HTTPS with certificates from a CA
 	// made for this build
@@ -143,7 +150,7 @@ func Run(o Options, version string) error {
 		return err
 	}
 
-	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise, s.Network, s.CPUs) }); err != nil {
+	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise, s.Network, s.CPUs, s.BuildCPUs) }); err != nil {
 		return err
 	}
 
@@ -184,6 +191,7 @@ type RunInfo struct {
 	Network       string    `json:"network"`
 	Arch          string    `json:"arch"` // always arm64
 	CPUs          int       `json:"cpus"`
+	BuildCPUs     int       `json:"build_cpus"`
 	BootSeconds   float64   `json:"boot_seconds"`
 	SnapshotBytes int64     `json:"snapshot_bytes"`
 	StateBytes    int64     `json:"state_bytes"`
@@ -211,7 +219,7 @@ func writeRunInfo(out string, o Options, s *Settings, fs *rootfs.Result, packFil
 
 	info := RunInfo{
 		Title: s.Title, Source: o.Source, Command: s.Command, MemoryMB: s.Memory, Network: s.Network,
-		Arch: "arm64", CPUs: s.CPUs,
+		Arch: "arm64", CPUs: s.CPUs, BuildCPUs: s.BuildCPUs,
 		BootSeconds: meta.BootSeconds, SnapshotBytes: meta.SnapshotBytes, StateBytes: meta.StateBytes,
 		WarmPackFiles: packFiles, WarmPackBytes: packBytes, Files: len(fs.Files),
 		BuiltAt: time.Now().UTC().Truncate(time.Second), Snowglobe: version,
@@ -331,6 +339,22 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 	}
 	if s.CPUs < 1 || s.CPUs > MaxCPUs {
 		return nil, fmt.Errorf("cpus %d: use 1 to %d", s.CPUs, MaxCPUs)
+	}
+
+	s.BuildCPUs = o.BuildCPUs
+	if s.BuildCPUs == 0 {
+		if c := label("build-cpus"); c != "" {
+			n, err := strconv.Atoi(c)
+			if err != nil {
+				return nil, fmt.Errorf("label %sbuild-cpus: %q is not a number", labelPrefix, c)
+			}
+			s.BuildCPUs = n
+		} else {
+			s.BuildCPUs = max(s.CPUs, DefaultBuildCPUs)
+		}
+	}
+	if s.BuildCPUs < s.CPUs || s.BuildCPUs > MaxCPUs {
+		return nil, fmt.Errorf("build-cpus %d: use %d (the cpus) to %d", s.BuildCPUs, s.CPUs, MaxCPUs)
 	}
 
 	if w := first(o.Warm, label("warm")); w != "" {

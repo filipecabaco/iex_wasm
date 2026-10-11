@@ -12,6 +12,10 @@
 //!
 //! The serial port (ttyS0) carries boot logs and a root shell used for housekeeping; the app
 //! runs on the virtio console (hvc0), which the page shows.
+//!
+//! --build-cpus boots on more CPUs than the site ships with (--cpus), so a one-CPU site boots
+//! as fast as a many-CPU one. Before the snapshot the guest takes the extra CPUs offline and
+//! the snapshot keeps only the first --cpus; the exercises then run on those alone.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
@@ -26,9 +30,7 @@ use crate::machine::{self, Activity, Spec};
 use crate::text;
 use crate::Args;
 
-/// How long the app may take to be ready. Slow boots are real: the Supabase stack on one CPU on
-/// CI's arm64 runners needs over 20 minutes.
-const TIMEOUT: Duration = Duration::from_secs(45 * 60);
+const TIMEOUT: Duration = Duration::from_secs(20 * 60);
 /// Without --ready, the app counts as ready once its console has been quiet this long.
 const QUIET: Duration = Duration::from_secs(5);
 /// An exercise command is done once the guest has neither printed nor fetched a file for this
@@ -42,9 +44,17 @@ const ROWS: u16 = 30;
 
 pub fn main(args: &Args) -> Result<u8, String> {
     let system = PathBuf::from(args.positional.first().ok_or("snapshot needs the system directory")?);
+    let cpus: usize = args.get("cpus").unwrap_or("1").parse().map_err(|_| "--cpus: not a number")?;
+    let build_cpus: usize = match args.get("build-cpus") {
+        Some(n) => n.parse().map_err(|_| "--build-cpus: not a number")?,
+        None => cpus,
+    };
+    if build_cpus < cpus {
+        return Err(format!("--build-cpus {build_cpus} is fewer than --cpus {cpus}"));
+    }
     let spec = Spec {
         memory_mb: args.get("memory").unwrap_or("512").parse().map_err(|_| "--memory: not a number")?,
-        cpus: args.get("cpus").unwrap_or("1").parse().map_err(|_| "--cpus: not a number")?,
+        cpus: build_cpus,
         network: args.get("network").unwrap_or("none").to_string(),
     };
     let ready = args.get("ready").map(str::to_string);
@@ -119,7 +129,23 @@ pub fn main(args: &Args) -> Result<u8, String> {
     }
     let boot_reads = activity.reads.lock().unwrap().take().unwrap_or_default();
 
-    let state = runner.save_state();
+    // Back to the CPUs the site ships with: Linux moves every task and interrupt off the rest,
+    // and each ends in PSCI CPU_OFF, so the snapshot can leave them out
+    if build_cpus > cpus {
+        activity.serial.lock().unwrap().clear();
+        let offline = format!(
+            "for c in $(seq {cpus} {}); do echo 0 > /sys/devices/system/cpu/cpu$c/online; done; echo CPUS_$(nproc)_OFF\n",
+            build_cpus - 1
+        );
+        board.serial_input(offline.as_bytes());
+        let marker = format!("CPUS_{cpus}_OFF");
+        if !activity.wait_serial(Duration::from_secs(120), |s| s.windows(marker.len()).any(|w| w == marker.as_bytes())) {
+            return Err(format!("the guest did not take CPUs {cpus}-{} offline", build_cpus - 1));
+        }
+        eprintln!("Booted on {build_cpus} CPUs, saving {cpus}");
+    }
+
+    let state = runner.save_state_cpus(cpus)?;
     eprintln!("\nCompressing {} MB snapshot ...", state.len() >> 20);
     let compressed = compress(&state)?;
     let out = system.join("state.bin.zst");

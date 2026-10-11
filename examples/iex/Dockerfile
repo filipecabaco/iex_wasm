@@ -7,7 +7,8 @@ ENV LANG=C.UTF-8 HOME=/root
 WORKDIR /root
 CMD ["iex"]
 
+# The BEAM starts one scheduler per CPU it sees: boot on the one CPU it ships with
 LABEL snowglobe.title="Elixir IEx in the browser" \
       snowglobe.ready="iex(1)> " \
-      snowglobe.memory="384" \
+      snowglobe.memory="384" snowglobe.build-cpus="1" \
       snowglobe.exercise='["Enum.map(1..5, &(&1 * &1))", "for x <- 1..3, y <- [:a, :b], do: {x, y}", "1..4 |> Task.async_stream(&(&1 * 10)) |> Enum.to_list()", "pid = spawn(fn -> receive do msg -> IO.inspect(msg, label: \"got\") end end)", "send(pid, {:hello, \"from a browser tab\"})", "h Enum.chunk_every"]'
