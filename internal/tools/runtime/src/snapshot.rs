@@ -26,7 +26,9 @@ use crate::machine::{self, Activity, Spec};
 use crate::text;
 use crate::Args;
 
-const TIMEOUT: Duration = Duration::from_secs(20 * 60);
+/// How long the app may take to be ready. Slow boots are real: the Supabase stack on one CPU on
+/// CI's arm64 runners needs over 20 minutes.
+const TIMEOUT: Duration = Duration::from_secs(45 * 60);
 /// Without --ready, the app counts as ready once its console has been quiet this long.
 const QUIET: Duration = Duration::from_secs(5);
 /// An exercise command is done once the guest has neither printed nor fetched a file for this
