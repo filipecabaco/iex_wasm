@@ -90,6 +90,102 @@ handles disk commits and mirroring over Armless's existing `connect()` transport
 manages permission, the remembered handle, and the editor. No server or new browser dependencies
 are required.
 
+## Enable working folders in another example
+
+Working folders are opt-in, not automatically available in every guest. The browser UI is
+independent of TypeScript, but the guest must run a compatible file bridge. Keep application
+code outside `/workspace`: importing a disk folder resets that directory, including files
+created by terminal commands.
+
+For an example whose main process runs Node.js:
+
+1. Copy `examples/editor/bridge.mjs` into the other example's Docker build context. It uses
+   only Node built-ins; it does not require npm packages, `tsx`, or Zod.
+2. Add `folder-preload.mjs` alongside that copy:
+
+   ```js
+   import { createBridge } from './bridge.mjs';
+
+   // Child Node processes inherit this flag and must not bind the same port again.
+   if (!process.env.SNOWGLOBE_EDITOR_BRIDGE_STARTED) {
+     process.env.SNOWGLOBE_EDITOR_BRIDGE_STARTED = '1';
+     const bridge = createBridge('/workspace');
+     await new Promise((resolve, reject) => {
+       bridge.once('error', reject);
+       bridge.listen(8090, '0.0.0.0', resolve);
+     });
+   }
+   ```
+
+3. In the Dockerfile, with Node.js already installed, add:
+
+   ```dockerfile
+   COPY bridge.mjs folder-preload.mjs /app/
+   RUN mkdir -p /workspace
+   ENV NODE_OPTIONS="--import /app/folder-preload.mjs"
+   WORKDIR /workspace
+   LABEL snowglobe.editor="true" \
+         snowglobe.network="fetch"
+   ```
+
+   Keep your application's command and ready marker. If its entry point is relative to its
+   old working directory, use an absolute path, such as `CMD ["node", "/app/main.mjs"]`.
+   If you already set `NODE_OPTIONS`, append this import instead of replacing those options.
+   The preload waits for the bridge to listen before the application can print its ready marker.
+4. Build the example normally. Choose a small working folder in the browser, save a file, and
+   verify its contents from the guest. The application should read project files in `/workspace`.
+
+For Python, Go, or another non-Node application, either run the supplied Node bridge as a
+separate **guest** process under the application's startup script/supervisor, or implement its
+protocol in that language. Start the bridge before the ready marker and keep it running for
+the application's lifetime; setting the labels alone is not sufficient.
+
+The protocol uses guest port **8090**, one UTF-8 JSON request ending in `\n` per virtual TCP
+connection, and one JSON response ending in `\n`, followed by connection close. Success is
+`{"result":true}`; failure is `{"error":"message"}`.
+
+| Operation | Request fields | Guest action |
+|-----------|----------------|--------------|
+| `reset` | `{"op":"reset"}` | Clear the dedicated workspace before a disk-authoritative import. |
+| `mkdir` | `op`, relative `path` | Create a directory and missing parents. |
+| `write` | `op`, relative `path`, base64 `data` | Commit the complete file contents, creating missing parents. |
+| `remove` | `op`, relative `path` | Remove one regular file; tolerate an already-missing target. |
+| `rmdir` | `op`, relative `path` | Remove an empty directory only; tolerate an already-missing target. |
+
+Use the supplied bridge's validation and limits as the contract: reject traversal, symlink
+roots/parents/targets, malformed or oversized data, and unsupported operations. Never make
+`rmdir` recursive. A replacement bridge must not access the host's filesystem.
+
+## Public HTTPS deployment
+
+Deploy the **entire generated output directory**, not just `index.html`, to an HTTPS static
+host. No host-side file API or server listening on port 8090 is needed: the guest and virtual
+TCP bridge run inside each visitor's browser. Each visitor chooses a folder on their own
+computer; the working-folder bridge does not upload those files to the hosting server.
+Grant access only to trusted sites, since page scripts and network-enabled guest programs
+could transmit accessible data.
+
+Use desktop Chrome/Edge and open the example directly, rather than in a cross-origin iframe.
+The folder picker needs a user interaction and permission. Moving from localhost to a public
+domain requires choosing the folder again; a different origin or example URL path has a
+separate remembered selection. Existing ordinary disk files are not lost. Keep the deployed
+URL stable and offer **Reconnect working folder** when the browser requires renewed access.
+
+The host must serve the runtime, filesystem assets, and service worker correctly. For
+multi-CPU guests, the generated service worker establishes cross-origin isolation with an
+initial reload; do not remove it or block the guest's Web Workers/WebAssembly.
+
+In this repository, `DEMOS` in `mise.toml` controls builds that are uploaded and published;
+`EXAMPLES` are built/tested only and have no public route. The editor is in `DEMOS`, so the
+Pages workflow publishes it at `/editor/`. To publish another example, put it in `DEMOS`
+without also listing it in `EXAMPLES`, and add a headless check in
+`.github/workflows/pages.yml` if its example name does not already have one. This publishes
+the direct route; adding navigation to the static demo index is a separate change.
+
+For a fork using the Pages workflow, first enable **Settings → Pages → Build and deployment
+→ Source: GitHub Actions**. Otherwise `actions/configure-pages` fails with a missing-site
+404 even when every test and example build succeeds.
+
 ## Regression checks
 
 ```sh

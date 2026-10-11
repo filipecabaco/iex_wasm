@@ -202,11 +202,13 @@ to disk** before leaving. The example supports nested paths, edits UTF-8 text, m
 files unchanged, and bounds imports to 1 MiB per file, 16 MiB total and 1,000 entries. It needs
 HTTPS/localhost and `showDirectoryPicker()`; unsupported browsers can run the terminal but do
 not silently substitute browser-private files. See the [example guide](examples/editor/README.md)
-for the full workflow and concurrency/permission limits.
+for the full workflow and concurrency/permission limits, plus instructions for
+[enabling working folders in another example](examples/editor/README.md#enable-working-folders-in-another-example)
+and [public HTTPS deployment](examples/editor/README.md#public-https-deployment).
 
 ## Share a run as a post
 
-Every demo has an X player card at `card/<demo>/` (e.g.
+Selected demos have an X player card at `card/<demo>/` (e.g.
 [filipecabaco.github.io/snowglobe/card/elixir/](https://filipecabaco.github.io/snowglobe/card/elixir/)):
 shared on X, the post itself boots the run in a 480×480 frame, and the link opens the demo page.
 `elixir assets/cards.exs` writes the card pages and poster sources from `assets/cards.json`, where
