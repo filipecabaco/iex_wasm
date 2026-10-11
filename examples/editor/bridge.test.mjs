@@ -10,6 +10,13 @@ const B = available ? await import('./bridge.mjs') : {};
 const check = (name, fn) => test(name, { skip: !available }, fn);
 const encoded = value => Buffer.from(value).toString('base64');
 test('the example ships its guest workspace bridge', () => assert.ok(available));
+test('the editor is included in public deployment, not only in CI', async () => {
+  const configuration = await fs.readFile(new URL('../../mise.toml', import.meta.url), 'utf8');
+  const demos = configuration.match(/^DEMOS = "([^"]*)"$/m)?.[1].split(/\s+/) ?? [];
+  const ciOnly = configuration.match(/^EXAMPLES = "([^"]*)"$/m)?.[1].split(/\s+/) ?? [];
+  assert.ok(demos.includes('editor'), 'editor must be uploaded and assembled into the public site');
+  assert.ok(!ciOnly.includes('editor'), 'editor must not also be scheduled as a CI-only example');
+});
 async function root(t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'snowglobe-guest-workspace-'));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
