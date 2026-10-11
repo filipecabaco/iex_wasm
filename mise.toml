@@ -2,7 +2,8 @@
 go = "1.27.1"
 
 [env]
-DEMOS = "supabase iex postgres elixir python typescript go rust java curl"
+# <example>-<n>cpu: examples/<example> built with --cpus <n>; supabase-1cpu is what its X card plays
+DEMOS = "supabase supabase-1cpu iex postgres elixir python typescript go rust java curl"
 # Examples built and checked in CI but not on the site (too big, or need the host's network)
 EXAMPLES = "apk"
 
@@ -13,7 +14,10 @@ set -e
 go build -o snowglobe ./cmd/snowglobe
 rm -rf dist
 for demo in $DEMOS; do
-  ./snowglobe build "examples/$demo" --out "dist/$demo"
+  case "$demo" in
+    *-[0-9]cpu) n=${demo##*-}; ./snowglobe build "examples/${demo%-*}" --out "dist/$demo" --cpus "${n%cpu}" ;;
+    *) ./snowglobe build "examples/$demo" --out "dist/$demo" ;;
+  esac
 done
 mise run assemble
 '''

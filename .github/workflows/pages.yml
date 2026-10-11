@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # DEMOS (on the site) and EXAMPLES (CI only) in mise.toml are the lists of sites
+  # DEMOS (on the site) and EXAMPLES (CI only) in mise.toml are the lists of sites. A site named
+  # <example>-<n>cpu is examples/<example> built with --cpus <n> (an X card needs one CPU)
   setup:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -37,7 +38,9 @@ jobs:
       - id: sites
         run: |
           echo "sites=$(mise env --json | jq -c '[(.DEMOS | split(" ") | .[] | {name: ., deploy: true}),
-                                                 (.EXAMPLES | split(" ") | .[] | {name: ., deploy: false})]')" >> "$GITHUB_OUTPUT"
+                                                 (.EXAMPLES | split(" ") | .[] | {name: ., deploy: false})]
+                                                | map(. + {src: (.name | sub("-[0-9]+cpu$"; "")),
+                                                           cpus: (.name | capture("-(?<n>[0-9]+)cpu$").n // "")})')" >> "$GITHUB_OUTPUT"
 
   test:
     runs-on: ubuntu-24.04
@@ -92,6 +95,8 @@ jobs:
     name: ${{ matrix.site.name }}
     env:
       SITE: ${{ matrix.site.name }}
+      SRC: ${{ matrix.site.src }}
+      CPUS: ${{ matrix.site.cpus }}
     steps:
       - uses: actions/checkout@v7
 
@@ -102,7 +107,7 @@ jobs:
         id: cache
         with:
           path: dist/${{ matrix.site.name }}
-          key: site-${{ matrix.site.name }}-${{ hashFiles(format('examples/{0}/**', matrix.site.name), 'internal/**', 'cmd/**', 'go.mod', 'go.sum') }}
+          key: site-${{ matrix.site.name }}-${{ hashFiles(format('examples/{0}/**', matrix.site.src), 'internal/**', 'cmd/**', 'go.mod', 'go.sum') }}
 
       - uses: actions/download-artifact@v8
         with:
@@ -126,14 +131,14 @@ jobs:
 
       - name: Build ${{ matrix.site.name }}
         if: steps.cache.outputs.cache-hit != 'true'
-        run: ./snowglobe build "examples/$SITE" --out "dist/$SITE"
+        run: ./snowglobe build "examples/$SRC" --out "dist/$SITE" ${CPUS:+--cpus "$CPUS"}
 
       # Type into the app in its own language and check what it prints. The Go demo is a
       # full-screen app with no prompt: it only has to keep running.
       - name: Check ${{ matrix.site.name }}
         if: matrix.site.name != 'curl'
         run: |
-          case "$SITE" in
+          case "$SRC" in
             iex|elixir) commands='IO.puts("snowglobe-#{6 * 7}")'; expect=snowglobe-42 ;;
             python)     commands='print(f"snowglobe-{6 * 7}")'; expect=snowglobe-42 ;;
             typescript) commands='console.log("snowglobe-" + 6 * 7)'; expect=snowglobe-42 ;;
