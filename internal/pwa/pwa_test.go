@@ -54,6 +54,42 @@ func TestRun(t *testing.T) {
 	}
 }
 
+func TestSessionAssetsAndCacheIsolation(t *testing.T) {
+	dir := site(t)
+	for _, name := range []string{"sessions.js", "session-ui.js"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Run(Options{Site: dir}); err != nil {
+		t.Fatal(err)
+	}
+	sw, _ := os.ReadFile(filepath.Join(dir, "sw.js"))
+	for _, want := range []string{`"sessions.js"`, `"session-ui.js"`, `self.registration.scope`, `k.endsWith(":" + self.registration.scope)`} {
+		if !strings.Contains(string(sw), want) {
+			t.Errorf("PWA lacks session asset/cache isolation %q", want)
+		}
+	}
+}
+
+func TestEditorAssetsArePrecachedWhenPresent(t *testing.T) {
+	dir := site(t)
+	for _, name := range []string{"working-folder.js", "folder-ui.js"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Run(Options{Site: dir}); err != nil {
+		t.Fatal(err)
+	}
+	sw, _ := os.ReadFile(filepath.Join(dir, "sw.js"))
+	for _, name := range []string{"working-folder.js", "folder-ui.js"} {
+		if !strings.Contains(string(sw), `"`+name+`"`) {
+			t.Errorf("editor shell asset not precached: %s", name)
+		}
+	}
+}
+
 func TestIsolatesSeveralCPUs(t *testing.T) {
 	dir := siteWith(t, 4)
 	if err := Run(Options{Site: dir}); err != nil {

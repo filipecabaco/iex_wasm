@@ -141,7 +141,7 @@ jobs:
           case "$SRC" in
             iex|elixir) commands='IO.puts("snowglobe-#{6 * 7}")'; expect=snowglobe-42 ;;
             python)     commands='print(f"snowglobe-{6 * 7}")'; expect=snowglobe-42 ;;
-            typescript) commands='console.log("snowglobe-" + 6 * 7)'; expect=snowglobe-42 ;;
+            typescript|editor) commands='console.log("snowglobe-" + 6 * 7)'; expect=snowglobe-42 ;;
             java)       commands='System.out.println("snowglobe-" + 6 * 7)'; expect=snowglobe-42 ;;
             postgres)   commands="SELECT 'snowglobe-' || 6 * 7;"; expect=snowglobe-42 ;;
             rust)       commands='echo snowglobe-$((6 * 7))'; expect=snowglobe-42 ;;
