@@ -137,8 +137,7 @@ func Run(o Options, version string) error {
 				return err
 			}
 		}
-		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs,
-			ConsoleCols: tools.ConsoleCols, ConsoleRows: tools.ConsoleRows})
+		return nil // the final page fingerprints the snapshot once it exists
 	}); err != nil {
 		return err
 	}
@@ -170,7 +169,11 @@ func Run(o Options, version string) error {
 		if err := os.WriteFile(filepath.Join(out, "warm-report.json"), data, 0o644); err != nil {
 			return err
 		}
-		return writeRunInfo(out, o, s, fs, files, bytes, version)
+		if err := writeRunInfo(out, o, s, fs, files, bytes, version); err != nil {
+			return err
+		}
+		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs,
+			ConsoleCols: tools.ConsoleCols, ConsoleRows: tools.ConsoleRows})
 	})
 }
 

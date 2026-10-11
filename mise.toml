@@ -41,4 +41,4 @@ run = "go run ./cmd/snowglobe serve dist"
 
 [tasks.test]
 description = "Run the tests"
-run = "go test ./..."
+run = "go test ./... && node --test internal/site/sessions.test.cjs"

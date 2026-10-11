@@ -110,6 +110,53 @@ to a home screen or dock and keeps working offline once it has run. Chromium sho
 **Install app** button in the status strip; on iOS, use Share → Add to Home Screen. A new build
 gets a new cache. Run it after `snowglobe pool`; every demo on the live site is installable.
 
+## Keep your workspace
+
+Every newly built run remembers your work locally. A quiet status shows **Saving…**, **Saved
+on this device**, or **Saved to your folder**. The **Workspace** menu holds the less frequent
+actions; opening it does not shrink the terminal. Saves include the whole emulated machine—RAM,
+processes and guest-written files—plus the terminal replay. This preserves TypeScript REPL
+variables as well as Supabase's database and running services. No checkpoint is sent to a server.
+
+- Automatic saving is always on, starting after 60 seconds while the page is visible; expensive
+  saves lengthen the interval. The guest pauses during capture, then resumes while the checkpoint
+  is compressed and committed. Older settings that disabled autosave are migrated to automatic saving.
+- Refresh resumes the workspace's **last completed save**, not necessarily its latest changes.
+  There is no reliable unload-time save. Before leaving important work, use **Workspace → Save
+  now** and wait for the saved status. The last-save time and size are under **More options**.
+  Console/input activity after capture is marked as newer; running processes can also change in
+  the background.
+- **Start fresh…** asks for one confirmation, starts from the demo's original snapshot, and keeps
+  the previous saves. **More options** contains saved workspaces, named workspace creation,
+  runtime reload and explicit deletion. Only **Delete this saved workspace…** removes a save;
+  starting fresh or reloading does not.
+- **Download backup / Restore backup…** use `.snowglobe` files. Restored backups are validated
+  and become separate workspaces rather than overwriting existing ones. These files can contain
+  passwords, tokens, database contents and other guest memory; keep them private. They are not
+  encrypted. Restore only backups you trust.
+- On browsers with `showDirectoryPicker()` (principally desktop Chrome/Edge), **Save to a
+  folder…** saves the current workspace into a dedicated `snowglobe-…` subdirectory of a
+  user-selected folder. Two alternating files retain the previous valid save if a write fails
+  or the newest file is corrupt. This is **session-bundle storage**, not a live guest filesystem
+  mount. Reopening may require **Reconnect folder** permission. Switching storage copies the
+  current work and keeps the old saves; if a folder cannot be opened, the menu offers starting
+  in this browser instead. Firefox/Safari can use browser storage and backup download/restore.
+
+Browser storage survives ordinary refreshes but is subject to quota, site-data clearing and
+possible eviction. The page requests persistent storage when supported; the browser can refuse.
+Checkpoint-write failures are shown, never reported as successful saves. A second tab on the
+same demo opens a temporary run rather than competing for the saved sessions; it can export a
+backup. Web Locks are required for automatic saving. Folder locking is local to this origin and
+browser profile: do not write the same session folder concurrently from different browsers.
+
+Checkpoints are tied to the exact base snapshot, filesystem, runtime and machine configuration.
+After an incompatible rebuild, older sessions are **kept for export**, not silently restored or
+replaced. Backups do not include the runtime or all original filesystem blobs: retain the
+original built site and its blob store if you need to restore those sessions later. This is
+checkpoint persistence, not a continuously durable Postgres volume or a database backup service.
+External HTTP/WebSocket connections may need reconnecting after restore. Capturing large guests
+uses additional memory and can briefly freeze the UI, especially on mobile devices.
+
 ## Share a run as a post
 
 Every demo has an X player card at `card/<demo>/` (e.g.
@@ -203,6 +250,15 @@ supa:~/app$ notes signup grace@example.com hopper-1906 && notes ls
 signed in as grace@example.com (66973d17)
 grace@example.com: 0 note(s)
 ```
+
+## Development checks
+
+Run `go test ./...` and `node --test internal/site/sessions.test.cjs` (Node 22+; no npm packages
+needed), or `mise run test`. To exercise real IndexedDB transactions, Web Locks and filesystem
+writable streams, serve the repository on localhost and open
+`internal/site/sessions.browser.html` in a visible tab; its results are displayed on the page.
+The automatic-saving check requires the tab to remain visible, just like the demos. Full session
+restore should also be checked against a built demo, since storage tests do not verify the VM.
 
 ## The warm cache
 
