@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Working folder regression tests</title>
+<h1>Working folder regression tests</h1><pre id="results">Running…</pre>
+<div id="fixture"></div><div id="terminal"></div><div id="keys"></div>
+<script src="sessions.js"></script><script src="working-folder.js"></script><script src="folder-ui.js"></script>
+<script>
+(async () => {
+  const tests = [], S = SnowglobeSessions, W = SnowglobeWorkingFolder;
+  const scope = 'working-folder-test-' + crypto.randomUUID();
+  const root = await navigator.storage.getDirectory();
+  const directory = await root.getDirectoryHandle(scope, { create: true });
+  const originalPicker = window.showDirectoryPicker;
+  let ui;
+  const assert = (ok, message) => { if (!ok) throw new Error(message); };
+  const bytes = value => new TextEncoder().encode(value);
+  const bridge = { files: new Map(), request: async request => {
+    if (request.op === 'reset') bridge.files.clear();
+    else if (request.op === 'write') bridge.files.set(request.path, request.data);
+    else if (request.op === 'remove') bridge.files.delete(request.path);
+    return true;
+  } };
+  async function fixture() {
+    const html = await fetch('editor.html');
+    assert(html.ok, 'The editor UI fragment is missing');
+    document.getElementById('fixture').innerHTML = await html.text();
+    assert(typeof SnowglobeFolderUI === 'function', 'The working folder UI is missing');
+    ui = new SnowglobeFolderUI(); ui.scope = scope;
+    // Real IndexedDB and FileSystemHandles; only the VM transport is substituted.
+    ui.bridge = bridge;
+    await ui.attach({});
+  }
+  async function cleanupUI() {
+    if (!ui) return;
+    ui.closed = true; await ui.release?.(); ui.browser?.db.close(); ui = null;
+  }
+  async function test(name, fn) {
+    try { await fn(); tests.push({ name, pass: true }); }
+    catch (e) { tests.push({ name, pass: false, error: e.message }); }
+    finally { await cleanupUI(); }
+  }
+  await test('real writable streams create, edit, delete and reopen ordinary files', async () => {
+    const disk = new W.DiskFolder(directory);
+    await disk.write('src/main.ts', bytes('const x = 1;'), null);
+    await disk.write('src/main.ts', bytes('const x = 42;'), bytes('const x = 1;'));
+    const reopened = new W.DiskFolder(directory);
+    assert(new TextDecoder().decode(await reopened.read('src/main.ts')) === 'const x = 42;', 'Ordinary file not committed');
+    await reopened.remove('src/main.ts', bytes('const x = 42;'));
+    let missing = false; try { await disk.read('src/main.ts'); } catch (e) { missing = e.name === 'NotFoundError'; }
+    assert(missing, 'Disk file was not deleted');
+  });
+  await test('choosing a folder remembers a real handle separately from session bundles', async () => {
+    window.showDirectoryPicker = async () => directory;
+    await fixture();
+    await ui.choose(directory);
+    const settings = await ui.browser.settings();
+    assert(settings.handle?.kind === 'directory' && !settings.active && !settings.folderHandle, 'Working folder confused with session storage');
+    assert(document.getElementById('working-folder-location').textContent.includes(directory.name), 'Folder name not visible');
+    assert(ui.workspace && ui.synced, 'Folder was not loaded into the VPS');
+    assert(!(await directory.resolve(await directory.getDirectoryHandle('src'))).includes('snowglobe-'), 'Files were put into a session subfolder');
+  });
+  await test('folders are listed distinctly and selecting one offers only explicit empty-folder deletion', async () => {
+    const empty = await directory.getDirectoryHandle('empty-folder', { create: true });
+    await empty.getDirectoryHandle('nested-empty', { create: true });
+    await fixture();
+    const files = document.getElementById('editor-files');
+    assert([...files.options].some(o => o.textContent === 'empty-folder/'), 'Empty folder missing from the working-folder list');
+    assert([...files.options].some(o => o.textContent === 'empty-folder/nested-empty/'), 'Nested empty folder missing from the working-folder list');
+    files.value = 'empty-folder'; await files.onchange();
+    assert(document.getElementById('editor-path').textContent === 'empty-folder/', 'Selected folder not identified distinctly');
+    assert(document.getElementById('editor-content').disabled && document.getElementById('editor-save').disabled,
+      'Text editing or saving was enabled for a directory');
+    assert(!document.getElementById('editor-delete').disabled && document.getElementById('editor-delete').textContent === 'Delete empty folder…',
+      'Folder selection did not offer explicit empty-folder deletion');
+    assert(document.getElementById('editor-name').value === 'empty-folder/', 'Folder selection did not offer a path for creating a child file');
+    assert((await directory.getDirectoryHandle('empty-folder')).kind === 'directory', 'Selecting a directory modified it');
+  });
+  await test('creating and deleting a nested file leaves its empty parent visible without reloading', async () => {
+    await fixture();
+    document.getElementById('editor-name').value = 'created-folder/new-file.txt';
+    await document.getElementById('editor-new').onclick();
+    const listed = () => [...document.getElementById('editor-files').options].map(o => o.textContent);
+    assert(listed().includes('created-folder/'), 'Newly created parent folder not shown until reload');
+    const confirmation = window.confirm;
+    try { window.confirm = () => true; await document.getElementById('editor-delete').onclick(); }
+    finally { window.confirm = confirmation; }
+    assert(listed().includes('created-folder/') && !listed().includes('created-folder/new-file.txt'), 'Deleting the last file hid its empty parent');
+    const folder = await directory.getDirectoryHandle('created-folder');
+    let count = 0; for await (const entry of folder.entries()) count++;
+    assert(count === 0, 'File deletion did not leave the expected empty disk directory');
+  });
+  await test('empty-folder deletion needs confirmation and removes the disk directory and guest mirror', async () => {
+    await fixture();
+    const files = document.getElementById('editor-files');
+    files.value = 'created-folder'; await files.onchange();
+    const button = document.getElementById('editor-delete');
+    assert(!button.disabled && button.textContent === 'Delete empty folder…', 'Empty-folder deletion is not available');
+    const confirmation = window.confirm, request = bridge.request, calls = [];
+    try {
+      bridge.request = async value => { calls.push(value); return request(value); };
+      window.confirm = message => { assert(message.includes('created-folder') && message.includes('empty'), 'Directory confirmation is unclear'); return false; };
+      await button.onclick();
+      assert((await directory.getDirectoryHandle('created-folder')).kind === 'directory' && calls.length === 0, 'Cancelled deletion changed disk or guest');
+      window.confirm = () => true; await button.onclick();
+      let missing = false; try { await directory.getDirectoryHandle('created-folder'); } catch (e) { missing = e.name === 'NotFoundError'; }
+      assert(missing && calls.some(c => c.op === 'rmdir' && c.path === 'created-folder'), 'Confirmed directory deletion did not remove disk and request the guest mirror');
+      assert(![...files.options].some(o => o.value === 'created-folder') && ui.path === null, 'Deleted directory remains selected or listed');
+      assert(document.getElementById('editor-name').value === '', 'Deleted folder retained its default new-file path');
+    } finally { window.confirm = confirmation; bridge.request = request; }
+  });
+  await test('nonempty directories cannot be deleted even when their contents were added outside the editor', async () => {
+    await directory.getDirectoryHandle('delete-full', { create: true });
+    await fixture();
+    const files = document.getElementById('editor-files');
+    files.value = 'delete-full'; await files.onchange();
+    const disk = new W.DiskFolder(directory);
+    await disk.write('delete-full/outside.txt', bytes('keep outside content'), null);
+    const confirmation = window.confirm, request = bridge.request;
+    let calls = 0;
+    try {
+      window.confirm = () => true; bridge.request = async value => { calls++; return request(value); };
+      await document.getElementById('editor-delete').onclick();
+      assert(document.getElementById('working-folder-status').textContent.includes('not empty'), 'Nonempty-folder refusal is not explained');
+      assert(new TextDecoder().decode(await disk.read('delete-full/outside.txt')) === 'keep outside content' && calls === 0,
+        'Directory deletion lost outside content or changed the guest after a failed disk deletion');
+      assert(ui.path === 'delete-full', 'A failed directory deletion cleared the selection');
+    } finally { window.confirm = confirmation; bridge.request = request; }
+  });
+  await test('directory deletion reports committed disk deletion separately from a failed guest mirror', async () => {
+    await directory.getDirectoryHandle('delete-offline', { create: true });
+    await fixture();
+    document.getElementById('editor-files').value = 'delete-offline'; await document.getElementById('editor-files').onchange();
+    const confirmation = window.confirm, request = bridge.request;
+    try {
+      window.confirm = () => true;
+      bridge.request = async () => { throw new Error('guest offline'); };
+      await document.getElementById('editor-delete').onclick();
+      let missing = false; try { await directory.getDirectoryHandle('delete-offline'); } catch (e) { missing = e.name === 'NotFoundError'; }
+      assert(missing && !ui.synced && ui.path === null && document.getElementById('working-folder-status').textContent.includes('Deleted on disk'),
+        'Committed directory deletion was misreported as a disk failure');
+      assert(document.getElementById('editor-delete').disabled, 'Guest mirror failure still allowed deletion');
+    } finally { window.confirm = confirmation; bridge.request = request; }
+    try {
+      window.confirm = () => true; await document.getElementById('working-folder-reload').onclick();
+      assert(ui.synced && !ui.entries.some(e => e.path === 'delete-offline'), 'Reload resurrected a deleted directory');
+    } finally { window.confirm = confirmation; }
+  });
+  await test('the editor creates, saves and deletes real files and updates the VPS mirror', async () => {
+    await fixture();
+    document.getElementById('editor-name').value = 'hello.txt';
+    await document.getElementById('editor-new').onclick();
+    assert(ui.path === 'hello.txt' && !ui.dirty, 'New file not selected');
+    const content = document.getElementById('editor-content');
+    content.value = 'hello ☃\n'; content.dispatchEvent(new Event('input'));
+    assert(ui.dirty && document.getElementById('editor-dirty').textContent.includes('Unsaved'), 'Editor did not track unsaved changes');
+    await document.getElementById('editor-save').onclick();
+    assert(!ui.dirty && new TextDecoder().decode(await ui.workspace.disk.read('hello.txt')) === 'hello ☃\n', 'Save did not commit to disk');
+    assert(bridge.files.get('hello.txt') === W.base64(bytes('hello ☃\n')), 'VPS did not see the saved file');
+    const confirmation = window.confirm;
+    try {
+      window.confirm = () => false; await document.getElementById('editor-delete').onclick();
+      assert(bridge.files.has('hello.txt'), 'Cancelled deletion changed the VPS');
+      window.confirm = () => true; await document.getElementById('editor-delete').onclick();
+      let missing = false; try { await directory.getFileHandle('hello.txt'); } catch (e) { missing = e.name === 'NotFoundError'; }
+      assert(missing && !bridge.files.has('hello.txt'), 'Deletion did not remove the disk file and VPS mirror');
+    } finally { window.confirm = confirmation; }
+  });
+  await test('reopening uses the remembered folder and disk contents rather than stale session files', async () => {
+    const disk = new W.DiskFolder(directory);
+    await disk.write('restored.txt', bytes('disk wins'), null);
+    bridge.files.set('ghost.txt', 'stale snapshot');
+    await fixture();
+    assert(ui.workspace && ui.synced && bridge.files.get('restored.txt') === W.base64(bytes('disk wins')), 'Remembered folder not loaded automatically');
+    assert(!bridge.files.has('ghost.txt'), 'Deleted files returned from the VM checkpoint');
+  });
+  await test('unsaved buffers are protected when changing files or reloading the folder', async () => {
+    await fixture();
+    const content = document.getElementById('editor-content');
+    content.value = 'unsaved'; content.dispatchEvent(new Event('input'));
+    const oldPath = ui.path, confirmation = window.confirm;
+    try {
+      window.confirm = () => false;
+      document.getElementById('editor-files').value = 'restored.txt';
+      await document.getElementById('editor-files').onchange();
+      assert(ui.path === oldPath && content.value === 'unsaved', 'File change discarded a dirty buffer');
+      await document.getElementById('working-folder-reload').onclick();
+      assert(ui.path === oldPath && content.value === 'unsaved', 'Folder reload discarded a dirty buffer');
+    } finally { window.confirm = confirmation; }
+  });
+  await test('permission loss shows reconnect without silently replacing disk files with a snapshot', async () => {
+    await fixture(); await cleanupUI();
+    const open = S.BrowserStore.open;
+    try {
+      S.BrowserStore.open = async scope => {
+        const store = await open(scope), settings = store.settings.bind(store);
+        store.settings = async value => value === undefined ? { handle: {
+          name: 'Needs access', queryPermission: async () => 'prompt', requestPermission: async () => 'denied',
+        } } : settings(value);
+        return store;
+      };
+      const before = new Map(bridge.files);
+      await fixture();
+      assert(!ui.workspace && !document.getElementById('working-folder-reconnect').hidden, 'Lost permission did not offer reconnection');
+      assert(document.getElementById('editor-save').disabled && document.getElementById('editor-new').disabled, 'Files writable without folder access');
+      await document.getElementById('working-folder-reconnect').onclick();
+      assert(document.getElementById('working-folder-status').textContent.includes('not granted'), 'Denied reconnection not explained');
+      assert(JSON.stringify([...bridge.files]) === JSON.stringify([...before]), 'Lost access changed the guest workspace');
+    } finally { S.BrowserStore.open = open; }
+  });
+  await test('permission revoked during editing offers reconnection without discarding the unsaved buffer', async () => {
+    await fixture();
+    const content = document.getElementById('editor-content');
+    content.value = 'unsaved permission test'; content.dispatchEvent(new Event('input'));
+    const denied = async () => { throw new DOMException('Access revoked', 'NotAllowedError'); };
+    ui.workspace.disk.directory = { getFileHandle: denied, getDirectoryHandle: denied };
+    await document.getElementById('editor-save').onclick();
+    assert(ui.needsPermission && !document.getElementById('working-folder-reconnect').hidden, 'Revoked access did not offer Reconnect');
+    assert(ui.dirty && content.value === 'unsaved permission test', 'Revoked permission discarded the buffer');
+    const confirmation = window.confirm;
+    try {
+      window.confirm = () => false;
+      await document.getElementById('working-folder-reconnect').onclick();
+      assert(ui.dirty && content.value === 'unsaved permission test', 'Reconnect discarded unsaved edits without confirmation');
+      window.confirm = () => true;
+      await document.getElementById('working-folder-reconnect').onclick();
+      assert(ui.synced && !ui.needsPermission && !ui.dirty, 'Folder did not reconnect after explicit permission and discard approval');
+    } finally { window.confirm = confirmation; }
+  });
+  await test('another tab cannot acquire the working-folder writer lock', async () => {
+    await fixture();
+    let rejected = false;
+    try { await S.acquireLock(ui.scope); } catch { rejected = true; }
+    assert(rejected, 'A concurrent tab could become a second disk writer');
+  });
+  await test('unsupported browsers explain the limitation and never substitute browser-private files', async () => {
+    window.showDirectoryPicker = undefined;
+    await fixture();
+    assert(document.getElementById('working-folder-choose').disabled, 'Unsupported directory picker not disabled');
+    assert(document.getElementById('working-folder-status').textContent.includes('Chrome') && !ui.workspace, 'Unsupported browser silently substituted another store');
+    window.showDirectoryPicker = async () => directory;
+  });
+  await test('disk commit followed by a VPS error is reported distinctly and can be repaired', async () => {
+    await fixture();
+    const content = document.getElementById('editor-content'), request = bridge.request;
+    content.value = 'persisted despite guest failure'; content.dispatchEvent(new Event('input'));
+    const file = ui.path;
+    try {
+      bridge.request = async () => { throw new Error('guest offline'); };
+      await document.getElementById('editor-save').onclick();
+      assert(!ui.dirty && !ui.synced && document.getElementById('working-folder-status').textContent.includes('on disk'), 'Disk success misreported as lost data');
+      assert(new TextDecoder().decode(await ui.workspace.disk.read(file)) === content.value, 'Disk commit lost after mirror error');
+    } finally { bridge.request = request; }
+    const confirmation = window.confirm;
+    try {
+      window.confirm = () => true;
+      await document.getElementById('working-folder-reload').onclick();
+      assert(ui.synced && bridge.files.get(file) === W.base64(bytes(content.value)), 'Reload did not repair the mirror');
+    } finally { window.confirm = confirmation; }
+  });
+  await test('the dirty baseline advances after saving, including a committed disk save with a VPS failure', async () => {
+    await fixture();
+    const content = document.getElementById('editor-content'), original = content.value;
+    content.value = original + 'saved'; content.dispatchEvent(new Event('input'));
+    await document.getElementById('editor-save').onclick();
+    content.value = original; content.dispatchEvent(new Event('input'));
+    assert(ui.dirty && !document.getElementById('editor-save').disabled, 'Reverting to the old disk version was incorrectly marked saved');
+    const saved = original + 'saved';
+    content.value = saved; content.dispatchEvent(new Event('input'));
+    assert(!ui.dirty, 'Returning to the new saved disk version was incorrectly marked unsaved');
+    const request = bridge.request;
+    try {
+      content.value = 'another disk version'; content.dispatchEvent(new Event('input'));
+      bridge.request = async () => { throw new Error('guest offline'); };
+      await document.getElementById('editor-save').onclick();
+      content.dispatchEvent(new Event('input'));
+      assert(!ui.dirty, 'A committed disk save retained the old editor baseline after a VPS error');
+    } finally { bridge.request = request; }
+  });
+  await test('a binary file is mirrored unchanged but cannot be overwritten by the text editor', async () => {
+    const disk = new W.DiskFolder(directory);
+    await disk.write('binary.bin', new Uint8Array([0, 255, 128]), null);
+    await fixture(); await ui.open('binary.bin');
+    assert(bridge.files.get('binary.bin') === 'AP+A', 'Binary content not mirrored unchanged');
+    assert(document.getElementById('editor-content').disabled && document.getElementById('editor-save').disabled, 'Binary content editable as lossy text');
+  });
+  const cleanup = await S.BrowserStore.open(scope); await cleanup.settings({}); cleanup.db.close();
+  await root.removeEntry(scope, { recursive: true });
+  window.showDirectoryPicker = originalPicker;
+  window.__workingFolderTests = { pass: tests.every(t => t.pass), tests };
+  document.getElementById('results').textContent = JSON.stringify(window.__workingFolderTests, null, 2);
+})().catch(e => { window.__workingFolderTests = { pass: false, error: e.message }; document.getElementById('results').textContent = JSON.stringify(window.__workingFolderTests); });
+</script></html>

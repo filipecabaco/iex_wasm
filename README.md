@@ -169,6 +169,41 @@ checkpoint persistence, not a continuously durable Postgres volume or a database
 External HTTP/WebSocket connections may need reconnecting after restore. Capturing large guests
 uses additional memory and can briefly freeze the UI, especially on mobile devices.
 
+## Ordinary project files on disk
+
+Session backups and a project's working files are different things. The new
+**[`editor`](examples/editor)** example starts from the TypeScript + Zod environment and adds
+a basic browser text editor beside its Linux terminal:
+
+```sh
+snowglobe build examples/editor --out dist/editor
+snowglobe serve dist/editor
+```
+
+In desktop Chrome/Edge, choose **Choose working folder…**, enter a relative filename such as
+`src/hello.ts`, and click **New file**. **Save file to disk** commits edits to ordinary files
+in that folder and mirrors them into the VPS at `/workspace`. **Delete file…** removes the
+selected file from both places after confirmation. The list includes empty folders, marked
+with a trailing `/`; selecting a folder prepares a child-file path without allowing text
+editing. **Delete empty folder…** removes a selected empty folder after confirmation; folders
+with contents are never deleted recursively. File persistence does not require saving the
+whole machine session.
+
+The browser remembers the chosen folder separately from session storage. On refresh/reopening,
+files load automatically while permission remains granted; otherwise **Reconnect working
+folder** restores access. Browsers expose the folder name, not its full OS path. Disk contents
+are authoritative even when restoring an older machine checkpoint: the guest's `/workspace`
+is replaced by the folder contents, so deleted disk files do not return from a snapshot.
+
+This first example is an explicit editor-to-disk/VPS mirror, **not a live bidirectional mount**.
+Terminal-created/changed files are not written back to disk. External disk changes are loaded
+on refresh or **Reload folder into VPS**. Unsaved editor text is not durable: finish **Save file
+to disk** before leaving. The example supports nested paths, edits UTF-8 text, mirrors binary
+files unchanged, and bounds imports to 1 MiB per file, 16 MiB total and 1,000 entries. It needs
+HTTPS/localhost and `showDirectoryPicker()`; unsupported browsers can run the terminal but do
+not silently substitute browser-private files. See the [example guide](examples/editor/README.md)
+for the full workflow and concurrency/permission limits.
+
 ## Share a run as a post
 
 Every demo has an X player card at `card/<demo>/` (e.g.
@@ -265,12 +300,14 @@ grace@example.com: 0 note(s)
 
 ## Development checks
 
-Run `go test ./...` and `node --test internal/site/sessions.test.cjs` (Node 22+; no npm packages
-needed), or `mise run test`. To exercise real IndexedDB transactions, Web Locks and filesystem
-writable streams, serve the repository on localhost and open
-`internal/site/sessions.browser.html` in a visible tab; its results are displayed on the page.
-The automatic-saving check requires the tab to remain visible, just like the demos. Full session
-restore should also be checked against a built demo, since storage tests do not verify the VM.
+Run `go test ./...` and `node --test internal/site/*.test.cjs examples/editor/bridge.test.mjs`
+(Node 22+; no npm packages needed), or `mise run test`. To exercise real IndexedDB transactions,
+Web Locks and filesystem writable streams, serve the repository on localhost and open
+`internal/site/sessions.browser.html` and `internal/site/working-folder.browser.html` in visible
+tabs; their results are displayed on the pages. The automatic-saving check requires its tab to
+remain visible, just like the demos. Full session restore and the editor's disk-folder → VPS
+flow should also be checked against built examples, since the browser regression pages
+substitute the VM and use disposable origin-private directories.
 
 ## The warm cache
 

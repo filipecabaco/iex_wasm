@@ -24,7 +24,16 @@ var sessionsJS []byte
 //go:embed session-ui.js
 var sessionUIJS []byte
 
-var tmpl = template.Must(template.New("index").Parse(page))
+//go:embed editor.html
+var editorHTML string
+
+//go:embed working-folder.js
+var workingFolderJS []byte
+
+//go:embed folder-ui.js
+var folderUIJS []byte
+
+var tmpl = template.Must(template.Must(template.New("index").Parse(page)).New("editor").Parse(editorHTML))
 
 // Page holds what varies between sites.
 type Page struct {
@@ -33,6 +42,7 @@ type Page struct {
 	MemoryMB int    // must match the snapshot
 	Network  string // "none" or "fetch"; must match the snapshot
 	CPUs     int    // must match the snapshot; more than one needs cross-origin isolation
+	Editor   bool   // opt-in text editor; image must run the /workspace bridge on port 8090
 	// The console size the snapshot was taken at: its screen is replayed at this size
 	ConsoleCols, ConsoleRows int
 }
@@ -79,7 +89,12 @@ func Render(out string, p Page) error {
 			return err
 		}
 	}
-	for name, source := range map[string][]byte{"sessions.js": sessionsJS, "session-ui.js": sessionUIJS} {
+	assets := map[string][]byte{"sessions.js": sessionsJS, "session-ui.js": sessionUIJS}
+	if p.Editor {
+		assets["working-folder.js"] = workingFolderJS
+		assets["folder-ui.js"] = folderUIJS
+	}
+	for name, source := range assets {
 		if err := os.WriteFile(filepath.Join(out, name), source, 0o644); err != nil {
 			return err
 		}
@@ -89,7 +104,7 @@ func Render(out string, p Page) error {
 		return err
 	}
 	defer f.Close()
-	if err := tmpl.Execute(f, p); err != nil {
+	if err := tmpl.ExecuteTemplate(f, "index", p); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(out, ".nojekyll"), nil, 0o644); err != nil {

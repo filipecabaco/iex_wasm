@@ -83,6 +83,18 @@ func TestResolveExercise(t *testing.T) {
 	}
 }
 
+func TestEditorRequiresNetworking(t *testing.T) {
+	if _, err := Resolve(Options{}, image(map[string]string{"snowglobe.editor": "true"}, "tsx")); err == nil {
+		t.Error("the editor's guest file bridge requires the network device")
+	}
+	if _, err := Resolve(Options{}, image(map[string]string{"snowglobe.editor": "perhaps", "snowglobe.network": "fetch"}, "tsx")); err == nil {
+		t.Error("invalid editor labels must be rejected")
+	}
+	if _, err := Resolve(Options{}, image(map[string]string{"snowglobe.editor": "true", "snowglobe.network": "fetch"}, "tsx")); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolveNetwork(t *testing.T) {
 	s, _ := Resolve(Options{}, image(nil, "sh"))
 	if s.Network != "none" {

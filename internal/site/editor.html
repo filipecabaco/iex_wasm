@@ -1,0 +1,54 @@
+<style>
+  #editor { display: flex; flex-direction: column; width: 48%; min-width: 0; box-sizing: border-box;
+    background: #161615; color: #e9e9e4; border-right: 1px solid #3b3b39; padding: 12px; gap: 10px; }
+  #editor h2 { font: inherit; font-weight: 700; margin: 0; }
+  #editor p { margin: 0; }
+  #editor .editor-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #editor button, #editor input, #editor select, #editor textarea { font: inherit; color: inherit;
+    border: 1px solid #50504b; border-radius: 4px; background: #222221; padding: 7px 9px; box-sizing: border-box; }
+  #editor button { cursor: pointer; }
+  #editor :disabled { opacity: .45; cursor: default; }
+  #editor :focus-visible { outline: 2px solid #e9e9e4; outline-offset: 2px; }
+  #editor-name { flex: 1; min-width: 100px; }
+  #editor-files { width: 100%; max-height: 100px; }
+  #editor-content { flex: 1; width: 100%; min-height: 100px; resize: none; tab-size: 2; border-radius: 0; line-height: 1.5; }
+  #working-folder-location, #working-folder-status, #editor-path { overflow-wrap: anywhere; }
+  #working-folder-status[data-error="true"] { color: #ff9e80; }
+  #editor-dirty { color: #ffd18a; }
+  #editor .editor-note { color: #aaa; font-size: 11px; }
+  #editor-save { background: #e9e9e4 !important; color: #161615 !important; }
+  #editor-delete { color: #ff9e80 !important; margin-left: auto; }
+  @media (max-width: 800px) {
+    .has-editor #terminal-wrap { flex-direction: column; overflow: auto; }
+    #editor { width: 100%; min-height: 380px; flex: 1; border-right: 0; border-bottom: 1px solid #3b3b39; }
+    .has-editor #terminal { min-height: 220px; }
+  }
+</style>
+<section id="editor" aria-label="Disk-backed text editor">
+  <h2>Working folder · text editor</h2>
+  <p id="working-folder-location">No working folder selected.</p>
+  <div class="editor-actions">
+    <button id="working-folder-choose" type="button" disabled>Choose working folder…</button>
+    <button id="working-folder-reconnect" type="button" hidden>Reconnect working folder</button>
+    <button id="working-folder-reload" type="button" disabled>Reload folder into VPS</button>
+  </div>
+  <p id="working-folder-status" role="status">Waiting for the VPS…</p>
+  <p class="editor-note">Ordinary files on disk → VPS <code>/workspace</code>. Separate from Save / restore above.
+    Disk wins on reload. Terminal-created or changed files are not written back to disk.</p>
+  <div class="editor-actions">
+    <input id="editor-name" aria-label="New file path" placeholder="src/hello.ts" autocomplete="off" spellcheck="false" disabled>
+    <button id="editor-new" type="button" disabled>New file</button>
+  </div>
+  <select id="editor-files" size="4" aria-label="Working folder files and folders" disabled></select>
+  <p class="editor-note">Folders end in /, including empty ones. Select a folder to start a new file path inside it
+    or use Delete empty folder. Nonempty folders cannot be deleted.</p>
+  <div class="editor-actions"><strong id="editor-path">Select a file or folder</strong><span id="editor-dirty" hidden>Unsaved editor changes</span></div>
+  <textarea id="editor-content" aria-label="File contents" spellcheck="false" autocapitalize="off" autocorrect="off" disabled></textarea>
+  <div class="editor-actions">
+    <button id="editor-save" type="button" disabled>Save file to disk</button>
+    <button id="editor-delete" type="button" disabled>Delete file…</button>
+  </div>
+  <p class="editor-note">New file creates an empty disk file. Save file commits edits immediately; wait for completion before leaving.
+    Refresh loses unsaved editor changes. UTF-8 text only; binary files are mirrored unchanged.
+    Small folders: 1 MiB per file, 16 MiB total, 1,000 entries. Choose only a folder you trust this site to access.</p>
+</section>

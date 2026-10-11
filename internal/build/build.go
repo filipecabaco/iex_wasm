@@ -53,6 +53,7 @@ type Settings struct {
 	Exercise []string
 	Network  string
 	CPUs     int
+	Editor   bool
 	Console  boot.Console
 }
 
@@ -172,7 +173,7 @@ func Run(o Options, version string) error {
 		if err := writeRunInfo(out, o, s, fs, files, bytes, version); err != nil {
 			return err
 		}
-		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs,
+		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs, Editor: s.Editor,
 			ConsoleCols: tools.ConsoleCols, ConsoleRows: tools.ConsoleRows})
 	})
 }
@@ -318,6 +319,16 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 	s.Network = first(o.Network, label("network"), "none")
 	if s.Network != "none" && s.Network != "fetch" {
 		return nil, fmt.Errorf("network %q: use none or fetch", s.Network)
+	}
+
+	if value := label("editor"); value != "" {
+		if value != "true" && value != "false" {
+			return nil, fmt.Errorf("label %seditor: use true or false", labelPrefix)
+		}
+		s.Editor = value == "true"
+	}
+	if s.Editor && s.Network != "fetch" {
+		return nil, errors.New("the working-folder editor requires snowglobe.network=fetch for its guest file bridge")
 	}
 
 	s.CPUs = o.CPUs

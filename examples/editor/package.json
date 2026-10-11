@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "description": "TypeScript + Zod with a disk-backed working-folder editor",
+  "dependencies": {
+    "tsx": "4.23.13",
+    "zod": "4.6.5"
+  }
+}

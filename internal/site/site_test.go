@@ -140,6 +140,28 @@ func TestWorkspaceShowsSaveControlsAndExplicitMethods(t *testing.T) {
 	}
 }
 
+func TestEditorIsOptInAndShipsWorkingFolderAssets(t *testing.T) {
+	p := Page{Title: "Editor", MemoryMB: 512, Network: "fetch", CPUs: 1, Editor: true}
+	page, dir := render(t, p)
+	for _, want := range []string{`id="editor"`, `id="working-folder-choose"`, `id="working-folder-reconnect"`, `id="working-folder-reload"`, `id="editor-new"`, `id="editor-save"`, `id="editor-delete"`, `id="editor-content"`, `src="working-folder.js"`, `src="folder-ui.js"`, `new SnowglobeFolderUI(sessions)`, `await editor.attach(emulator)`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("editor page lacks %q", want)
+		}
+	}
+	for _, name := range []string{"working-folder.js", "folder-ui.js"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("missing editor asset %s: %v", name, err)
+		}
+	}
+	page, dir = render(t, Page{Title: "Terminal", MemoryMB: 512, CPUs: 1, Network: "none"})
+	if strings.Contains(page, `id="editor"`) || strings.Contains(page, `src="folder-ui.js"`) {
+		t.Error("ordinary demos must remain terminal-only")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "folder-ui.js")); err == nil {
+		t.Error("ordinary demos should not ship editor assets")
+	}
+}
+
 func TestSeveralCPUsWithNetwork(t *testing.T) {
 	page, dir := render(t, Page{Title: "Demo", MemoryMB: 512, Network: "fetch", CPUs: 4})
 	for _, want := range []string{"const cpus = 4 ;", `network: { tls: "system/tls.json" }`, `register("sw.js")`} {

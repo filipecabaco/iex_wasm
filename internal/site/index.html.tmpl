@@ -124,8 +124,12 @@
   <script src="armless/armless.js"></script>
   <script src="sessions.js"></script>
   <script src="session-ui.js"></script>
+  {{- if .Editor}}
+  <script src="working-folder.js"></script>
+  <script src="folder-ui.js"></script>
+  {{- end}}
 </head>
-<body>
+<body{{if .Editor}} class="has-editor"{{end}}>
   <header id="strip">
     <span class="name">{{.Title}}</span>
     <span class="facts">sandboxed in this tab · no server · {{if eq .Network "fetch"}}HTTP(S) through your browser{{else}}no network{{end}}</span>
@@ -191,6 +195,7 @@
     </div>
   </div>
   <div id="terminal-wrap">
+    {{if .Editor}}{{template "editor" .}}{{end}}
     <div id="terminal"></div>
     <div id="session-paused" role="status" hidden><div><strong>Copying workspace…</strong><p>Terminal briefly paused. Please wait.</p></div></div>
   </div>
@@ -245,6 +250,7 @@
     // Rendered by snowglobe. Everything below must match the snapshot (snowglobe-vm snapshot):
     // the same RAM size, CPUs and devices
     const sessions = new SnowglobeSessionUI({ build: {{.BuildID}}, memory: {{.MemoryMB}}, cpus, network: {{.Network}} });
+    {{if .Editor}}const editor = new SnowglobeFolderUI(sessions);{{end}}
     if (!isolationNeeded && !await sessions.prepare()) {
       status.textContent = "workspace needs attention";
       status.dataset.state = "error";
@@ -393,6 +399,7 @@
       term.onData((data) => { if (sessions.input()) emulator.console_input(withCtrl(data)); });
       keyBar(term);
       emulator.run();
+      {{if .Editor}}await editor.attach(emulator);{{end}}
       setStatus("ready", "running");
       term.focus();
       sessions.attach(emulator, term, () => { if (pendingResize) resize(); });
