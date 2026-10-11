@@ -128,8 +128,11 @@ test('fullstack example is published and has a headless preview/RLS check', asyn
   const workflow = await fs.readFile(new URL('../../.github/workflows/pages.yml', import.meta.url), 'utf8');
   assert.match(workflow, /fullstack-supabase-svelte\)[\s\S]*?verify\.mjs[\s\S]*?fullstack-preview-ok/);
   const fullstack = workflow.match(/fullstack-supabase-svelte\)([\s\S]*?);;/)?.[1] ?? '';
-  assert.match(fullstack, /verify\.mjs && notes signup/);
-  assert.match(fullstack, /echo fullstack-check-exit=\$result/);
+  const commands = fullstack.match(/commands=\$'([^']*)'/)?.[1].split('\\n') ?? [];
+  assert.equal(commands.length, 2, 'Compile and notes checks must have independent per-command budgets');
+  assert.match(commands[0], /verify\.mjs; result=\$\?; echo fullstack-preview-exit=\$result/);
+  assert.match(commands[1], /notes signup[\s\S]*&& notes ls; result=\$\?; echo fullstack-check-exit=\$result/);
+  assert.match(fullstack, /fullstack-preview-exit=0/);
   assert.match(fullstack, /fullstack-check-exit=0/);
 });
 

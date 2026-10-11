@@ -155,9 +155,9 @@ jobs:
                         expect=$'apk exit=0\n__ _ _ __ _ __ ___' ;;
             # The Supabase CLI's native stack and the notes app on it: Grace can't see Ada's note
             fullstack-supabase-svelte)
-                        # The runner returns console output, not guest exit codes. Require both.
-                        commands='node /opt/svelte/verify.mjs && notes signup ada@example.com lovelace-1815 && notes add first program && notes ls && notes signup grace@example.com hopper-1906 && notes ls; result=$?; echo fullstack-check-exit=$result'
-                        expect=$'fullstack-preview-ok\n#1 added\nada@example.com: 1 note(s)\ngrace@example.com: 0 note(s)\nfullstack-check-exit=0' ;;
+                        # Each line has its own runner budget. Require results AND guest exit codes.
+                        commands=$'node /opt/svelte/verify.mjs; result=$?; echo fullstack-preview-exit=$result\nnotes signup ada@example.com lovelace-1815 && notes add first program && notes ls && notes signup grace@example.com hopper-1906 && notes ls; result=$?; echo fullstack-check-exit=$result'
+                        expect=$'fullstack-preview-ok\nfullstack-preview-exit=0\n#1 added\nada@example.com: 1 note(s)\ngrace@example.com: 0 note(s)\nfullstack-check-exit=0' ;;
             supabase)   commands=$'notes signup ada@example.com lovelace-1815\nnotes add first program, for the analytical engine\nnotes ls\nnotes signup grace@example.com hopper-1906\nnotes ls'
                         expect=$'#1 added\nada@example.com: 1 note(s)\ngrace@example.com: 0 note(s)' ;;
             go)         commands= ;;
