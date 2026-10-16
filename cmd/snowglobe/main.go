@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"github.com/filipecabaco/snowglobe/internal/build"
 	"github.com/filipecabaco/snowglobe/internal/instance"
@@ -19,8 +20,16 @@ import (
 	"github.com/filipecabaco/snowglobe/internal/tools"
 )
 
-// Set at release time with -ldflags "-X main.version=..."
-var version = "dev"
+// Set at release time with -ldflags "-X main.version=..."; `go install ...@v1.2.3` can't pass
+// ldflags, so main falls back to the module version Go records in the binary
+var version string
+
+func moduleVersion() string {
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
+}
 
 const usage = `snowglobe packages a Docker image into a static website that runs it in the browser.
 
@@ -106,6 +115,9 @@ container (through the proxy in HTTPS_PROXY/HTTP_PROXY/NO_PROXY if set, trusting
 `
 
 func main() {
+	if version == "" {
+		version = moduleVersion()
+	}
 	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)

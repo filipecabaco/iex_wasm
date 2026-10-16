@@ -32,11 +32,17 @@ snowglobe pool sites              # several sites under one host share a single 
   host, Docker needs QEMU's binfmt handlers to build arm64 images (Docker Desktop has them; on
   Linux: `docker run --privileged --rm tonistiigi/binfmt --install arm64`).
 
-Install with Go 1.27+:
+Install a binary for Linux or macOS (amd64 or arm64) from the
+[releases](https://github.com/filipecabaco/snowglobe/releases), or with Go 1.27+:
 
 ```sh
 go install github.com/filipecabaco/snowglobe/cmd/snowglobe@latest
 ```
+
+The first build fetches the tools image (the machine that boots and snapshots your image) from
+`ghcr.io/filipecabaco/snowglobe-tools`. For a version that hasn't been released yet, it is
+compiled locally instead, which takes a few minutes once. Set `SNOWGLOBE_TOOLS_BUILD=1` to
+always compile it locally.
 
 ## Your image, in a tab
 

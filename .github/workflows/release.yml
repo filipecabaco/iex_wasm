@@ -1,0 +1,153 @@
+name: Release
+
+# Pushing a tag vX.Y.Z (vX.Y.Z-rc.1 for a prerelease) from main releases it: the same tests and
+# site checks as main (pages.yml, without touching the site), the tools image published to GHCR
+# for amd64 and arm64 so `snowglobe build` pulls it instead of compiling snowglobe-vm, then the
+# binaries on a GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Go's module proxy only treats semver tags as versions, and a release is cut from main
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::$TAG isn't vX.Y.Z or vX.Y.Z-pre"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$TAG isn't on main"; exit 1; }
+
+  ci:
+    needs: check
+    uses: ./.github/workflows/pages.yml
+    with:
+      release: true
+    # What pages.yml declares; with release: true it pushes and deploys nothing
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+  # The tools image runs on the host's architecture: each is built on its own. It's named after
+  # its sources (tools.Version), so a release that didn't change it finds it published already
+  tools:
+    needs: ci
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+      published: ${{ steps.build.outputs.published }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - name: Build the tools image, or find it published
+        id: build
+        run: |
+          go build -o snowglobe ./cmd/snowglobe
+          local=$(./snowglobe tools)
+          image="ghcr.io/${GITHUB_REPOSITORY,,}-tools:${local#*:}"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          if docker buildx imagetools inspect "$image" > /dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$image is published already"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            docker tag "$local" "$image-${{ matrix.arch }}"
+          fi
+
+      - name: Push ${{ matrix.arch }}
+        if: steps.build.outputs.published != 'true'
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE-${{ matrix.arch }}"
+
+  tools-manifest:
+    needs: tools
+    if: needs.tools.outputs.published != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      packages: write
+    env:
+      IMAGE: ${{ needs.tools.outputs.image }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish the amd64 + arm64 image
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker buildx imagetools create --tag "$IMAGE" "$IMAGE-amd64" "$IMAGE-arm64"
+          docker buildx imagetools inspect "$IMAGE"
+
+  release:
+    needs: [tools, tools-manifest]
+    # tools-manifest is skipped when the image was published already
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      # Docker Desktop is the only host requirement on macOS; Windows isn't tested, so not shipped
+      - name: Build the binaries
+        run: |
+          mkdir -p release
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*} arch=${target#*/}
+            name="snowglobe_${TAG#v}_${os}_${arch}"
+            mkdir -p "build/$name"
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X main.version=$TAG" -o "build/$name/snowglobe" ./cmd/snowglobe
+            cp LICENSE.md README.md "build/$name/"
+            tar -czf "release/$name.tar.gz" -C build "$name"
+          done
+          (cd release && sha256sum -- *.tar.gz > SHA256SUMS)
+          cat release/SHA256SUMS
+
+      - name: Check the linux/amd64 binary
+        run: |
+          mkdir check && tar -xzf "release/snowglobe_${TAG#v}_linux_amd64.tar.gz" -C check
+          got=$("check/snowglobe_${TAG#v}_linux_amd64/snowglobe" version)
+          [ "$got" = "snowglobe $TAG" ] || { echo "::error::got $got"; exit 1; }
+
+      - name: Publish the release
+        run: |
+          prerelease=
+          [[ "$TAG" == *-* ]] && prerelease=--prerelease
+          gh release create "$TAG" --verify-tag --generate-notes --title "$TAG" $prerelease release/*
