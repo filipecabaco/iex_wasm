@@ -2,12 +2,18 @@ name: CI and Pages
 
 # Every push to main and every pull request: the tests, then every site built and checked (the
 # demos on the site, plus the examples in EXAMPLES that aren't). Pushes to main then assemble the
-# demos into the site and deploy it to GitHub Pages.
+# demos into the site and deploy it to GitHub Pages. release.yml calls it with release: true to
+# gate a release on the same checks, without touching the site.
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        type: boolean
+        default: false
 
 permissions:
   # contents: write pushes the blob store (refs/snowglobe/blobs) from main's runs
@@ -148,8 +154,10 @@ jobs:
             # Packages installed into the running machine, from Alpine's mirrors
             apk)        commands=$'apk add figlet >/dev/null 2>&1; echo "apk exit=$?"\nfiglet -w 60 armless'
                         expect=$'apk exit=0\n__ _ _ __ _ __ ___' ;;
-            # The Supabase CLI's native stack and the notes app on it: Grace can't see Ada's note
-            supabase)   commands=$'notes signup ada@example.com lovelace-1815\nnotes add first program, for the analytical engine\nnotes ls\nnotes signup grace@example.com hopper-1906\nnotes ls'
+            # The Supabase CLI's native stack and the notes app on it: Grace can't see Ada's note. The
+            # first line waits for Auth and the Data API to answer: just restored from the snapshot, on one
+            # CPU, they can take longer than the gateway allows for a first request
+            supabase)   commands=$'for i in $(seq 30); do curl -fsS -o /dev/null -m 10 "$API_URL/auth/v1/health" && curl -fsS -o /dev/null -m 10 -H "apikey: $ANON_KEY" "$API_URL/rest/v1/" && break; sleep 2; done\nnotes signup ada@example.com lovelace-1815\nnotes add first program, for the analytical engine\nnotes ls\nnotes signup grace@example.com hopper-1906\nnotes ls'
                         expect=$'#1 added\nada@example.com: 1 note(s)\ngrace@example.com: 0 note(s)' ;;
             go)         commands= ;;
             *)          echo "::error title=$SITE::no check for $SITE"; exit 1 ;;
@@ -193,7 +201,7 @@ jobs:
 
       # Hidden files must come along: `snowglobe pool` looks for each build's .snowglobe marker
       - uses: actions/upload-artifact@v7
-        if: matrix.site.deploy && github.event_name != 'pull_request'
+        if: matrix.site.deploy && github.event_name != 'pull_request' && !inputs.release
         with:
           name: site-${{ matrix.site.name }}
           path: dist/${{ matrix.site.name }}
@@ -203,7 +211,7 @@ jobs:
 
   assemble:
     needs: [test, site]
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && !inputs.release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

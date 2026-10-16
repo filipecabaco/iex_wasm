@@ -22,6 +22,10 @@ import (
 //go:embed Dockerfile runtime/Cargo.toml runtime/Cargo.lock runtime/src
 var context embed.FS
 
+// Registry is where releases publish the tools image, tagged with its Version. Setting
+// SNOWGLOBE_TOOLS_BUILD always builds it locally instead.
+const Registry = "ghcr.io/filipecabaco/snowglobe-tools"
+
 // VM is snowglobe-vm's path in the image.
 const VM = "/tools/snowglobe-vm"
 
@@ -38,6 +42,17 @@ func Build(version string) (*Image, error) {
 	tag := "snowglobe-tools:" + Version()
 	if _, err := docker.Output("image", "inspect", "--format", "{{.Id}}", tag); err == nil {
 		return &Image{tag: tag}, nil
+	}
+
+	// Releases publish it under the same name, for amd64 and arm64: pulling takes seconds. A
+	// version that was never published (a change to the image not yet released) builds it here
+	published := Registry + ":" + Version()
+	if os.Getenv("SNOWGLOBE_TOOLS_BUILD") == "" {
+		if _, err := docker.Output("pull", "--quiet", published); err == nil {
+			if _, err := docker.Output("tag", published, tag); err == nil {
+				return &Image{tag: tag}, nil
+			}
+		}
 	}
 
 	dir, err := os.MkdirTemp("", "snowglobe-tools-")

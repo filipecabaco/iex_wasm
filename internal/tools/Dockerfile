@@ -41,3 +41,8 @@ RUN mkdir -p site/armless site/xterm /tmp/x && \
 COPY --from=runtime /snowglobe-vm /tools/snowglobe-vm
 
 ENV HOME=/tmp
+
+# Links the image releases publish (ghcr.io/filipecabaco/snowglobe-tools) to this repository
+LABEL org.opencontainers.image.source="https://github.com/filipecabaco/snowglobe" \
+      org.opencontainers.image.description="snowglobe's build tools: snowglobe-vm and the browser runtime" \
+      org.opencontainers.image.licenses="MIT"

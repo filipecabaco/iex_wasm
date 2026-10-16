@@ -43,8 +43,17 @@ try {
     case "login": {
       // Auth: a session whose access token (a JWT) the Data API checks, and RLS reads the user from
       const [email, password] = args;
-      const path = command === "signup" ? "/auth/v1/signup" : "/auth/v1/token?grant_type=password";
-      const s = await call(path, { method: "POST", body: { email, password } });
+      const signup = () => call("/auth/v1/signup", { method: "POST", body: { email, password } });
+      const login = () => call("/auth/v1/token?grant_type=password", { method: "POST", body: { email, password } });
+      // A cold stack on one CPU can time out at the gateway after the user was already created, so
+      // a retried signup falls back to login
+      let s;
+      try {
+        s = await (command === "signup" ? signup() : login());
+      } catch (e) {
+        if (!/timed out/.test((e as Error).message)) throw e;
+        s = await login().catch(signup);
+      }
       await Bun.write(file, JSON.stringify({ access_token: s.access_token, user: s.user }));
       console.log(`signed in as ${s.user.email} (${s.user.id.slice(0, 8)})`);
       break;
