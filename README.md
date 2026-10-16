@@ -62,6 +62,9 @@ LABEL snowglobe.title="Python in the browser" \
 | `--exercise CMD` (repeatable) | `snowglobe.exercise` (JSON array) | none |
 | `--warm REGEX` | `snowglobe.warm` | none |
 | `--network fetch` | `snowglobe.network` | `none` |
+| `--tunnel [HOST:]PORT=URL` (repeatable) | `snowglobe.tunnels` (JSON array) | none |
+| `--tunnel-token URL` | `snowglobe.tunnel-token` | none |
+| `--allow-private` | | off |
 | `--cpus N` (1–8) | `snowglobe.cpus` | `1` |
 
 Labels let a Dockerfile describe itself; flags override them. `--cmd` swaps the program without
@@ -98,9 +101,38 @@ Connected (press CTRL+C to quit)
 ```
 
 The browser's rules still apply: HTTP(S) only reaches servers that allow CORS (example.com doesn't,
-so the guest gets a 502 that says so), raw TCP and UDP go nowhere, and TLS is 1.3 with
-X25519/P-256 and AES-128-GCM, which every current client offers. The TypeScript demo uses all of
-it: Zod validating a live GitHub API response, and a WebSocket echo.
+so the guest gets a 502 that says so), UDP goes nowhere, other TCP only through a tunnel (below),
+and TLS is 1.3 with X25519/P-256 and AES-128-GCM, which every current client offers. The
+TypeScript demo uses all of it: Zod validating a live GitHub API response, and a WebSocket echo.
+
+### Other TCP: tunnels
+
+A page can't open raw TCP, so a guest's connection to a database, Redis or any port but 80 and 443
+is refused, unless the site names it as a **tunnel**: `--tunnel HOST:PORT=URL` carries every
+connection the guest opens to `HOST:PORT` (any name on `PORT`, if `HOST` is left out) over a
+WebSocket to `URL`, the stream's bytes sent as binary messages. That is what websockify, websocat
+and Neon's wsproxy speak, so any of them in front of the service is the other end:
+
+```console
+$ websocat --binary ws-l:0.0.0.0:6543 tcp:127.0.0.1:5432     # next to Postgres
+$ snowglobe build ./my-app --network fetch --tunnel db.internal:5432=wss://db-proxy.example.com/
+```
+
+The guest connects to `db.internal:5432` as usual; no change to the app. `snowglobe run` and the
+build's snapshot carry tunnels the same way, from the host. Tunnelled connections that stay open
+while the app idles (a connection pool, a `LISTEN`) don't count as the app being busy.
+
+**Credentials.** Whatever the guest knows ships with the site: a database password in its
+environment is in the snapshot, for every visitor. Instead, put `{token}` in the tunnel URL and
+name a token endpoint with `--tunnel-token URL`: the page asks it (`GET`, answering with the token
+as plain text) for a fresh one on every connection, and a gateway behind the tunnel checks the
+token and holds the real credentials (pgbouncer logging in upstream itself, an S3 proxy signing
+requests again). Natively, `build` and `run` fetch one token per boot. A token only replaces the
+password; what it opens is whatever the gateway lets any visitor do.
+
+The build's snapshot (and `snowglobe run`) refuse loopback and private addresses, so a guest can't
+reach the host's own services; `--allow-private` lets them, for a tunnel endpoint on your own
+machine while developing. The page is unaffected.
 
 ## Install it as an app
 
@@ -225,6 +257,9 @@ $ snowglobe pack dist/elixir -o elixir.tar.gz      # one self-contained file, po
 $ snowglobe run https://cdn.example.com/elixir.tar.gz
 ```
 
+`--tunnel` and `--tunnel-token` replace the site's own tunnels for a run (a local proxy, say), and
+`--allow-private` lets them reach this machine.
+
 A site built with `--network fetch` can also serve: `-p HOST:GUEST` forwards a port on your machine
 to a port in the guest, through the same virtual network its own requests use. Host ports bind to
 127.0.0.1 unless you give an address (`-p 0.0.0.0:8080:4000`):
@@ -302,6 +337,20 @@ bytes). What the demos show:
 | Rust + clap | 4.0 MB | 0.4 MB | 25.1 MB | `jtab` is read on first use; the shell is all that boots |
 | Java + Gson | 48.2 MB | 0 | 115.4 MB | the JDK's `lib/modules` image, opened at boot |
 | curl + jq | 4.1 MB | 2.3 MB | 24.9 MB | `curl`, its TLS and `jq` load on the first request |
+
+**Warming from outside traffic.** Exercises are commands typed into the console. For an app that
+is used over the network (an API under its own test suite, say), record what a run reads instead,
+and add it to the warm pack:
+
+```console
+$ snowglobe run dist --name api --detach -p 5000:5000 --record-reads api-reads.json
+$ npm test                                   # anything that talks to 127.0.0.1:5000
+$ snowglobe stop api && snowglobe warm dist api-reads.json
+Recorded 2 files: 0 new in the warm pack, now 254 files, 27.5 MB
+```
+
+`warm` keeps what the pack had and adds what's new, and updates `run.json`; it takes several
+recordings at once. `warm-report.json` still describes the build's own phases.
 
 Whatever a program loads lazily needs exercises to warm well (TypeScript's compile path, Zod,
 first-use tools); whatever it loads up front (a release in embedded mode, a startup file's imports,

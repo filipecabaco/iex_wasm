@@ -251,6 +251,16 @@
       document.getElementById("sessions").open = true;
       return;
     }
+    {{- if .TunnelToken}}
+    // Tunnel URLs with {token} get a fresh one from the token endpoint for each connection, so
+    // the credentials stay with the gateway behind the tunnel, not in this page or the guest
+    const tunnelToken = {{.TunnelToken}};
+    const withTokens = (tunnels) => tunnels.map((t) => !t.url.includes("{token}") ? t : { ...t, url: async () => {
+      const r = await fetch(tunnelToken, { cache: "no-store" });
+      if (!r.ok) throw new Error(`tunnel token: ${r.status}`);
+      return t.url.replaceAll("{token}", encodeURIComponent((await r.text()).trim()));
+    } });
+    {{- end}}
     const emulator = isolationNeeded ? null : new Armless({
       wasm: "armless/armless.wasm",
       wasm_smp: "armless/armless-smp.wasm",
@@ -260,8 +270,9 @@
       initial_state: sessions.initialState ?? "system/state.bin.zst",
       {{- if eq .Network "fetch"}}
       // The guest's HTTP(S) and WebSockets end in the machine (HTTPS with a CA made for this
-      // site) and go out as this page's own fetch() and WebSocket
-      network: { tls: "system/tls.json" },
+      // site) and go out as this page's own fetch() and WebSocket; its TCP to the tunnels'
+      // destinations goes out as WebSockets too
+      network: { tls: "system/tls.json"{{if .Tunnels}}, tunnels: {{if .TunnelToken}}withTokens({{.Tunnels}}){{else}}{{.Tunnels}}{{end}}{{end}} },
       {{- end}}
       // The terminal is set up (and the screen replayed) before the guest runs
       autostart: false,

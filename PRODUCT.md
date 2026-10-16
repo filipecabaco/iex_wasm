@@ -45,7 +45,9 @@ shell, not a subset runtime: the real program built from a Dockerfile.
   cache miss right after a deploy can take ~15 s); commands take tens of milliseconds (Rust) to
   several seconds (Java snippets compile with javac).
 - Networking is opt-in per run (`--network fetch`): HTTP(S) and WebSockets leave as the visitor's own
-  browser requests (CORS applies); otherwise the guest has no network. No snowglobe server exists.
+  browser requests (CORS applies); other TCP only to the destinations the site tunnels over
+  WebSockets (`--tunnel`), with per-connection tokens so no credential ships with the site;
+  otherwise the guest has no network. No snowglobe server exists.
 - Guests must be arm64 Alpine images. Sites can have several CPUs (`--cpus`), each in a Web Worker.
 
 ## Brand Commitments

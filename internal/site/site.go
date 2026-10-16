@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/filipecabaco/snowglobe/internal/tunnel"
 )
 
 //go:embed index.html.tmpl
@@ -33,6 +35,10 @@ type Page struct {
 	MemoryMB int    // must match the snapshot
 	Network  string // "none" or "fetch"; must match the snapshot
 	CPUs     int    // must match the snapshot; more than one needs cross-origin isolation
+	// Guest TCP destinations the page carries over WebSockets (armless's network.tunnels)
+	Tunnels []tunnel.Tunnel
+	// Where the page gets a fresh access token for each tunnel connection whose URL has {token}
+	TunnelToken string
 	// The console size the snapshot was taken at: its screen is replayed at this size
 	ConsoleCols, ConsoleRows int
 }

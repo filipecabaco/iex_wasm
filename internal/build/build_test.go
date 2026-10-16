@@ -96,3 +96,32 @@ func TestResolveNetwork(t *testing.T) {
 		t.Error("an unknown backend should fail")
 	}
 }
+
+func TestResolveTunnels(t *testing.T) {
+	labels := map[string]string{"snowglobe.network": "fetch", "snowglobe.tunnels": `["db:5432=wss://proxy/db"]`}
+	s, err := Resolve(Options{}, image(labels, "sh"))
+	if err != nil || len(s.Tunnels) != 1 || s.Tunnels[0].Host != "db" || s.Tunnels[0].URL != "wss://proxy/db" {
+		t.Fatalf("from the label: %+v, %v", s, err)
+	}
+	s, _ = Resolve(Options{Tunnels: []string{"5432=ws://127.0.0.1:6543", "6379=ws://127.0.0.1:6544"}}, image(labels, "sh"))
+	if len(s.Tunnels) != 2 || s.Tunnels[0].Host != "" {
+		t.Errorf("flags replace the label: %+v", s.Tunnels)
+	}
+	if _, err := Resolve(Options{Tunnels: []string{"5432=ws://x"}}, image(nil, "sh")); err == nil {
+		t.Error("tunnels without a network are an error")
+	}
+	if _, err := Resolve(Options{Network: "fetch", Tunnels: []string{"5432=tcp://x"}}, image(nil, "sh")); err == nil {
+		t.Error("a tunnel to something other than ws:// or wss:// is an error")
+	}
+	if _, err := Resolve(Options{}, image(map[string]string{"snowglobe.network": "fetch", "snowglobe.tunnels": "db:5432"}, "sh")); err == nil {
+		t.Error("the label must be a JSON array")
+	}
+	if _, err := Resolve(Options{Network: "fetch", Tunnels: []string{"5432=wss://gw/db?token={token}"}}, image(nil, "sh")); err == nil {
+		t.Error("a {token} tunnel without a token endpoint is an error")
+	}
+	s, err = Resolve(Options{Network: "fetch", Tunnels: []string{"5432=wss://gw/db?token={token}"}},
+		image(map[string]string{"snowglobe.tunnel-token": "https://gw/token"}, "sh"))
+	if err != nil || s.TunnelToken != "https://gw/token" {
+		t.Errorf("token endpoint from the label: %q, %v", s.TunnelToken, err)
+	}
+}

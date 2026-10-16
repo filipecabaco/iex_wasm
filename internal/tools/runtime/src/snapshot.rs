@@ -86,7 +86,7 @@ pub fn main(args: &Args) -> Result<u8, String> {
     let activity = Activity::new(true);
     *activity.reads.lock().unwrap() = Some(BTreeSet::new());
     let board = vm.board.clone();
-    let _host = machine::host(&board, blobs, &spec.network, &activity);
+    let _host = machine::host(&board, blobs, &spec.network, machine::Net::from_args(args, None)?, &activity);
     let mut runner = Runner::new(vm, clock, false);
     runner.start();
 

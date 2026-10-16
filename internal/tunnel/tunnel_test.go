@@ -1,0 +1,43 @@
+package tunnel
+
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestParse(t *testing.T) {
+	got, err := Parse("DB.internal:5432=wss://proxy.example.com/db?x=1")
+	want := Tunnel{Host: "db.internal", Port: 5432, URL: "wss://proxy.example.com/db?x=1"}
+	if err != nil || got != want {
+		t.Fatalf("got %+v, %v; want %+v", got, err, want)
+	}
+	if got, err := Parse("6379=ws://127.0.0.1:7000"); err != nil || got != (Tunnel{Port: 6379, URL: "ws://127.0.0.1:7000"}) {
+		t.Fatalf("any host: got %+v, %v", got, err)
+	}
+	for _, bad := range []string{"5432", "db:5432=tcp://x", ":5432=ws://x", "db:0=ws://x", "db:nope=ws://x", "=ws://x"} {
+		if _, err := Parse(bad); err == nil {
+			t.Errorf("%q: want an error", bad)
+		}
+	}
+}
+
+func TestFill(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, " a b&c \n") }))
+	defer srv.Close()
+	in := []Tunnel{{Port: 5432, URL: "wss://gw/db?token={token}"}, {Port: 9000, URL: "wss://gw/s3"}}
+	out, err := Fill(in, srv.URL)
+	if err != nil || out[0].URL != "wss://gw/db?token=a+b%26c" || out[1].URL != "wss://gw/s3" {
+		t.Fatalf("got %+v, %v", out, err)
+	}
+	if in[0].URL != "wss://gw/db?token={token}" {
+		t.Error("Fill changed its input")
+	}
+	if _, err := Fill(in, ""); err == nil {
+		t.Error("a {token} URL without an endpoint is an error")
+	}
+	if out, err := Fill(in[1:], ""); err != nil || len(out) != 1 {
+		t.Error("no placeholder, no endpoint needed")
+	}
+}

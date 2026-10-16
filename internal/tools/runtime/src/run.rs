@@ -9,6 +9,7 @@
 //! what the command printed; {"mode":"attach","rows":R,"cols":C} replays the screen and
 //! streams the session both ways.
 
+use std::collections::BTreeSet;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -200,7 +201,27 @@ pub fn main(args: &Args) -> Result<u8, String> {
     drop(reader);
 
     let activity = Activity::new(false);
-    let host = Arc::new(machine::host(&board, blobs, &spec.network, &activity));
+    // Every file the guest fetches from the restore on, written out as it grows (a detached run
+    // ends when its container is stopped) in the reads.json shape `snowglobe warm` merges
+    if let Some(path) = args.get("record-reads").map(PathBuf::from) {
+        *activity.reads.lock().unwrap() = Some(BTreeSet::new());
+        let activity = activity.clone();
+        std::thread::spawn(move || {
+            let mut written = None;
+            loop {
+                let names: Vec<String> = activity.reads.lock().unwrap().iter().flatten().cloned().collect();
+                if written != Some(names.len()) {
+                    let doc = json!({ "boot": [], "exercise": { "run": names } });
+                    if std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).is_ok() {
+                        written = Some(names.len());
+                    }
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        });
+    }
+    let net = machine::Net::from_args(args, Some(&info["tunnels"]))?;
+    let host = Arc::new(machine::host(&board, blobs, &spec.network, net, &activity));
     runner.start();
     let runner = Arc::new(runner);
 

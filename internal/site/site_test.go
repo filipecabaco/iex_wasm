@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/filipecabaco/snowglobe/internal/tunnel"
 )
 
 func render(t *testing.T, p Page) (string, string) {
@@ -158,5 +160,35 @@ func TestSeveralCPUsWithNetwork(t *testing.T) {
 		if !strings.Contains(string(sw), want) {
 			t.Errorf("sw.js lacks %q", want)
 		}
+	}
+}
+
+func TestTunnels(t *testing.T) {
+	page, _ := render(t, Page{Title: "Demo", MemoryMB: 512, Network: "fetch", CPUs: 1, Tunnels: []tunnel.Tunnel{
+		{Host: "db.internal", Port: 5432, URL: "wss://proxy.example.com/db?a=1&b=</script>"},
+		{Port: 6379, URL: "ws://127.0.0.1:7000"},
+	}})
+	// A JSON array in the script: the URL escaped so it can't end the script
+	want := `network: { tls: "system/tls.json", tunnels: [{"host":"db.internal","port":5432,"url":"wss://proxy.example.com/db?a=1\u0026b=\u003c/script\u003e"},{"port":6379,"url":"ws://127.0.0.1:7000"}] }`
+	if !strings.Contains(page, want) {
+		i := strings.Index(page, "network:")
+		t.Errorf("page lacks %s\ngot: %s", want, page[i:min(i+300, len(page))])
+	}
+}
+
+func TestTunnelToken(t *testing.T) {
+	page, _ := render(t, Page{Title: "Demo", MemoryMB: 512, Network: "fetch", CPUs: 1, TunnelToken: "https://gw.example.com/token",
+		Tunnels: []tunnel.Tunnel{{Host: "db.internal", Port: 5432, URL: "wss://gw.example.com/db?token={token}"}}})
+	for _, want := range []string{`const tunnelToken = "https://gw.example.com/token";`,
+		`tunnels: withTokens([{"host":"db.internal","port":5432,"url":"wss://gw.example.com/db?token={token}"}])`} {
+		if !strings.Contains(page, want) {
+			i := strings.Index(page, "const tunnelToken")
+			t.Errorf("page lacks %s\ngot: %s", want, page[i:min(i+700, len(page))])
+		}
+	}
+	plain, _ := render(t, Page{Title: "Demo", MemoryMB: 512, Network: "fetch", CPUs: 1,
+		Tunnels: []tunnel.Tunnel{{Port: 5432, URL: "ws://127.0.0.1:6543"}}})
+	if strings.Contains(plain, "withTokens") || strings.Contains(plain, "tunnelToken") {
+		t.Error("without a token endpoint the tunnels go in as they are")
 	}
 }

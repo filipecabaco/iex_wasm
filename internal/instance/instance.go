@@ -15,6 +15,7 @@ import (
 
 	"github.com/filipecabaco/snowglobe/internal/docker"
 	"github.com/filipecabaco/snowglobe/internal/tools"
+	"github.com/filipecabaco/snowglobe/internal/tunnel"
 )
 
 // label marks the containers snowglobe started, for ps
@@ -27,6 +28,14 @@ type Options struct {
 	Detach bool
 	// Ports to forward into the guest: "guest", "host:guest" or "ip:host:guest"
 	Publish []string
+	// Tunnels replace the site's own ("[HOST:]PORT=URL"), e.g. to point it at a local proxy
+	Tunnels []string
+	// AllowPrivate lets the guest reach loopback and private addresses
+	AllowPrivate bool
+	// TunnelToken replaces the site's token endpoint for tunnel URLs with {token}
+	TunnelToken string
+	// RecordReads is a file to write every file the guest reads to, for `snowglobe warm`
+	RecordReads string
 }
 
 // Port is one forwarded port.
@@ -75,10 +84,28 @@ func Run(o Options, version string) error {
 		return fmt.Errorf("%s isn't a built snowglobe site (no run.json)", o.Site)
 	}
 	var run struct {
-		MemoryMB int    `json:"memory_mb"`
-		Network  string `json:"network"`
+		MemoryMB int             `json:"memory_mb"`
+		Network  string          `json:"network"`
+		Tunnels  []tunnel.Tunnel `json:"tunnels"`
+		Token    string          `json:"tunnel_token"`
 	}
 	if err := json.Unmarshal(data, &run); err != nil {
+		return err
+	}
+	tunnels := run.Tunnels
+	if len(o.Tunnels) > 0 {
+		if tunnels, err = tunnel.ParseAll(o.Tunnels); err != nil {
+			return err
+		}
+	}
+	if len(tunnels) > 0 && run.Network != "fetch" {
+		return errors.New("tunnels need a guest with a network: build the site with --network fetch")
+	}
+	token := run.Token
+	if o.TunnelToken != "" {
+		token = o.TunnelToken
+	}
+	if tunnels, err = tunnel.Fill(tunnels, token); err != nil {
 		return err
 	}
 
@@ -109,7 +136,22 @@ func Run(o Options, version string) error {
 		hostNetwork = slices.Contains(net, "host")
 		args = append(args, net...)
 	}
-	command := []string{tools.VM, "run", "/site"}
+	command := append([]string{tools.VM, "run", "/site"}, tools.TunnelArgs(tunnels, o.AllowPrivate)...)
+	if o.RecordReads != "" {
+		// The container runs as nobody: it writes to a file made here, open to it
+		record, err := filepath.Abs(o.RecordReads)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(record, []byte(`{"boot":[],"exercise":{}}`), 0o666); err != nil {
+			return err
+		}
+		if err := os.Chmod(record, 0o666); err != nil {
+			return err
+		}
+		args = append(args, "-v", record+":/record/reads.json")
+		command = append(command, "--record-reads", "/record/reads.json")
+	}
 
 	// The container runs unprivileged, so it listens on high ports and forwards each to its guest port
 	for i, spec := range o.Publish {
