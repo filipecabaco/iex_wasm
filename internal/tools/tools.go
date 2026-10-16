@@ -12,9 +12,11 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/filipecabaco/snowglobe/internal/docker"
+	"github.com/filipecabaco/snowglobe/internal/tunnel"
 )
 
 //go:embed Dockerfile runtime/Cargo.toml runtime/Cargo.lock runtime/src
@@ -109,7 +111,8 @@ const (
 // Snapshot boots <out>/system and writes the state, console replay and reads.json there.
 //
 // After the snapshot it types each exercise command into the app and records what it reads.
-func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string, network string, cpus, buildCPUs int) error {
+func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []string, network string,
+	tunnels []tunnel.Tunnel, allowPrivate bool, cpus, buildCPUs int) error {
 	args := []string{VM, "snapshot", "/out/system",
 		"--memory", fmt.Sprint(memoryMB), "--network", network,
 		"--cpus", fmt.Sprint(cpus), "--build-cpus", fmt.Sprint(buildCPUs),
@@ -120,6 +123,7 @@ func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []str
 	for _, e := range exercises {
 		args = append(args, "--exercise", e)
 	}
+	args = append(args, TunnelArgs(tunnels, allowPrivate)...)
 	var extra []string
 	if network != "none" {
 		extra = NetworkArgs()
@@ -134,6 +138,22 @@ func (i *Image) run(out string, extra []string, command ...string) error {
 		"-v", out + ":/out"}
 	args = append(append(args, extra...), i.tag)
 	return docker.Run(append(args, command...)...)
+}
+
+// TunnelArgs are snowglobe-vm's flags for the guest's tunnels, and for reaching private addresses.
+func TunnelArgs(tunnels []tunnel.Tunnel, allowPrivate bool) []string {
+	var args []string
+	for _, t := range tunnels {
+		dest := strconv.Itoa(t.Port)
+		if t.Host != "" {
+			dest = t.Host + ":" + dest
+		}
+		args = append(args, "--tunnel", dest+"="+t.URL)
+	}
+	if allowPrivate {
+		args = append(args, "--allow-private")
+	}
+	return args
 }
 
 var proxyVars = []string{"HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy",

@@ -34,6 +34,8 @@ Usage:
                                                      service worker)
   snowglobe pack <dir> [-o site.tar.gz]              pack a built site into one tarball (.tar.gz,
                                                      .tar.zst) to publish on a CDN
+  snowglobe warm <dir> <reads.json ...>              add the files runs recorded (run
+                                                     --record-reads) to the site's warm pack
   snowglobe run [dir | url] [--name N] [--detach]    run a built site in a sandboxed container:
                                                      a session in a terminal; with stdin piped,
                                                      each line is typed in as a command. The site
@@ -43,6 +45,12 @@ Usage:
                                                      -p 8000:8000 forwards a host port to a guest
                                                      port (127.0.0.1 unless IP:HOST:GUEST); needs a
                                                      site built with --network fetch
+                                                     --record-reads FILE writes every file the guest
+                                                     reads, for warm (drive it from outside with -p:
+                                                     an API's test suite, say)
+                                                     --tunnel [HOST:]PORT=URL replaces the site's
+                                                     tunnels (a local proxy, say); --allow-private
+                                                     lets the guest reach this machine's services
   snowglobe exec <name> <command>                    type a command into a running instance and
                                                      print what it printed
   snowglobe attach <name>                            join a running instance (ctrl-] detaches)
@@ -61,6 +69,18 @@ Build flags:
   --warm REGEX    extra guest paths to preload, on top of what the guest read
   --network NAME  none (default) or fetch: the guest's plain HTTP requests go out through the
                   browser's fetch(), upgraded to HTTPS on HTTPS pages; servers must allow CORS
+  --tunnel [HOST:]PORT=URL
+                  carry the guest's TCP to HOST:PORT (any name, if HOST is left out) over a
+                  WebSocket to URL (ws:// or wss://), as binary messages: websockify, websocat
+                  or Neon's wsproxy in front of the service. The only way out for raw TCP in a
+                  browser (a database, Redis...). Repeatable; needs --network fetch
+  --tunnel-token URL
+                  a GET answering with an access token, for tunnel URLs with {token} in them:
+                  the page asks it for a fresh one per connection (the snapshot, for one per
+                  boot). With a gateway behind the tunnels that holds the real credentials,
+                  none is in the page or the guest
+  --allow-private let the build's snapshot reach loopback and private addresses (a tunnel
+                  endpoint on this machine, say); the page is unaffected
   --exercise CMD  a command to type into the app after the snapshot, recording the files it reads
                   so they're preloaded too; repeatable. A warm-report.json explains the result
   --cpus N        guest CPUs, 1 to 8 (default: 1). More than one runs each CPU in its own Web
@@ -73,6 +93,7 @@ An image can carry its own settings as labels, which flags override:
   LABEL snowglobe.ready="iex(1)> " snowglobe.title="My app" snowglobe.memory="256" \
         snowglobe.exercise='["h Enum.map", "Task.async(fn -> 1 end)"]'
   LABEL snowglobe.network="fetch" snowglobe.cpus="2" snowglobe.build-cpus="2"
+  LABEL snowglobe.tunnels='["db.internal:5432=wss://db-proxy.example.com/"]'
 
 The image must be 64-bit ARM Alpine: FROM alpine (multi-arch; snowglobe builds it for arm64)
 or arm64v8/alpine. Docker is the only requirement. On an x86 host, building arm64 images needs
@@ -104,6 +125,8 @@ func main() {
 		err = runRun(os.Args[2:])
 	case "pack":
 		err = runPack(os.Args[2:])
+	case "warm":
+		err = runWarm(os.Args[2:])
 	case "exec":
 		if len(os.Args) < 4 {
 			err = fmt.Errorf("exec takes an instance name and a command")
@@ -156,6 +179,9 @@ func runBuild(args []string) error {
 	fs.StringVar(&o.Warm, "warm", "", "")
 	fs.Func("exercise", "", func(v string) error { o.Exercise = append(o.Exercise, v); return nil })
 	fs.StringVar(&o.Network, "network", "", "")
+	fs.Func("tunnel", "", func(v string) error { o.Tunnels = append(o.Tunnels, v); return nil })
+	fs.StringVar(&o.TunnelToken, "tunnel-token", "", "")
+	fs.BoolVar(&o.AllowPrivate, "allow-private", false, "")
 	fs.IntVar(&o.CPUs, "cpus", 0, "")
 	fs.IntVar(&o.BuildCPUs, "build-cpus", 0, "")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
@@ -247,6 +273,10 @@ func runRun(args []string) error {
 	publish := func(v string) error { o.Publish = append(o.Publish, v); return nil }
 	fs.Func("p", "", publish)
 	fs.Func("publish", "", publish)
+	fs.Func("tunnel", "", func(v string) error { o.Tunnels = append(o.Tunnels, v); return nil })
+	fs.BoolVar(&o.AllowPrivate, "allow-private", false, "")
+	fs.StringVar(&o.RecordReads, "record-reads", "", "")
+	fs.StringVar(&o.TunnelToken, "tunnel-token", "", "")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 
 	positional, err := parse(fs, args)
@@ -268,6 +298,19 @@ func runRun(args []string) error {
 		}
 	}
 	return instance.Run(o, version)
+}
+
+func runWarm(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("warm takes a built site and the reads.json files runs recorded")
+	}
+	s, err := build.Warm(args[0], args[1:])
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Recorded %d files: %d new in the warm pack, now %d files, %.1f MB\n",
+		s.Recorded, s.Added, s.Files, float64(s.Bytes)/(1<<20))
+	return nil
 }
 
 func runPool(args []string) error {

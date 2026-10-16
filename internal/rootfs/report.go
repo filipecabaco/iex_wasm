@@ -36,7 +36,7 @@ type Group struct {
 
 // BuildReport attributes every unique file to the first phase that read it: boot, then each
 // exercise command in order, then the pattern, else cold. Kernel and initramfs (/boot) are left
-// out: v86 reads them itself at boot and never again after a restore.
+// out: armless reads them itself at boot and never again after a restore.
 func BuildReport(res *Result, reads *Reads, order []string, match *regexp.Regexp, blobSize func(string) int64) Report {
 	byBlob := map[string]File{}
 	for _, f := range res.Files {

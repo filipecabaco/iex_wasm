@@ -1,8 +1,11 @@
 package tools
 
 import (
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/filipecabaco/snowglobe/internal/tunnel"
 )
 
 func TestSnapshotMemoryHeadroom(t *testing.T) {
@@ -19,5 +22,19 @@ func TestSnapshotMemoryHeadroom(t *testing.T) {
 	}
 	if _, err := snapshotMemoryHeadroom(append(source, source...)); err == nil {
 		t.Fatal("ambiguous upstream runtime must fail closed")
+	}
+}
+
+func TestTunnelArgs(t *testing.T) {
+	got := TunnelArgs([]tunnel.Tunnel{
+		{Host: "db.internal", Port: 5432, URL: "wss://gw/db?token=abc"},
+		{Port: 6379, URL: "ws://127.0.0.1:7000"},
+	}, true)
+	want := []string{"--tunnel", "db.internal:5432=wss://gw/db?token=abc", "--tunnel", "6379=ws://127.0.0.1:7000", "--allow-private"}
+	if !slices.Equal(got, want) {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	if got := TunnelArgs(nil, false); len(got) != 0 {
+		t.Errorf("nothing to pass: got %q", got)
 	}
 }

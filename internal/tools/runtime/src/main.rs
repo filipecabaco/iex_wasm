@@ -26,7 +26,9 @@ fn usage() -> ExitCode {
         "usage:
   snowglobe-vm snapshot <system dir> [--memory MB] [--cpus N] [--network none|fetch]
                         [--ready TEXT] [--exercise COMMAND ...]
+                        [--tunnel [HOST:]PORT=URL ...] [--allow-private]
   snowglobe-vm run <site dir> [--blobs DIR] [--detached] [--socket PATH] [--forward PORT:GUEST ...]
+                   [--tunnel [HOST:]PORT=URL ...] [--allow-private] [--record-reads FILE]
   snowglobe-vm exec [--socket PATH] <command>
   snowglobe-vm attach [--socket PATH]"
     );
@@ -82,9 +84,9 @@ fn main() -> ExitCode {
         return usage();
     };
     let result = match command.as_str() {
-        "snapshot" => Args::parse(rest, &["memory", "cpus", "build-cpus", "network", "ready", "exercise", "cols", "rows"])
+        "snapshot" => Args::parse(rest, &["memory", "cpus", "build-cpus", "network", "ready", "exercise", "cols", "rows", "tunnel"])
             .and_then(|a| snapshot::main(&a)),
-        "run" => Args::parse(rest, &["blobs", "socket", "forward"]).and_then(|a| run::main(&a)),
+        "run" => Args::parse(rest, &["blobs", "socket", "forward", "tunnel", "record-reads"]).and_then(|a| run::main(&a)),
         "exec" => {
             // Everything after the flags is the command, as typed
             let (socket, words) = match rest.first().map(String::as_str) {

@@ -67,7 +67,7 @@ func WriteWarmPack(res *Result, sel WarmSelection, outDir string) (files int, by
 	seen := map[string]bool{}
 
 	for _, f := range res.Files {
-		// The kernel and initramfs are read by v86 itself at boot, never again after a restore
+		// The kernel and initramfs are read by armless itself at boot, never again after a restore
 		if strings.HasPrefix(f.Path, "/boot/") || seen[f.Blob] {
 			continue
 		}

@@ -19,6 +19,7 @@ import (
 	"github.com/filipecabaco/snowglobe/internal/sandboxca"
 	"github.com/filipecabaco/snowglobe/internal/site"
 	"github.com/filipecabaco/snowglobe/internal/tools"
+	"github.com/filipecabaco/snowglobe/internal/tunnel"
 )
 
 const (
@@ -40,7 +41,14 @@ type Options struct {
 	Warm     string
 	Exercise []string
 	Network  string
-	CPUs     int // default 1
+	// Tunnels are guest TCP destinations carried over WebSockets, "[HOST:]PORT=URL"
+	Tunnels []string
+	// TunnelToken answers a GET with an access token for tunnel URLs with {token} in them
+	TunnelToken string
+	// AllowPrivate lets the build's snapshot reach loopback and private addresses (a tunnel
+	// endpoint or service on this machine); the page is unaffected
+	AllowPrivate bool
+	CPUs         int // default 1
 	// BuildCPUs boots and warms the guest on more CPUs than it ships with; the snapshot keeps
 	// CPUs. Default: max(CPUs, DefaultBuildCPUs)
 	BuildCPUs int
@@ -48,16 +56,18 @@ type Options struct {
 
 // Settings are the resolved values a build runs with.
 type Settings struct {
-	Title     string
-	Command   string
-	Ready     string
-	Memory    int
-	Warm      *regexp.Regexp
-	Exercise  []string
-	Network   string
-	CPUs      int
-	BuildCPUs int
-	Console   boot.Console
+	Title       string
+	Command     string
+	Ready       string
+	Memory      int
+	Warm        *regexp.Regexp
+	Exercise    []string
+	Network     string
+	Tunnels     []tunnel.Tunnel
+	TunnelToken string
+	CPUs        int
+	BuildCPUs   int
+	Console     boot.Console
 }
 
 // The guest is 64-bit ARM: the armless machine
@@ -102,6 +112,9 @@ func Run(o Options, version string) error {
 	}
 	fmt.Printf("    command: %s\n    ready:   %s\n    memory:  %d MB\n    network: %s\n    cpus:    %d (booted on %d)\n",
 		s.Command, describeReady(s.Ready), s.Memory, s.Network, s.CPUs, s.BuildCPUs)
+	for _, t := range s.Tunnels {
+		fmt.Printf("    tunnel:  %s:%d -> %s\n", first(t.Host, "*"), t.Port, t.URL)
+	}
 
 	// With networking on, the page terminates the guest's HTTPS with certificates from a CA
 	// made for this build
@@ -149,7 +162,14 @@ func Run(o Options, version string) error {
 		return err
 	}
 
-	if err := step("Boot and snapshot", func() error { return t.Snapshot(out, s.Memory, s.Ready, s.Exercise, s.Network, s.CPUs, s.BuildCPUs) }); err != nil {
+	if err := step("Boot and snapshot", func() error {
+		// The snapshot opens its tunnels natively: one token for the whole boot
+		tunnels, err := tunnel.Fill(s.Tunnels, s.TunnelToken)
+		if err != nil {
+			return err
+		}
+		return t.Snapshot(out, s.Memory, s.Ready, s.Exercise, s.Network, tunnels, o.AllowPrivate, s.CPUs, s.BuildCPUs)
+	}); err != nil {
 		return err
 	}
 
@@ -180,31 +200,33 @@ func Run(o Options, version string) error {
 			return err
 		}
 		return site.Render(out, site.Page{Title: s.Title, MemoryMB: s.Memory, Network: s.Network, CPUs: s.CPUs,
-			ConsoleCols: tools.ConsoleCols, ConsoleRows: tools.ConsoleRows})
+			Tunnels: s.Tunnels, TunnelToken: s.TunnelToken, ConsoleCols: tools.ConsoleCols, ConsoleRows: tools.ConsoleRows})
 	})
 }
 
 // RunInfo is what a site says about itself: the measured facts of its build, for pages that
 // present several runs (snowglobe's own demo index reads it).
 type RunInfo struct {
-	Title         string    `json:"title"`
-	Source        string    `json:"source"`
-	Command       string    `json:"command"`
-	MemoryMB      int       `json:"memory_mb"`
-	Network       string    `json:"network"`
-	Arch          string    `json:"arch"` // always arm64
-	CPUs          int       `json:"cpus"`
-	BuildCPUs     int       `json:"build_cpus"`
-	BootSeconds   float64   `json:"boot_seconds"`
-	SnapshotBytes int64     `json:"snapshot_bytes"`
-	StateBytes    int64     `json:"state_bytes"`
-	WarmPackFiles int       `json:"warm_pack_files"`
-	WarmPackBytes int64     `json:"warm_pack_bytes"`
-	Files         int       `json:"files"`
-	BlobBytes     int64     `json:"blob_bytes"`
-	BuiltAt       time.Time `json:"built_at"`
-	Snowglobe     string    `json:"snowglobe"`
-	HasTranscript bool      `json:"has_transcript"`
+	Title         string          `json:"title"`
+	Source        string          `json:"source"`
+	Command       string          `json:"command"`
+	MemoryMB      int             `json:"memory_mb"`
+	Network       string          `json:"network"`
+	Tunnels       []tunnel.Tunnel `json:"tunnels,omitempty"`
+	TunnelToken   string          `json:"tunnel_token,omitempty"`
+	Arch          string          `json:"arch"` // always arm64
+	CPUs          int             `json:"cpus"`
+	BuildCPUs     int             `json:"build_cpus"`
+	BootSeconds   float64         `json:"boot_seconds"`
+	SnapshotBytes int64           `json:"snapshot_bytes"`
+	StateBytes    int64           `json:"state_bytes"`
+	WarmPackFiles int             `json:"warm_pack_files"`
+	WarmPackBytes int64           `json:"warm_pack_bytes"`
+	Files         int             `json:"files"`
+	BlobBytes     int64           `json:"blob_bytes"`
+	BuiltAt       time.Time       `json:"built_at"`
+	Snowglobe     string          `json:"snowglobe"`
+	HasTranscript bool            `json:"has_transcript"`
 }
 
 // writeRunInfo writes run.json and moves the exercise transcript next to it
@@ -222,6 +244,7 @@ func writeRunInfo(out string, o Options, s *Settings, fs *rootfs.Result, packFil
 
 	info := RunInfo{
 		Title: s.Title, Source: o.Source, Command: s.Command, MemoryMB: s.Memory, Network: s.Network,
+		Tunnels: s.Tunnels, TunnelToken: s.TunnelToken,
 		Arch: "arm64", CPUs: s.CPUs, BuildCPUs: s.BuildCPUs,
 		BootSeconds: meta.BootSeconds, SnapshotBytes: meta.SnapshotBytes, StateBytes: meta.StateBytes,
 		WarmPackFiles: packFiles, WarmPackBytes: packBytes, Files: len(fs.Files),
@@ -326,6 +349,25 @@ func Resolve(o Options, img *docker.Image) (*Settings, error) {
 	s.Network = first(o.Network, label("network"), "none")
 	if s.Network != "none" && s.Network != "fetch" {
 		return nil, fmt.Errorf("network %q: use none or fetch", s.Network)
+	}
+
+	// Raw TCP the browser can't make, carried over WebSockets: only with a network
+	specs := o.Tunnels
+	if len(specs) == 0 && label("tunnels") != "" {
+		if err := json.Unmarshal([]byte(label("tunnels")), &specs); err != nil {
+			return nil, fmt.Errorf("label %stunnels must be a JSON array of [HOST:]PORT=URL: %w", labelPrefix, err)
+		}
+	}
+	var err error
+	if s.Tunnels, err = tunnel.ParseAll(specs); err != nil {
+		return nil, err
+	}
+	if len(s.Tunnels) > 0 && s.Network != "fetch" {
+		return nil, errors.New("tunnels need a guest with a network: build with --network fetch")
+	}
+	s.TunnelToken = first(o.TunnelToken, label("tunnel-token"))
+	if tunnel.NeedsToken(s.Tunnels) && s.TunnelToken == "" {
+		return nil, fmt.Errorf("a tunnel URL has %s: name its token endpoint with --tunnel-token", tunnel.Placeholder)
 	}
 
 	s.CPUs = o.CPUs

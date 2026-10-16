@@ -6,7 +6,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use armless::dev::{DeviceConfig, Event};
-use armless::native::{Egress, HostOptions, NativeHost};
+use armless::native::{Egress, HostOptions, NativeHost, Tunnel};
 use armless::platform::{Clock, NativePlatform};
 use armless::vm::{Config, Vm};
 
@@ -75,6 +75,9 @@ pub struct Activity {
     pub last_console: Mutex<Option<Instant>>,
     /// TCP connections open between the guest and the outside
     connections: Mutex<HashSet<u32>>,
+    /// Tunnelled destinations: their connections (a database pool, a LISTEN) stay open while
+    /// the app idles, so only their traffic counts as activity
+    tunnels: Mutex<Vec<Tunnel>>,
     /// Files fetched in the current phase, when recording
     pub reads: Mutex<Option<BTreeSet<String>>>,
     watchers: Mutex<Vec<Watcher>>,
@@ -92,6 +95,7 @@ impl Activity {
             last: Mutex::new(Instant::now()),
             last_console: Mutex::new(None),
             connections: Mutex::default(),
+            tunnels: Mutex::default(),
             reads: Mutex::new(None),
             watchers: Mutex::default(),
             echo_serial,
@@ -149,6 +153,11 @@ impl Activity {
                 }
                 self.touch();
             },
+            Event::TcpOpen { host, port, .. }
+                if self.tunnels.lock().unwrap().iter().any(|t| t.matches(host, *port)) =>
+            {
+                self.touch()
+            },
             Event::TcpOpen { id, .. }
             | Event::TcpConnected { id }
             | Event::HttpRequest { id, .. }
@@ -183,8 +192,47 @@ impl Activity {
     }
 }
 
+/// Where the guest's TCP goes besides straight out: host-side, so not part of the snapshot.
+#[derive(Default)]
+pub struct Net {
+    /// Destinations carried over WebSockets, as in the page
+    pub tunnels: Vec<Tunnel>,
+    /// Loopback and private addresses are off limits unless allowed
+    pub allow_private: bool,
+}
+
+impl Net {
+    /// `--tunnel [HOST:]PORT=URL` (repeatable) and `--allow-private`; without --tunnel, the
+    /// ones the site was built with (run.json's `tunnels`), if any.
+    pub fn from_args(args: &crate::Args, saved: Option<&serde_json::Value>) -> Result<Net, String> {
+        let specs = args.all("tunnel");
+        let tunnels = if !specs.is_empty() {
+            specs
+                .iter()
+                .map(|s| Tunnel::parse(s).ok_or_else(|| format!("--tunnel {s}: use [HOST:]PORT=ws://... or wss://...")))
+                .collect::<Result<_, _>>()?
+        } else {
+            saved
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+                .map(|t| {
+                    Some(Tunnel {
+                        host: t["host"].as_str().map(str::to_string),
+                        port: u16::try_from(t["port"].as_u64()?).ok()?,
+                        url: t["url"].as_str()?.to_string(),
+                    })
+                })
+                .collect::<Option<_>>()
+                .ok_or("run.json: tunnels must be { host, port, url }")?
+        };
+        Ok(Net { tunnels, allow_private: args.has("allow-private") })
+    }
+}
+
 /// The host side of the machine: blobs from `blobs`, the network if the site has one.
-pub fn host(board: &Arc<armless::Board>, blobs: PathBuf, network: &str, activity: &Arc<Activity>) -> NativeHost {
+pub fn host(board: &Arc<armless::Board>, blobs: PathBuf, network: &str, net: Net, activity: &Arc<Activity>) -> NativeHost {
+    *activity.tunnels.lock().unwrap() = net.tunnels.clone();
     let a = activity.clone();
     NativeHost::spawn(
         board.clone(),
@@ -193,7 +241,8 @@ pub fn host(board: &Arc<armless::Board>, blobs: PathBuf, network: &str, activity
             network: network == "fetch",
             // Direct, or through the proxy the environment names: sandboxes that only let HTTPS
             // out through a (TLS-intercepting) proxy work too
-            egress: Egress::from_env(),
+            egress: Egress { allow_private: net.allow_private, ..Egress::from_env() },
+            tunnels: net.tunnels,
         },
         Box::new(move |e| a.observe(e)),
     )
