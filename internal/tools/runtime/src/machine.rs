@@ -33,7 +33,15 @@ pub fn new_vm(spec: &Spec, system: &Path) -> Result<(Vm<NativePlatform>, Arc<Clo
             ..Default::default()
         },
     };
-    let (vm, clock) = armless::runner::new_vm(config)?;
+    let (mut vm, clock) = armless::runner::new_vm(config)?;
+    // Hot guest code is compiled to host code (armless's native JIT): booting, exercising and
+    // running a site spend most of their time in emulated code. ARMLESS_JIT=off keeps the
+    // interpreter; where the host can't run generated code the CPU stays interpreted anyway.
+    if std::env::var("ARMLESS_JIT").map_or(true, |v| v != "off") {
+        for cpu in vm.cpus.iter_mut().filter(|c| !c.jit.enabled) {
+            cpu.enable_native_jit();
+        }
+    }
     let json = std::fs::read(system.join("filesystem.json")).map_err(|e| format!("filesystem.json: {e}"))?;
     vm.board.load_filesystem(&json)?;
     // With a network, the guest's HTTPS ends in the machine's web relay, with certificates from

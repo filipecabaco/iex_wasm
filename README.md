@@ -229,6 +229,11 @@ by armless natively (`snowglobe-vm`, in Rust), with its app console on your term
 an emulated machine with no access to the host, and the container around it runs unprivileged,
 read-only, memory-capped and offline unless the site was built with `--network fetch`.
 
+Natively, armless compiles hot guest code to host code (its native JIT), when booting and
+snapshotting a site at build time as well as when running one: about 2–3× faster on CPU-bound work
+than its interpreter. `ARMLESS_JIT=off` keeps the interpreter. A host that can't run generated code
+stays interpreted on its own.
+
 With a network, the guest goes out the way your machine does. The same web relay makes its HTTP(S)
 and WebSocket requests, other TCP connections are made for it, and private addresses are off
 limits. If `HTTPS_PROXY`, `HTTP_PROXY` or `NO_PROXY` are set, they go to the container, and so does

@@ -103,7 +103,7 @@ func (i *Image) CopySite(out string) error {
 	return os.WriteFile(file, patched, 0o644)
 }
 
-// armless-v0.2.6 reserves only RAM+1 GiB for SMP. A live snapshot also allocates serialized
+// armless (v0.2.6 and v0.2.7) reserves only RAM+1 GiB for SMP. A live snapshot also allocates serialized
 // filesystem metadata and a growing RAM buffer; Supabase can exceed that limit during capture.
 // Raise the maximum, not the initial allocation, while retaining wasm32's 4 GiB hard ceiling.
 // Guard the pinned source shape so a runtime upgrade requires deliberate re-evaluation.
@@ -151,8 +151,17 @@ func (i *Image) Snapshot(out string, memoryMB int, ready string, exercises []str
 func (i *Image) run(out string, extra []string, command ...string) error {
 	args := []string{"run", "--rm", "--user", fmt.Sprintf("%d:%d", os.Getuid(), os.Getgid()),
 		"-v", out + ":/out"}
-	args = append(append(args, extra...), i.tag)
+	args = append(append(append(args, JITArgs()...), extra...), i.tag)
 	return docker.Run(append(args, command...)...)
+}
+
+// JITArgs pass the host's ARMLESS_JIT to the container: snowglobe-vm compiles hot guest code
+// to host code unless it is "off".
+func JITArgs() []string {
+	if v := os.Getenv("ARMLESS_JIT"); v != "" {
+		return []string{"-e", "ARMLESS_JIT=" + v}
+	}
+	return nil
 }
 
 // TunnelArgs are snowglobe-vm's flags for the guest's tunnels, and for reaching private addresses.
