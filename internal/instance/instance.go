@@ -123,6 +123,7 @@ func Run(o Options, version string) error {
 		"--cap-drop", "ALL", "--security-opt", "no-new-privileges",
 		"--memory", fmt.Sprintf("%dm", run.MemoryMB+768), "--pids-limit", "256",
 		"-v", site + ":/site:ro"}
+	args = append(args, tools.JITArgs()...)
 	if run.Network != "fetch" {
 		if len(o.Publish) > 0 {
 			return fmt.Errorf("-p needs a guest with a network: build the site with --network fetch")

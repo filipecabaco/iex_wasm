@@ -3,7 +3,8 @@
 # that gets copied into every site. Runs on the host's native architecture.
 
 # snowglobe-vm, from runtime/ (a Rust crate on the armless library, pinned in Cargo.lock)
-FROM rust:1.90-alpine3.22 AS runtime
+# armless's native JIT (Cranelift) needs Rust 1.96
+FROM rust:1.99-alpine3.22 AS runtime
 RUN apk add --no-cache musl-dev git
 WORKDIR /src
 COPY runtime/ .
@@ -20,8 +21,8 @@ WORKDIR /tools
 
 # The browser runtime, pinned and integrity-checked: armless (armless.js, armless.wasm,
 # armless-smp.wasm) from its release, and xterm.js from npm
-ADD --checksum=sha256:fcb3ed1ab25bda75e3c9b64ea077624333af5f33fd0aac664b09110d085311e6 \
-    https://github.com/filipecabaco/armless/releases/download/armless-v0.2.6/armless-web.tar.gz /tmp/armless-web.tar.gz
+ADD --checksum=sha256:f8e120e30edb4d23b4076bf5f0104a302829fb492619491bee2228e957e359b5 \
+    https://github.com/filipecabaco/armless/releases/download/armless-v0.2.7/armless-web.tar.gz /tmp/armless-web.tar.gz
 ADD --checksum=sha256:908e66e04af6c8dc6b00dd3b54de088e2e81e5ed866284fd6c2fb3c2d1c7a3f6 \
     https://registry.npmjs.org/@xterm/xterm/-/xterm-6.0.0.tgz /tmp/xterm.tgz
 ADD --checksum=sha256:26003b4517a132b64e4ff228fd88a5fda3fff5e606c76093f6dcff772e9ecec0 \
