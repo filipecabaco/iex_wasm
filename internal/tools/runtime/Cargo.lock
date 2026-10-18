@@ -72,8 +72,8 @@ checksum = "3bc62ac97cc33321f50863d514c3bc38a453947a8f9e781137e47c7401020aed"
 
 [[package]]
 name = "armless"
-version = "0.2.9"
-source = "git+https://github.com/filipecabaco/armless?tag=armless-v0.2.9#fa227a6c44d9475e9d4db5c35ea7b7d5cba0c35e"
+version = "0.2.10"
+source = "git+https://github.com/filipecabaco/armless?tag=armless-v0.2.10#ce6fec5540d87314533061fdbeabd160ab0f1ade"
 dependencies = [
  "aes-gcm",
  "cranelift-codegen",
