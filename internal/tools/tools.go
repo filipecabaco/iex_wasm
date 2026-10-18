@@ -103,7 +103,7 @@ func (i *Image) CopySite(out string) error {
 	return os.WriteFile(file, patched, 0o644)
 }
 
-// armless (v0.2.6 to v0.2.9) reserves only RAM+1 GiB for SMP. A live snapshot also allocates serialized
+// armless (v0.2.6 to v0.2.10) reserves only RAM+1 GiB for SMP. A live snapshot also allocates serialized
 // filesystem metadata and a growing RAM buffer; Supabase can exceed that limit during capture.
 // Raise the maximum, not the initial allocation, while retaining wasm32's 4 GiB hard ceiling.
 // Guard the pinned source shape so a runtime upgrade requires deliberate re-evaluation.
