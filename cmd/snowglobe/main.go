@@ -97,6 +97,9 @@ Build flags:
   --build-cpus N  CPUs to boot and warm up on before the snapshot (default: the larger of --cpus
                   and 4); the extra ones go offline first, so build time doesn't depend on --cpus.
                   Programs that size thread pools at start (the BEAM's schedulers) keep N
+  --no-chunks     store every guest file in one blob, however large (default: files of 2 MiB
+                  and more are split into content-defined chunks, so a read fetches only what it
+                  covers and sites share identical chunks; the page then needs armless 0.3.0)
 
 An image can carry its own settings as labels, which flags override:
   LABEL snowglobe.ready="iex(1)> " snowglobe.title="My app" snowglobe.memory="256" \
@@ -196,6 +199,7 @@ func runBuild(args []string) error {
 	fs.BoolVar(&o.AllowPrivate, "allow-private", false, "")
 	fs.IntVar(&o.CPUs, "cpus", 0, "")
 	fs.IntVar(&o.BuildCPUs, "build-cpus", 0, "")
+	fs.BoolVar(&o.NoChunks, "no-chunks", false, "")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 
 	positional, err := parse(fs, args)

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/filipecabaco/snowglobe/internal/rootfs"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -320,41 +321,20 @@ func fetchAll(base *url.URL, dir string, names []string) error {
 	return failure
 }
 
-// BlobNames lists every blob the filesystem refers to: file nodes are
-// [name, size, mtime, mode, uid, gid, blob], directories carry a list of children instead
+// BlobNames lists every blob the filesystem refers to: whole files' and chunks'
 func BlobNames(file string) ([]string, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	var doc struct {
-		Root []json.RawMessage `json:"fsroot"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
+	refs, err := rootfs.ListBlobs(data)
+	if err != nil {
 		return nil, err
 	}
-	seen := map[string]bool{}
-	var names []string
-	var walk func(nodes []json.RawMessage)
-	walk = func(nodes []json.RawMessage) {
-		for _, raw := range nodes {
-			var node []json.RawMessage
-			if json.Unmarshal(raw, &node) != nil || len(node) < 7 {
-				continue
-			}
-			var children []json.RawMessage
-			if json.Unmarshal(node[6], &children) == nil {
-				walk(children)
-				continue
-			}
-			var blob string
-			if json.Unmarshal(node[6], &blob) == nil && strings.HasSuffix(blob, ".bin.zst") && !seen[blob] {
-				seen[blob] = true
-				names = append(names, blob)
-			}
-		}
+	names := make([]string, len(refs))
+	for i, r := range refs {
+		names[i] = r.Name
 	}
-	walk(doc.Root)
 	return names, nil
 }
 

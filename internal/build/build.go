@@ -52,6 +52,9 @@ type Options struct {
 	// BuildCPUs boots and warms the guest on more CPUs than it ships with; the snapshot keeps
 	// CPUs. Default: max(CPUs, DefaultBuildCPUs)
 	BuildCPUs int
+	// NoChunks keeps every guest file in one blob, however large: the filesystem format armless
+	// 0.2.x reads. By default files of 2 MiB and more are stored in content-defined chunks.
+	NoChunks bool
 }
 
 // Settings are the resolved values a build runs with.
@@ -136,7 +139,7 @@ func Run(o Options, version string) error {
 
 	var fs *rootfs.Result
 	if err := step("Convert to a 9p filesystem", func() (err error) {
-		fs, err = exportRootfs(filepath.Join(out, "system"), platform)
+		fs, err = exportRootfs(filepath.Join(out, "system"), platform, o.NoChunks)
 		if err == nil {
 			fmt.Printf("    %d entries, %d MB uncompressed, %d unique files\n", fs.Entries, fs.TotalSize>>20, len(fs.Blobs))
 		}
@@ -435,7 +438,7 @@ func pruneRuntime(out string, cpus int) error {
 }
 
 // exportRootfs streams `docker export` of the boot image straight into the converter.
-func exportRootfs(systemDir, platform string) (*rootfs.Result, error) {
+func exportRootfs(systemDir, platform string, noChunks bool) (*rootfs.Result, error) {
 	container, err := docker.Output("create", "--platform", platform, bootTag)
 	if err != nil {
 		return nil, err
@@ -444,7 +447,7 @@ func exportRootfs(systemDir, platform string) (*rootfs.Result, error) {
 
 	var res *rootfs.Result
 	err = docker.Stream(func(r io.Reader) (err error) {
-		res, err = rootfs.Convert(r, systemDir)
+		res, err = rootfs.Convert(r, systemDir, rootfs.Options{NoChunks: noChunks})
 		return
 	}, "export", container)
 	return res, err
