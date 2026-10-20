@@ -206,6 +206,9 @@
     <button type="button" data-send="right" aria-label="Right"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg></button>
   </div>
   <script>
+  // Milestones for benchmarks (bench/run.mjs reads them): snowglobe:start, :ready (the snapshot is
+  // in the machine), :running (the terminal is live) and :first-output (the guest's first output)
+  performance.mark("snowglobe:start");
   (async () => {
     const status = document.getElementById("status");
     document.getElementById("reset").addEventListener("click", () => {
@@ -277,6 +280,8 @@
       // The terminal is set up (and the screen replayed) before the guest runs
       autostart: false,
     });
+    // For tests and benchmarks: the machine (console_input, the console event)
+    window.snowglobe = { emulator };
 
     const embedded = new URLSearchParams(location.search).has("embed");
     if (embedded) document.documentElement.classList.add("embed");
@@ -344,6 +349,7 @@
       .then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null);
 
     emulator?.ready.then(async () => {
+      performance.mark("snowglobe:ready");
       run.readyAt = Date.now();
       document.documentElement.classList.add("running");
 
@@ -392,7 +398,11 @@
           await new Promise(resolve => term.write(bytes, resolve));
         }
       }
-      emulator.on("console", (bytes) => { sessions.record(bytes); term.write(bytes); });
+      emulator.on("console", (bytes) => {
+        if (!performance.getEntriesByName("snowglobe:first-output").length) performance.mark("snowglobe:first-output");
+        sessions.record(bytes);
+        term.write(bytes);
+      });
       window.addEventListener("resize", resize);
       viewport?.addEventListener("resize", resize);
       // Keep the guest's terminal size in sync with viewport and layout changes.
@@ -404,6 +414,7 @@
       term.onData((data) => { if (sessions.input()) emulator.console_input(withCtrl(data)); });
       keyBar(term);
       emulator.run();
+      performance.mark("snowglobe:running");
       setStatus("ready", "running");
       term.focus();
       sessions.attach(emulator, term, () => { if (pendingResize) resize(); });

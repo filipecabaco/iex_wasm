@@ -1,0 +1,12 @@
+{
+  "name": "snowglobe-bench",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end benchmarks of built snowglobe sites in Chromium (see README)",
+  "scripts": {
+    "test": "node --test lib.test.mjs server.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.56.1"
+  }
+}

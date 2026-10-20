@@ -317,12 +317,64 @@ grace@example.com: 0 note(s)
 
 ## Development checks
 
-Run `go test ./...` and `node --test internal/site/sessions.test.cjs` (Node 22+; no npm packages
-needed), or `mise run test`. To exercise real IndexedDB transactions, Web Locks and filesystem
+Run `go test ./...`, `node --test internal/site/sessions.test.cjs` and `node --test
+bench/lib.test.mjs bench/server.test.mjs` (Node 22+; no npm packages needed), or `mise run test`. To exercise real IndexedDB transactions, Web Locks and filesystem
 writable streams, serve the repository on localhost and open
 `internal/site/sessions.browser.html` in a visible tab; its results are displayed on the page.
 The automatic-saving check requires the tab to remain visible, just like the demos. Full session
 restore should also be checked against a built demo, since storage tests do not verify the VM.
+
+## Benchmarks
+
+`bench/` measures built sites end to end in Chromium (Playwright), the way visitors use them:
+
+- **cold**: a first visit, in a fresh browser profile: the page opened until the terminal is live
+  (the snapshot downloaded and restored, the screen replayed)
+- **warm**: a repeat visit in the same profile, served by the service worker (saved workspaces
+  are cleared first, so it restores the site's snapshot, not a save)
+- **4G cold**: a first visit over a slower link (9 Mbit/s, +75 ms per request)
+- **workload**: on the warm visit, each of the site's `exercise` commands typed in, timed until it
+  has finished printing (its `ready` prompt is back, or the guest has gone quiet)
+
+with what each visit downloaded, its requests and the page's JS heap. A local server stands in
+for GitHub Pages (its caching headers; the throttling is done there, so the service worker's and
+the CPU workers' requests are slowed too).
+
+```sh
+snowglobe build examples/python --out dist/python
+snowglobe pwa dist/python          # the service worker the live demos have (warm visits use it)
+(cd bench && npm ci)               # Playwright; then `npx playwright install chromium` once
+node bench/run.mjs dist/python     # --reps 3 by default; bench-results/python.json + summary.md
+```
+
+Its options (repetitions, scenarios, the link's speed) are listed at the top of `bench/run.mjs`.
+`node bench/report.mjs bench-results --baseline FILE` compares results with an earlier run's
+(`node bench/report.mjs DIR --combine FILE` makes one).
+
+In CI every site job benchmarks its site, and the `bench-report` job of the same run turns the
+results into one report: in the run's summary and, on a pull request, in one comment updated by
+each run. It leads with a verdict, then a table per demo of cold, warm, 4G cold and workload
+(medians), with downloads, requests, each metric's min–max and per-command times folded
+underneath, the commit measured and a link to the run.
+
+Every run is also kept as a file on `refs/snowglobe/bench` (outside `refs/heads`, like the blob
+store): `pr/<number>/<commit>.json` for a pull request, `main/<commit>.json` and
+`main/latest.json` for main. The comment lists the pull request's earlier runs (each commit's
+medians, per demo), and once main has a run, compares with main's latest: a change is flagged only
+when the median falls outside main's min–max over its visits and moves by 5% or more. Shared
+runners are noisy, so read single-digit changes as noise. To read the files:
+`git fetch origin refs/snowglobe/bench && git show FETCH_HEAD:pr/16/<commit>.json`.
+
+The numbers never fail CI; only a harness that can't measure does. A pull request from a fork has a
+read-only token: its report stays in the run's summary, and its results aren't kept.
+
+To measure an armless change, run "CI and Pages" by hand with `armless_ref` (a branch, tag or full
+commit of armless): the tools image is built on it ([`bench/use-armless.sh`](bench/use-armless.sh):
+snowglobe-vm and the browser runtime both from that commit), every site is rebuilt and
+re-snapshotted on it, benchmarked and compared with main's latest, and nothing is deployed or kept.
+Rebuilding matters: a snapshot carries the machine it was taken on (the guest reads the CPU's
+features once, at boot), so swapping only armless.wasm under an old snapshot would not measure the
+new one.
 
 ## The warm cache
 
@@ -416,6 +468,7 @@ internal/tools/       build container: snowglobe-vm (runtime/, Rust on armless) 
                       xterm.js (pinned)
 internal/site/        the page
 internal/pool/        shared blob store for several sites
+bench/                end-to-end benchmarks of built sites (Playwright)
 examples/             one Dockerfile per demo language
 site/                 the demo index page
 ```
