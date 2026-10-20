@@ -72,6 +72,7 @@ LABEL snowglobe.title="Python in the browser" \
 | `--tunnel-token URL` | `snowglobe.tunnel-token` | none |
 | `--allow-private` | | off |
 | `--cpus N` (1–8) | `snowglobe.cpus` | `1` |
+| `--no-chunks` | | off |
 
 Labels let a Dockerfile describe itself; flags override them. `--cmd` swaps the program without
 touching the image, and drops the image's `ready` and `exercise` labels, which belonged to its
@@ -370,7 +371,7 @@ a single static binary, Java's module image) is captured by boot reads alone.
 ## Several sites, one host
 
 `snowglobe pool <dir>` lets every site under a directory share one blob store. Blobs are named by
-content hash, so sites built on the same base (kernel, Alpine, the boot layer) share many: the six
+content hash (a large file's chunks too), so sites built on the same base (kernel, Alpine, the boot layer) share many: the six
 language demos go from 715 MB to 544 MB, and a visitor's second demo reuses what their browser cached.
 
 ## How it works
@@ -387,7 +388,9 @@ flowchart LR
    OpenRC, and a terminal that runs your command, on top of your image.
 2. **Filesystem.** `docker export` streams straight into snowglobe, which writes a 9p filesystem
    (v86's format, which armless reads): a JSON tree plus one zstd-compressed blob per unique file,
-   fetched by the browser on demand.
+   fetched by the browser on demand. Files of 2 MiB and more are split into content-defined chunks
+   (cut as armless's own image tools cut them), so a read fetches only the chunks it covers and
+   sites share identical chunks even when the files around them differ; `--no-chunks` turns it off.
 3. **Snapshot.** The guest boots headless in armless (natively, in the build container) until your
    app is ready, and the whole machine state is saved. Visitors restore it instead of booting Linux.
 4. **Warm pack.** The files the guest read while booting and while being exercised are bundled

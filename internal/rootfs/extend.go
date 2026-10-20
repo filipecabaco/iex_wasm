@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // PackEntry is one blob in a warm pack's index.
@@ -56,41 +55,21 @@ func ReadWarmPack(file string) ([]PackEntry, [][]byte, error) {
 	return entries, blobs, nil
 }
 
-// BlobSizes maps each blob in a filesystem.json to its file's uncompressed size.
+// BlobSizes maps each blob in a filesystem.json to its uncompressed size (a file's, or a
+// chunk's).
 func BlobSizes(file string) (map[string]int64, error) {
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	var doc struct {
-		Root []json.RawMessage `json:"fsroot"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
+	refs, err := ListBlobs(data)
+	if err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
-	sizes := map[string]int64{}
-	var walk func([]json.RawMessage)
-	walk = func(nodes []json.RawMessage) {
-		for _, raw := range nodes {
-			// [name, size, mtime, mode, uid, gid, blob | children | link target]
-			var node []json.RawMessage
-			if json.Unmarshal(raw, &node) != nil || len(node) < 7 {
-				continue
-			}
-			var children []json.RawMessage
-			if json.Unmarshal(node[6], &children) == nil {
-				walk(children)
-				continue
-			}
-			var blob string
-			var size int64
-			if json.Unmarshal(node[6], &blob) == nil && strings.HasSuffix(blob, ".bin.zst") &&
-				json.Unmarshal(node[1], &size) == nil {
-				sizes[blob] = size
-			}
-		}
+	sizes := make(map[string]int64, len(refs))
+	for _, r := range refs {
+		sizes[r.Name] = r.Size
 	}
-	walk(doc.Root)
 	return sizes, nil
 }
 

@@ -3,6 +3,9 @@
 //	<out>/filesystem.json                      tree metadata (v86 fs2json format, version 3)
 //	<out>/filesystem/<sha256[0:10]>.bin.zst   zstd-compressed file contents, deduplicated
 //
+// Files of ChunkThreshold bytes and more are stored in content-defined chunks: their target is a
+// list of [blob, length] pairs instead of one blob name (armless 0.3.0 and later read it).
+//
 // It is equivalent to v86's tools/fs2json.py and tools/copy-to-sha256.py --zstd, in one pass
 // over the tar stream, with contents hashed and compressed in parallel.
 package rootfs
@@ -35,11 +38,18 @@ const (
 	sIFLNK = 0o120000
 )
 
-// File is a regular file in the converted filesystem.
+// File is a blob of a regular file in the converted filesystem: the whole file, or one of its
+// chunks (a chunked file has one File per chunk, all with its path).
 type File struct {
 	Path string // absolute path inside the guest, e.g. "/usr/bin/env"
 	Blob string // blob name under filesystem/, e.g. "0a1b2c3d4e.bin.zst"
-	Size int64  // uncompressed size
+	Size int64  // uncompressed size of the blob
+}
+
+// Options change how a filesystem is converted.
+type Options struct {
+	// NoChunks keeps every file in one blob, however large: the format armless 0.2.x reads
+	NoChunks bool
 }
 
 // Result describes a converted filesystem.
@@ -61,18 +71,24 @@ type entry struct {
 	size     int64
 	linkname string
 
-	hash string
-	blob string
+	// The contents' blobs: one for a small file, its chunks for a large one
+	blobs   []blob
+	chunked bool
+}
+
+type blob struct {
+	hash, name string
+	size       int64
 }
 
 // Convert reads a tar stream and writes filesystem.json and filesystem/ under outDir.
-func Convert(r io.Reader, outDir string) (*Result, error) {
+func Convert(r io.Reader, outDir string, o Options) (*Result, error) {
 	blobsDir := filepath.Join(outDir, "filesystem")
 	if err := os.MkdirAll(blobsDir, 0o755); err != nil {
 		return nil, err
 	}
 
-	entries, err := readAndStore(tar.NewReader(r), blobsDir)
+	entries, err := readAndStore(tar.NewReader(r), blobsDir, o)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +118,7 @@ type job struct {
 
 // readAndStore walks the tar sequentially and hands regular file contents to a worker pool that
 // hashes, compresses and writes them.
-func readAndStore(tr *tar.Reader, blobsDir string) ([]*entry, error) {
+func readAndStore(tr *tar.Reader, blobsDir string, o Options) ([]*entry, error) {
 	var (
 		entries []*entry
 		mu      sync.Mutex
@@ -128,16 +144,23 @@ func readAndStore(tr *tar.Reader, blobsDir string) ([]*entry, error) {
 			defer enc.Close()
 
 			for j := range jobs {
-				sum := sha256.Sum256(j.data)
-				hash := hex.EncodeToString(sum[:])
-				blob := hash[:hashLength] + ".bin.zst"
-
-				if err := writeBlob(filepath.Join(blobsDir, blob), enc.EncodeAll(j.data, nil)); err != nil {
-					errOnce.Do(func() { werr = err })
+				parts := [][]byte{j.data}
+				chunked := !o.NoChunks && len(j.data) >= ChunkThreshold
+				if chunked {
+					parts = chunks(j.data)
+				}
+				blobs := make([]blob, len(parts))
+				for i, part := range parts {
+					sum := sha256.Sum256(part)
+					hash := hex.EncodeToString(sum[:])
+					blobs[i] = blob{hash, hash[:hashLength] + ".bin.zst", int64(len(part))}
+					if err := writeBlob(filepath.Join(blobsDir, blobs[i].name), enc.EncodeAll(part, nil)); err != nil {
+						errOnce.Do(func() { werr = err })
+					}
 				}
 
 				mu.Lock()
-				entries[j.index].hash, entries[j.index].blob = hash, blob
+				entries[j.index].blobs, entries[j.index].chunked = blobs, chunked
 				mu.Unlock()
 			}
 		}()
@@ -224,7 +247,7 @@ func writeBlob(target string, data []byte) error {
 }
 
 // buildTree turns the flat entry list into v86's nested node arrays:
-// [name, size, mtime, mode, uid, gid, filename | symlink target | children]
+// [name, size, mtime, mode, uid, gid, filename | [[chunk, length]...] | symlink target | children]
 func buildTree(entries []*entry, blobsDir string) ([]any, *Result, error) {
 	result := &Result{Entries: len(entries), Blobs: map[string]string{}}
 	nodes := make(map[string][]any, len(entries))
@@ -237,12 +260,14 @@ func buildTree(entries []*entry, blobsDir string) ([]any, *Result, error) {
 
 		switch e.typeflag {
 		case tar.TypeReg, tar.TypeRegA, tar.TypeCont:
-			if prev, ok := fullHash[e.blob]; ok && prev != e.hash {
-				return nil, nil, fmt.Errorf("collision in short hash (%s and %s)", prev, e.hash)
+			for _, b := range e.blobs {
+				if prev, ok := fullHash[b.name]; ok && prev != b.hash {
+					return nil, nil, fmt.Errorf("collision in short hash (%s and %s)", prev, b.hash)
+				}
+				fullHash[b.name] = b.hash
 			}
-			fullHash[e.blob] = e.hash
 			node[3] = e.mode | sIFREG
-			node = append(node, e.blob)
+			node = append(node, e.target())
 			files[e.path] = e
 
 		case tar.TypeLink:
@@ -251,10 +276,10 @@ func buildTree(entries []*entry, blobsDir string) ([]any, *Result, error) {
 			if !ok {
 				return nil, nil, fmt.Errorf("hard link %s points at unknown %s", e.path, e.linkname)
 			}
-			e.blob, e.hash, e.size = target.blob, target.hash, target.size
+			e.blobs, e.chunked, e.size = target.blobs, target.chunked, target.size
 			node[1] = target.size
 			node[3] = e.mode | sIFREG
-			node = append(node, target.blob)
+			node = append(node, e.target())
 			files[e.path] = e
 
 		case tar.TypeDir:
@@ -274,9 +299,9 @@ func buildTree(entries []*entry, blobsDir string) ([]any, *Result, error) {
 	}
 
 	for _, e := range entries {
-		if e.blob != "" {
-			result.Files = append(result.Files, File{Path: "/" + e.path, Blob: e.blob, Size: e.size})
-			result.Blobs[e.blob] = filepath.Join(blobsDir, e.blob)
+		for _, b := range e.blobs {
+			result.Files = append(result.Files, File{Path: "/" + e.path, Blob: b.name, Size: b.size})
+			result.Blobs[b.name] = filepath.Join(blobsDir, b.name)
 		}
 	}
 
@@ -293,6 +318,18 @@ func buildTree(entries []*entry, blobsDir string) ([]any, *Result, error) {
 		return out
 	}
 	return tree(""), result, nil
+}
+
+// target is a regular file's last node field: its blob, or its chunks as [blob, length] pairs.
+func (e *entry) target() any {
+	if !e.chunked {
+		return e.blobs[0].name
+	}
+	pairs := make([][]any, len(e.blobs))
+	for i, b := range e.blobs {
+		pairs[i] = []any{b.name, b.size}
+	}
+	return pairs
 }
 
 // addNode records a node under its parent, creating parent directories the tar never listed
