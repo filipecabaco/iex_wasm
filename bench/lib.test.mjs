@@ -34,12 +34,17 @@ test("summarizeCommands: per command, in the order typed", () => {
   assert.deepEqual(s.map((c) => [c.command, c.median]), [["b", 20], ["a", 6]]);
 });
 
-test("compare: only beyond main's spread and the noise floor", () => {
+test("compare: only when the runs' ranges don't overlap, and past the floor for the unit", () => {
   const base = { median: 1000, min: 950, max: 1100 };
-  assert.equal(compare({ median: 1080 }, base).verdict, "same"); // inside main's range
+  assert.equal(compare({ median: 1200, min: 1050, max: 1250 }, base).verdict, "same"); // ranges overlap
+  assert.equal(compare({ median: 1200, min: 1150, max: 1250 }, base).verdict, "worse");
+  assert.equal(compare({ median: 800, min: 780, max: 820 }, base).verdict, "better");
+  // a whole runner ~12% slower: apart, but under the 15% floor for times
+  assert.equal(compare({ median: 1120, min: 1110, max: 1130 }, { median: 1000, min: 990, max: 1010 }).verdict, "same");
+  // counts and sizes: 10%
+  assert.equal(compare({ median: 1120, min: 1110, max: 1130 }, { median: 1000, min: 990, max: 1010 }, "bytes").verdict, "worse");
+  // a median alone (no range) still compares
   assert.equal(compare({ median: 1200 }, base).verdict, "worse");
-  assert.equal(compare({ median: 800 }, base).verdict, "better");
-  assert.equal(compare({ median: 1104 }, { median: 1100, min: 1100, max: 1100 }).verdict, "same"); // < 5%
   assert.ok(Math.abs(compare({ median: 1200 }, base).delta - 0.2) < 1e-9);
   assert.equal(compare({ median: 5 }, null), null);
   assert.equal(compare(null, base), null);
