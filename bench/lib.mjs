@@ -22,8 +22,10 @@ export const DETAILS = [
   ["cold", "heap_peak_bytes", "cold JS heap (peak)", "bytes"],
 ];
 
-// Changes smaller than this never count, whatever the ranges say
-export const NOISE_FLOOR = 0.05;
+// Changes smaller than this never count, whatever the ranges say: times differ by up to ~13%
+// between two shared runners on the same build (every command a little slower on one), counts and
+// sizes much less
+export const NOISE_FLOOR = { ms: 0.15, other: 0.1 };
 
 export function stats(values) {
   const v = values.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
@@ -62,14 +64,16 @@ export function metric(result, scenario, key) {
   return result?.scenarios?.[scenario]?.summary?.[key] ?? null;
 }
 
-// How a current median compares with the baseline: the change, and whether it is beyond what
-// main's own repetitions spread over (and the noise floor)
-export function compare(current, baseline) {
+// How a current median compares with the baseline: the change, and whether it counts. It does
+// only when no visit of this run overlaps main's (this run's min–max is clear of main's) and the
+// medians differ by at least the noise floor for the unit
+export function compare(current, baseline, unit = "ms") {
   if (!current || !baseline || !baseline.median) return null;
   const delta = (current.median - baseline.median) / baseline.median;
-  const outside = current.median < baseline.min || current.median > baseline.max;
+  const apart = (current.min ?? current.median) > baseline.max || (current.max ?? current.median) < baseline.min;
+  const floor = unit === "ms" ? NOISE_FLOOR.ms : NOISE_FLOOR.other;
   let verdict = "same";
-  if (outside && Math.abs(delta) >= NOISE_FLOOR) verdict = delta > 0 ? "worse" : "better";
+  if (apart && Math.abs(delta) >= floor) verdict = delta > 0 ? "worse" : "better";
   return { delta, verdict };
 }
 
@@ -85,15 +89,15 @@ export function formatValue(value, unit) {
   return String(Math.round(value * 10) / 10);
 }
 
-function delta(current, baseline) {
-  const c = compare(current, baseline);
+function delta(current, baseline, unit) {
+  const c = compare(current, baseline, unit);
   if (!c) return "";
   const mark = c.verdict === "worse" ? " 🔺" : c.verdict === "better" ? " 🟢" : "";
   return ` (${c.delta >= 0 ? "+" : ""}${(c.delta * 100).toFixed(0)}%${mark})`;
 }
 
 function cell(current, baseline, unit) {
-  return current ? formatValue(current.median, unit) + delta(current, baseline) : "–";
+  return current ? formatValue(current.median, unit) + delta(current, baseline, unit) : "–";
 }
 
 function range(s, unit) {
@@ -103,7 +107,7 @@ function range(s, unit) {
 const bySite = (results) => [...results].sort((a, b) => a.site.localeCompare(b.site));
 
 // One row per site: each metric's median and, against main, its change, marked 🔺 (worse) or
-// 🟢 (better) only when outside main's min–max over its repetitions and ≥ 5%
+// 🟢 (better) only when every visit is clear of main's min–max and the change is past the noise floor
 export function table(results, baselines = {}, metrics = METRICS) {
   const shown = metrics.filter(([s, k]) => results.some((r) => metric(r, s, k)));
   const head = `| demo | ${shown.map(([, , label]) => label).join(" | ")} |`;
@@ -133,8 +137,8 @@ function spread(results, baselines) {
 export function verdicts(results, baselines = {}) {
   const out = [];
   for (const r of results) {
-    for (const [s, k, label] of METRICS) {
-      const c = compare(metric(r, s, k), metric(baselines[r.site], s, k));
+    for (const [s, k, label, unit] of METRICS) {
+      const c = compare(metric(r, s, k), metric(baselines[r.site], s, k), unit);
       if (c && c.verdict !== "same") out.push({ site: r.site, label, ...c });
     }
   }
@@ -167,7 +171,7 @@ export function report(results, baselines = {}, meta = {}) {
     reps && `medians of ${reps.reps} visits (${reps.throttled_reps} on 4G)`,
     meta.runUrl && `[run](${meta.runUrl})`,
   ].filter(Boolean).join(" · "));
-  lines.push("", "<sub>*cold*: a first visit (fresh profile), from opening the page to a live terminal (the snapshot restored, the screen replayed). *warm*: a repeat visit, served by the service worker. *4G cold*: a first visit over 9 Mbit/s with +75 ms per request. *workload*: the demo's exercise commands typed in on a warm visit, each until it has finished printing. 🔺/🟢: outside main's min–max over its visits and ≥ 5%.</sub>");
+  lines.push("", "<sub>*cold*: a first visit (fresh profile), from opening the page to a live terminal (the snapshot restored, the screen replayed). *warm*: a repeat visit, served by the service worker. *4G cold*: a first visit over 9 Mbit/s with +75 ms per request. *workload*: the demo's exercise commands typed in on a warm visit, each until it has finished printing. 🔺/🟢: every visit of this run clear of main's min–max, and ≥ 15% for times (≥ 10% for counts and sizes); shared runners differ by up to ~13% on the same build.</sub>");
 
   lines.push("", "<details><summary>Downloads and requests</summary>", "", table(results, baselines, DETAILS), "", "</details>");
   lines.push("", "<details><summary>Spread (min – max) of every metric</summary>", "", spread(results, baselines), "", "</details>");

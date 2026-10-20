@@ -361,8 +361,9 @@ Every run is also kept as a file on `refs/snowglobe/bench` (outside `refs/heads`
 store): `pr/<number>/<commit>.json` for a pull request, `main/<commit>.json` and
 `main/latest.json` for main. The comment lists the pull request's earlier runs (each commit's
 medians, per demo), and once main has a run, compares with main's latest: a change is flagged only
-when the median falls outside main's min–max over its visits and moves by 5% or more. Shared
-runners are noisy, so read single-digit changes as noise. To read the files:
+when no visit of the run overlaps main's (its min–max is clear of main's) and the medians differ
+by 15% or more for times, 10% for counts and sizes. Two shared runners differ by up to ~13% on the
+same build (every command a little slower on one), so read smaller changes as noise. To read the files:
 `git fetch origin refs/snowglobe/bench && git show FETCH_HEAD:pr/16/<commit>.json`.
 
 The numbers never fail CI; only a harness that can't measure does. A pull request from a fork has a
