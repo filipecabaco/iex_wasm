@@ -62,3 +62,12 @@ func TestBlobNames(t *testing.T) {
 		t.Errorf("got %v, %v", names, err)
 	}
 }
+
+func TestBlobNamesChunked(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "filesystem.json")
+	write(t, file, `{"fsroot":[["bin",0,0,16877,0,0,[["big",8,0,33188,0,0,[["aaaaaaaaaa.bin.zst",5],["bbbbbbbbbb.bin.zst",3]]],["sh",5,0,33261,0,0,"aaaaaaaaaa.bin.zst"]]]],"version":3,"size":13}`)
+	names, err := remote.BlobNames(file)
+	if err != nil || strings.Join(names, ",") != "aaaaaaaaaa.bin.zst,bbbbbbbbbb.bin.zst" {
+		t.Errorf("got %v, %v", names, err)
+	}
+}

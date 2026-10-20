@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func blobName(content string) string {
 
 func TestConvert(t *testing.T) {
 	out := t.TempDir()
-	res, err := Convert(bytes.NewReader(sampleTar(t)), out)
+	res, err := Convert(bytes.NewReader(sampleTar(t)), out, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +115,7 @@ func TestConvert(t *testing.T) {
 
 func TestWarmPack(t *testing.T) {
 	out := t.TempDir()
-	res, err := Convert(bytes.NewReader(sampleTar(t)), out)
+	res, err := Convert(bytes.NewReader(sampleTar(t)), out, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +150,7 @@ func TestWarmPack(t *testing.T) {
 
 func TestReport(t *testing.T) {
 	out := t.TempDir()
-	res, err := Convert(bytes.NewReader(sampleTar(t)), out)
+	res, err := Convert(bytes.NewReader(sampleTar(t)), out, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,5 +171,117 @@ func TestReport(t *testing.T) {
 	}
 	if r.Pattern.Files != 1 || r.Cold.Files != 0 {
 		t.Errorf("pattern = %+v, cold = %+v", r.Pattern, r.Cold)
+	}
+}
+
+// A tar with one large file and a hard link to it
+func bigTar(t *testing.T, big []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, h := range []*tar.Header{
+		{Name: "data/", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: "data/big.bin", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(big))},
+		{Name: "data/same.bin", Typeflag: tar.TypeLink, Linkname: "data/big.bin", Mode: 0o644},
+	} {
+		h.ModTime = time.Unix(1700000000, 0)
+		if err := tw.WriteHeader(h); err != nil {
+			t.Fatal(err)
+		}
+		if h.Typeflag == tar.TypeReg {
+			tw.Write(big)
+		}
+	}
+	tw.Close()
+	return buf.Bytes()
+}
+
+func TestConvertChunks(t *testing.T) {
+	big := counterData(5 << 20)
+	out := t.TempDir()
+	res, err := Convert(bytes.NewReader(bigTar(t, big)), out, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(out, "filesystem.json"))
+	refs, err := ListBlobs(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := chunks(big)
+	if len(parts) < 2 || len(refs) != len(parts) {
+		t.Fatalf("%d blobs listed for %d chunks", len(refs), len(parts))
+	}
+
+	var doc struct {
+		FSRoot []any `json:"fsroot"`
+	}
+	json.Unmarshal(data, &doc)
+	dir := doc.FSRoot[0].([]any)[6].([]any)
+	bigNode, linkNode := dir[0].([]any), dir[1].([]any)
+	target, ok := bigNode[6].([]any)
+	if !ok || len(target) != len(parts) || bigNode[1] != float64(len(big)) {
+		t.Fatalf("big.bin = %v", bigNode[:6])
+	}
+	if !slices.Equal(ends(parts), func() (e []int) {
+		total := 0
+		for _, c := range target {
+			total += int(c.([]any)[1].(float64))
+			e = append(e, total)
+		}
+		return
+	}()) {
+		t.Error("chunk lengths don't follow the cut points")
+	}
+	link, _ := json.Marshal(linkNode[6])
+	own, _ := json.Marshal(bigNode[6])
+	if string(link) != string(own) {
+		t.Error("the hard link should share big.bin's chunks")
+	}
+
+	// The chunks decompress, in order, to the file; one File per chunk and per path
+	dec, _ := zstd.NewReader(nil)
+	var whole []byte
+	for i, c := range target {
+		name := c.([]any)[0].(string)
+		compressed, err := os.ReadFile(res.Blobs[name])
+		if err != nil {
+			t.Fatal(err)
+		}
+		plain, err := dec.DecodeAll(compressed, nil)
+		if err != nil || blobName(string(plain)) != name || !bytes.Equal(plain, parts[i]) {
+			t.Fatalf("chunk %d (%s) is wrong: %v", i, name, err)
+		}
+		whole = append(whole, plain...)
+	}
+	if !bytes.Equal(whole, big) {
+		t.Error("chunks don't add up to the file")
+	}
+	if len(res.Files) != 2*len(parts) || res.TotalSize != 2*int64(len(big)) {
+		t.Errorf("%d files, %d bytes", len(res.Files), res.TotalSize)
+	}
+
+	// --no-chunks: one blob, the old format
+	out = t.TempDir()
+	if _, err := Convert(bytes.NewReader(bigTar(t, big)), out, Options{NoChunks: true}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(filepath.Join(out, "filesystem.json"))
+	json.Unmarshal(data, &doc)
+	if got := doc.FSRoot[0].([]any)[6].([]any)[0].([]any)[6]; got != blobName(string(big)) {
+		t.Errorf("with NoChunks, big.bin = %v", got)
+	}
+}
+
+// A file just under the threshold stays one blob
+func TestConvertSmallFileUnchunked(t *testing.T) {
+	small := counterData(ChunkThreshold - 1)
+	out := t.TempDir()
+	if _, err := Convert(bytes.NewReader(bigTar(t, small)), out, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(out, "filesystem.json"))
+	if refs, _ := ListBlobs(data); len(refs) != 1 || refs[0].Name != blobName(string(small)) {
+		t.Errorf("blobs = %v", refs)
 	}
 }
