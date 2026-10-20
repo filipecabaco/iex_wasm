@@ -1,11 +1,14 @@
 name: Release
 
-# Pushing a tag vX.Y.Z (vX.Y.Z-rc.1 for a prerelease) from main releases it: the same tests and
-# site checks as main (pages.yml, without touching the site), the tools image published to GHCR
-# for amd64 and arm64 so `snowglobe build` pulls it instead of compiling snowglobe-vm, then the
-# binaries on a GitHub release.
+# A release is v<VERSION>: changing VERSION on main releases it (the tag is made here, once the
+# checks pass, unless it exists already), and so does pushing a tag vX.Y.Z by hand (vX.Y.Z-rc.1 for
+# a prerelease). Either way: the same tests and site checks as main (pages.yml, without touching
+# the site), the tools image published to GHCR for amd64 and arm64 so `snowglobe build` pulls it
+# instead of compiling snowglobe-vm, then the binaries on a GitHub release.
 on:
   push:
+    branches: [main]
+    paths: [VERSION]
     tags: ['v*']
 
 permissions:
@@ -17,23 +20,38 @@ concurrency:
 
 jobs:
   # Go's module proxy only treats semver tags as versions, and a release is cut from main
+  # A push to main that changed VERSION to a version already tagged releases nothing (tag is empty)
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Check the tag
-        env:
-          TAG: ${{ github.ref_name }}
+        id: tag
         run: |
+          version="v$(tr -d '[:space:]' < VERSION)"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            TAG=$GITHUB_REF_NAME
+            [ "$TAG" = "$version" ] || echo "::warning::$TAG is released while VERSION says $version"
+          else
+            TAG=$version
+            if git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+              echo "$TAG is released already; nothing to do"
+              exit 0
+            fi
+          fi
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "::error::$TAG isn't vX.Y.Z or vX.Y.Z-pre"; exit 1; }
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main || { echo "::error::$TAG isn't on main"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   ci:
     needs: check
+    if: needs.check.outputs.tag
     uses: ./.github/workflows/pages.yml
     with:
       release: true
@@ -110,15 +128,15 @@ jobs:
           docker buildx imagetools inspect "$IMAGE"
 
   release:
-    needs: [tools, tools-manifest]
+    needs: [check, tools, tools-manifest]
     # tools-manifest is skipped when the image was published already
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !failure() && !cancelled() && needs.check.outputs.tag }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ needs.check.outputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
@@ -146,6 +164,17 @@ jobs:
           mkdir check && tar -xzf "release/snowglobe_${TAG#v}_linux_amd64.tar.gz" -C check
           got=$("check/snowglobe_${TAG#v}_linux_amd64/snowglobe" version)
           [ "$got" = "snowglobe $TAG" ] || { echo "::error::got $got"; exit 1; }
+
+      # Released from a change to VERSION: the tag, annotated, on the commit that was checked. A tag
+      # pushed with this workflow's token starts no other workflow, so it isn't released twice
+      - name: Tag ${{ env.TAG }}
+        if: github.ref_type != 'tag'
+        env:
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          git tag -a "$TAG" -m "$TAG" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
 
       - name: Publish the release
         run: |

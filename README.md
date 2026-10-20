@@ -460,6 +460,12 @@ mise run serve
 Pushing to `main` runs the tests and the same build in GitHub Actions, and deploys `dist/` to
 GitHub Pages.
 
+To release, change [`VERSION`](VERSION) in a pull request (`0.3.0`, or `0.3.0-rc.1` for a
+prerelease). Once it's on `main`, [`release.yml`](.github/workflows/release.yml) runs the same
+checks, tags `v<VERSION>` on that commit, publishes the tools image and puts the binaries on a
+GitHub release. A version that is tagged already releases nothing; pushing a tag by hand still
+releases it as before.
+
 ```
 cmd/snowglobe/        the CLI
 internal/rootfs/      tar stream → 9p filesystem + warm pack
