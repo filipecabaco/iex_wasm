@@ -210,6 +210,8 @@ type RunInfo struct {
 	Title         string          `json:"title"`
 	Source        string          `json:"source"`
 	Command       string          `json:"command"`
+	Ready         string          `json:"ready,omitempty"`    // what the snapshot waited for
+	Exercise      []string        `json:"exercise,omitempty"` // typed in after it (bench/ replays them)
 	MemoryMB      int             `json:"memory_mb"`
 	Network       string          `json:"network"`
 	Tunnels       []tunnel.Tunnel `json:"tunnels,omitempty"`
@@ -243,7 +245,8 @@ func writeRunInfo(out string, o Options, s *Settings, fs *rootfs.Result, packFil
 	}
 
 	info := RunInfo{
-		Title: s.Title, Source: o.Source, Command: s.Command, MemoryMB: s.Memory, Network: s.Network,
+		Title: s.Title, Source: o.Source, Command: s.Command, Ready: s.Ready, Exercise: s.Exercise,
+		MemoryMB: s.Memory, Network: s.Network,
 		Tunnels: s.Tunnels, TunnelToken: s.TunnelToken,
 		Arch: "arm64", CPUs: s.CPUs, BuildCPUs: s.BuildCPUs,
 		BootSeconds: meta.BootSeconds, SnapshotBytes: meta.SnapshotBytes, StateBytes: meta.StateBytes,

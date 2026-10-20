@@ -3,12 +3,21 @@ name: CI and Pages
 # Every push to main and every pull request: the tests, then every site built and checked (the
 # demos on the site, plus the examples in EXAMPLES that aren't). Pushes to main then assemble the
 # demos into the site and deploy it to GitHub Pages. release.yml calls it with release: true to
-# gate a release on the same checks, without touching the site.
+# gate a release on the same checks, without touching the site. Every site is also benchmarked
+# (bench/); bench.yml turns the results into a report, and main's into the baseline.
+#
+# Run by hand with armless_ref, the sites are built and benchmarked on that armless (a branch,
+# tag or full commit) instead of the pinned release, and nothing is deployed.
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      armless_ref:
+        description: "Build and benchmark the sites on this armless (branch, tag or full commit); deploys nothing"
+        required: false
+        default: ""
   workflow_call:
     inputs:
       release:
@@ -64,11 +73,27 @@ jobs:
   # loaded by every site job; it's cached until its sources change
   tools:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
       - uses: jdx/mise-action@v5
+
+      # Before the cache key: the edited image is a different image
+      - name: Use armless ${{ inputs.armless_ref }}
+        if: inputs.armless_ref
+        env:
+          ARMLESS_REF: ${{ inputs.armless_ref }}
+        run: |
+          sh bench/use-armless.sh "$ARMLESS_REF"
+          git diff --binary > armless-ref.patch
+
+      - uses: actions/upload-artifact@v7
+        if: inputs.armless_ref
+        with:
+          name: armless-ref-patch
+          path: armless-ref.patch
+          retention-days: 1
 
       - uses: actions/cache@v6
         id: cache
@@ -108,6 +133,16 @@ jobs:
 
       # Installs Go from mise.toml (cached between runs)
       - uses: jdx/mise-action@v5
+
+      # The same edit as the tools job's, so this snowglobe finds the image it built (and the
+      # site's cache key changes with it)
+      - uses: actions/download-artifact@v8
+        if: inputs.armless_ref
+        with:
+          name: armless-ref-patch
+      - name: Use armless ${{ inputs.armless_ref }}
+        if: inputs.armless_ref
+        run: git apply armless-ref.patch && rm armless-ref.patch
 
       - uses: actions/cache@v6
         id: cache
@@ -199,9 +234,47 @@ jobs:
           echo "$out" | grep -q attached-42 || { echo "::error title=attach::$out"; exit 1; }
           ./snowglobe ps | grep -q smoke
 
+      # Cold, warm and 4G visits in Chromium and the exercise commands timed (bench/run.mjs), on
+      # a copy made an installable app as the live demos are. Fails only if the harness does;
+      # bench.yml compares the numbers with main's
+      - uses: actions/setup-node@v7
+        if: ${{ !inputs.release }}
+        with:
+          node-version: 22
+
+      - name: Install the benchmark's browser
+        if: ${{ !inputs.release }}
+        run: |
+          cd bench && npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Benchmark ${{ matrix.site.name }}
+        if: ${{ !inputs.release }}
+        env:
+          ARMLESS_REF: ${{ inputs.armless_ref }}
+        run: |
+          # Hard links, but not for what `snowglobe pwa` rewrites in place
+          copy="$RUNNER_TEMP/bench/$SITE"
+          mkdir -p "$(dirname "$copy")"
+          cp -al "dist/$SITE" "$copy"
+          for f in index.html sw.js; do
+            if [ -e "$copy/$f" ]; then rm "$copy/$f"; cp "dist/$SITE/$f" "$copy/$f"; fi
+          done
+          ./snowglobe pwa "$copy"
+          node bench/run.mjs "$copy" --out-dir bench-results --reps 3 --throttled-reps 2
+          cat bench-results/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !inputs.release && !cancelled() }}
+        with:
+          name: bench-${{ matrix.site.name }}
+          path: bench-results/${{ matrix.site.name }}.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       # Hidden files must come along: `snowglobe pool` looks for each build's .snowglobe marker
       - uses: actions/upload-artifact@v7
-        if: matrix.site.deploy && github.event_name != 'pull_request' && !inputs.release
+        if: matrix.site.deploy && github.event_name != 'pull_request' && !inputs.release && !inputs.armless_ref
         with:
           name: site-${{ matrix.site.name }}
           path: dist/${{ matrix.site.name }}
@@ -211,7 +284,7 @@ jobs:
 
   assemble:
     needs: [test, site]
-    if: github.event_name != 'pull_request' && !inputs.release
+    if: github.event_name != 'pull_request' && !inputs.release && !inputs.armless_ref
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

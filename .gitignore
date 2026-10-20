@@ -12,3 +12,6 @@
 # Impeccable review captures (regenerated per review)
 /.impeccable/review/
 /assets/posters/
+
+# bench/run.mjs results
+/bench-results/
