@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { compare, DETAILS, formatValue, headline, MARKER, parseThrottle, plain, promptBack, promptPattern, report, stats, summarize, summarizeCommands, table } from "./lib.mjs";
+import { compare, DETAILS, formatValue, headline, history, MARKER, parseThrottle, plain, promptBack, promptPattern, report, stats, summarize, summarizeCommands, table } from "./lib.mjs";
 
 const result = (site, cold, workload) => ({
   schema: 1,
@@ -95,6 +95,21 @@ test("report: verdict first, compared commits and run, details, errors, the comm
   assert.match(md, /\*\*0 regressions, 1 improvement beyond main's run-to-run range\.\*\*/);
   assert.match(md, /This run: `f00dfee` · armless `main` · main: `abc1234` · \[run\]\(https:\/\/example\.test\/run\/1\)/);
   assert.match(md, /\| python \| cold \| 1\.00 s \(-50% 🟢\) \| 1\.00 s – 1\.00 s \| 2\.00 s \| 2\.00 s – 2\.00 s \|/);
+});
+
+test("history: one table per demo, this run first, earlier runs of the pull request after", () => {
+  const runs = [
+    { sha: "bbbbbbb222", created_at: "2026-10-20T02:00:00Z", sites: { python: result("python", [2000, 2000, 2000]) } },
+    { sha: "aaaaaaa111", created_at: "2026-10-20T01:00:00Z", sites: { python: result("python", [3000, 3000, 3000]), go: result("go", [500, 500, 500]) } },
+  ];
+  const md = history([result("python", [1000, 1000, 1000]), result("go", [400, 400, 400])], runs, "ccccccc333");
+  const python = md.slice(md.indexOf("**python**"));
+  assert.match(python, /\| `ccccccc` \(this run\) \| 1\.00 s \|/);
+  assert.ok(python.indexOf("`bbbbbbb`") < python.indexOf("`aaaaaaa`"));
+  assert.match(md, /\*\*go\*\*[\s\S]*\| `aaaaaaa` \| 500 ms \|/);
+  // the same commit run again isn't listed twice, and a demo with no earlier run gets no table
+  assert.equal(history([result("rust", [1, 1, 1])], [{ sha: "ccccccc333", sites: { rust: result("rust", [1, 1, 1]) } }], "ccccccc333"), "No earlier run has the same demos.");
+  assert.match(report([result("python", [1000, 1000, 1000])], {}, { sha: "ccccccc333", history: runs }), /Earlier runs on this pull request \(2\)/);
 });
 
 test("promptPattern and promptBack: the prompt after the echoed line, digits free", () => {

@@ -42,6 +42,7 @@ jobs:
       contents: write
       pages: write
       id-token: write
+      pull-requests: write
 
   # The tools image runs on the host's architecture: each is built on its own. It's named after
   # its sources (tools.Version), so a release that didn't change it finds it published already

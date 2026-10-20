@@ -183,9 +183,31 @@ export function report(results, baselines = {}, meta = {}) {
   }
   if (details.length) lines.push("", "<details><summary>Workload, per command</summary>", "", ...details, "</details>");
 
+  if (meta.history?.length) lines.push("", `<details><summary>Earlier runs on this pull request (${meta.history.length})</summary>`, "", history(results, meta.history, meta.sha), "", "</details>");
+
   const errors = results.flatMap((r) => (r.errors ?? []).map((e) => `- **${r.site}**: ${e}`));
   if (errors.length) lines.push("", "⚠️ Some visits failed and are left out:", "", ...errors);
   return lines.join("\n") + "\n";
+}
+
+// This run and the pull request's earlier ones (runs written by report.mjs --combine), newest
+// first: one table per demo with each run's medians, so a pull request's commits can be
+// compared with each other without main
+export function history(results, runs, sha) {
+  const all = [{ sha, sites: Object.fromEntries(results.map((r) => [r.site, r])) }, ...runs.filter((r) => r.sha !== sha)];
+  const out = [];
+  for (const site of bySite(results).map((r) => r.site)) {
+    const rows = all.filter((run) => run.sites?.[site]);
+    if (rows.length < 2) continue;
+    const shown = METRICS.filter(([s, k]) => rows.some((run) => metric(run.sites[site], s, k)));
+    out.push(`**${site}**`, "", `| commit | ${shown.map(([, , label]) => label).join(" | ")} |`, `|---|${shown.map(() => "---:").join("|")}|`);
+    for (const run of rows) {
+      const cells = shown.map(([s, k, , unit]) => formatValue(metric(run.sites[site], s, k)?.median, unit));
+      out.push(`| ${short(run.sha) ?? "?"}${run === all[0] ? " (this run)" : ""} | ${cells.join(" | ")} |`);
+    }
+    out.push("");
+  }
+  return out.length ? out.join("\n") : "No earlier run has the same demos.";
 }
 
 // A prompt-like ready text as a pattern: digits may change (iex(1)> becomes iex(2)>)

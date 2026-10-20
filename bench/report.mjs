@@ -3,10 +3,11 @@
 //
 //   node bench/report.mjs RESULTS_DIR [--baseline FILE] [--out FILE] [--sha SHA] [--run-url URL]
 //                                         markdown (the pull request comment), against FILE
-//   node bench/report.mjs RESULTS_DIR --combine FILE      write the baseline FILE
+//                                         [--history DIR]  earlier runs of the pull request
+//   node bench/report.mjs RESULTS_DIR --combine FILE      write one file for the whole run
 //
-// RESULTS_DIR holds what run.mjs wrote (<site>.json, in any subdirectories). A baseline is
-// { schema, sha, created_at, sites: { <site>: result } }.
+// RESULTS_DIR holds what run.mjs wrote (<site>.json, in any subdirectories). A combined run (a
+// baseline, or an entry of --history) is { schema, sha, created_at, sites: { <site>: result } }.
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -18,6 +19,7 @@ const { values: opt, positionals } = parseArgs({
   options: {
     baseline: { type: "string" },
     combine: { type: "string" },
+    history: { type: "string" },
     out: { type: "string" },
     "armless-ref": { type: "string" },
     sha: { type: "string" },
@@ -62,9 +64,29 @@ if (opt.combine) {
       console.error(`no usable baseline (${error.message}): comparing with nothing`);
     }
   }
+  if (opt.history) meta.history = await loadRuns(opt.history);
   const md = report(results, baselines, meta);
   if (opt.out) await writeFile(opt.out, md);
   else process.stdout.write(md);
+}
+
+// Combined runs (--combine's files) in DIR, newest first; a missing DIR is no history
+async function loadRuns(dir) {
+  const runs = [];
+  let entries = [];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return runs;
+  }
+  for (const name of entries) {
+    if (!name.endsWith(".json")) continue;
+    try {
+      const r = JSON.parse(await readFile(path.join(dir, name), "utf8"));
+      if (r.schema === SCHEMA && r.sites) runs.push(r);
+    } catch {}
+  }
+  return runs.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 }
 
 async function load(dir) {

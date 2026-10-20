@@ -4,7 +4,7 @@ name: CI and Pages
 # demos on the site, plus the examples in EXAMPLES that aren't). Pushes to main then assemble the
 # demos into the site and deploy it to GitHub Pages. release.yml calls it with release: true to
 # gate a release on the same checks, without touching the site. Every site is also benchmarked
-# (bench/); bench.yml turns the results into a report, and main's into the baseline.
+# (bench/); the bench-report job reports them and keeps each run on refs/snowglobe/bench.
 #
 # Run by hand with armless_ref, the sites are built and benchmarked on that armless (a branch,
 # tag or full commit) instead of the pinned release, and nothing is deployed.
@@ -25,8 +25,10 @@ on:
         default: false
 
 permissions:
-  # contents: write pushes the blob store (refs/snowglobe/blobs) from main's runs
+  # contents: write pushes the blob store (refs/snowglobe/blobs) from main's runs, and the
+  # benchmark results (refs/snowglobe/bench); pull-requests: write comments the benchmark report
   contents: write
+  pull-requests: write
   pages: write
   id-token: write
 
@@ -236,7 +238,7 @@ jobs:
 
       # Cold, warm and 4G visits in Chromium and the exercise commands timed (bench/run.mjs), on
       # a copy made an installable app as the live demos are. Fails only if the harness does;
-      # bench.yml compares the numbers with main's
+      # bench-report turns every site's numbers into one report
       - uses: actions/setup-node@v7
         if: ${{ !inputs.release }}
         with:
@@ -281,6 +283,118 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
+
+  # The benchmark report of this run's site jobs, in its summary and, on a pull request, in one
+  # comment that each run updates. Every run is also kept as a file on refs/snowglobe/bench
+  # (pr/<number>/<commit>.json; main/<commit>.json and main/latest.json), outside refs/heads like
+  # the blob store, so the comment lists the pull request's earlier runs and, once main has run,
+  # compares with main's latest. It reports only: the numbers never fail CI
+  bench-report:
+    needs: site
+    if: ${{ !cancelled() && !inputs.release }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      ARMLESS_REF: ${{ inputs.armless_ref }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bench-*
+          path: results
+
+      - name: Report
+        id: report
+        run: |
+          if ! ls results/*/*.json > /dev/null 2>&1; then
+            echo "No benchmark results in this run" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          GITHUB_SHA="$HEAD_SHA" node bench/report.mjs results --combine run.json
+          # Earlier runs, if the ref exists yet: this pull request's, and main's latest
+          args=()
+          if git fetch --quiet --depth=1 origin +refs/snowglobe/bench:refs/snowglobe/bench 2>/dev/null; then
+            if [ -n "$PR" ] && git cat-file -e "refs/snowglobe/bench:pr/$PR" 2>/dev/null; then
+              mkdir -p history
+              git archive refs/snowglobe/bench "pr/$PR" | tar -x -C history
+              args+=(--history "history/pr/$PR")
+            fi
+            if git show refs/snowglobe/bench:main/latest.json > main-latest.json 2>/dev/null; then
+              args+=(--baseline main-latest.json)
+            fi
+          fi
+          node bench/report.mjs results "${args[@]}" --sha "$HEAD_SHA" --run-url "$RUN_URL" \
+            ${ARMLESS_REF:+--armless-ref "$ARMLESS_REF"} --out report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+      # A commit on refs/snowglobe/bench adding this run's file, retried if another run's push
+      # got there first. A pull request from a fork has a read-only token: its run isn't kept
+      - name: Keep the results
+        if: steps.report.outputs.found && !inputs.armless_ref && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+        continue-on-error: true
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_INDEX_FILE: ${{ runner.temp }}/bench-index
+        run: |
+          blob=$(git hash-object -w run.json)
+          for attempt in 1 2 3; do
+            rm -f "$GIT_INDEX_FILE"
+            parent=()
+            if git fetch --quiet --depth=1 origin +refs/snowglobe/bench:refs/snowglobe/bench 2>/dev/null; then
+              git read-tree refs/snowglobe/bench
+              parent=(-p refs/snowglobe/bench)
+            fi
+            if [ -n "$PR" ]; then
+              git update-index --add --cacheinfo "100644,$blob,pr/$PR/$HEAD_SHA.json"
+              message="Benchmark of $HEAD_SHA (#$PR)"
+            else
+              git update-index --add --cacheinfo "100644,$blob,main/$HEAD_SHA.json"
+              git update-index --add --cacheinfo "100644,$blob,main/latest.json"
+              message="Benchmark of $HEAD_SHA (main)"
+            fi
+            commit=$(git commit-tree "$(git write-tree)" "${parent[@]}" -m "$message")
+            if git push --quiet origin "$commit:refs/snowglobe/bench"; then
+              echo "Kept as $(git show --name-only --format= "$commit" | head -n1) on refs/snowglobe/bench"
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "::warning title=Benchmark::couldn't keep this run's results on refs/snowglobe/bench"
+
+      # One comment per pull request, updated by each run. A token that can't comment (a fork's):
+      # the report stays in this run's summary
+      - name: Comment on the pull request
+        if: steps.report.outputs.found && github.event_name == 'pull_request'
+        run: |
+          marker='<!-- snowglobe-bench -->'
+          comment=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n1 || true)
+          if [ -n "$comment" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment" -F body=@report.md > /dev/null && ok=1
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@report.md > /dev/null && ok=1
+          fi
+          if [ -n "${ok:-}" ]; then
+            echo "Commented on #$PR"
+          else
+            echo "::warning title=Benchmark::couldn't comment on #$PR; the report is in this run's summary"
+          fi
 
   assemble:
     needs: [test, site]
