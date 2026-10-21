@@ -83,7 +83,7 @@ func TestFingerprintBindsMachineAndBaseAssets(t *testing.T) {
 
 func TestOneCPUOffline(t *testing.T) {
 	page, dir := render(t, Page{Title: "Demo <1>", MemoryMB: 256, Network: "none", CPUs: 1, ConsoleCols: 90, ConsoleRows: 30})
-	for _, want := range []string{`<script src="armless/armless.js">`, "memory_mb: 256", "const cpus = 1 ;",
+	for _, want := range []string{`<script src="armless/armless.js?v=`, "memory_mb: 256", "const cpus = 1 ;",
 		"Demo &lt;1&gt;", "term.resize( 90 , 30 )"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page lacks %q", want)
@@ -101,7 +101,7 @@ func TestOneCPUOffline(t *testing.T) {
 
 func TestSessionControlsAndSafeReload(t *testing.T) {
 	page, dir := render(t, Page{Title: "Session demo", MemoryMB: 256, Network: "none", CPUs: 1})
-	for _, want := range []string{`src="sessions.js"`, `src="session-ui.js"`, `id="sessions"`, `id="session-save"`, `id="session-export"`, `id="session-import"`, `id="session-folder"`, `id="session-delete"`, `SnowglobeSessionUI`, `await sessions.prepare()`, `sessions.initialState`, `sessions.attach(emulator, term`, `new ResizeObserver(resize)`, `sessions.message("Workspace could not start"`} {
+	for _, want := range []string{`src="sessions.js?v=`, `src="session-ui.js?v=`, `id="sessions"`, `id="session-save"`, `id="session-export"`, `id="session-import"`, `id="session-folder"`, `id="session-delete"`, `SnowglobeSessionUI`, `await sessions.prepare()`, `sessions.initialState`, `sessions.attach(emulator, term`, `new ResizeObserver(resize)`, `sessions.message("Workspace could not start"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page lacks persistence integration %q", want)
 		}
@@ -144,7 +144,7 @@ func TestWorkspaceShowsSaveControlsAndExplicitMethods(t *testing.T) {
 
 func TestSeveralCPUsWithNetwork(t *testing.T) {
 	page, dir := render(t, Page{Title: "Demo", MemoryMB: 512, Network: "fetch", CPUs: 4})
-	for _, want := range []string{"const cpus = 4 ;", `network: { tls: "system/tls.json" }`, `register("sw.js")`} {
+	for _, want := range []string{"const cpus = 4 ;", `network: { tls: versioned("system/tls.json") }`, `register("sw.js")`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -169,7 +169,7 @@ func TestTunnels(t *testing.T) {
 		{Port: 6379, URL: "ws://127.0.0.1:7000"},
 	}})
 	// A JSON array in the script: the URL escaped so it can't end the script
-	want := `network: { tls: "system/tls.json", tunnels: [{"host":"db.internal","port":5432,"url":"wss://proxy.example.com/db?a=1\u0026b=\u003c/script\u003e"},{"port":6379,"url":"ws://127.0.0.1:7000"}] }`
+	want := `network: { tls: versioned("system/tls.json"), tunnels: [{"host":"db.internal","port":5432,"url":"wss://proxy.example.com/db?a=1\u0026b=\u003c/script\u003e"},{"port":6379,"url":"ws://127.0.0.1:7000"}] }`
 	if !strings.Contains(page, want) {
 		i := strings.Index(page, "network:")
 		t.Errorf("page lacks %s\ngot: %s", want, page[i:min(i+300, len(page))])
@@ -190,5 +190,44 @@ func TestTunnelToken(t *testing.T) {
 		Tunnels: []tunnel.Tunnel{{Port: 5432, URL: "ws://127.0.0.1:6543"}}})
 	if strings.Contains(plain, "withTokens") || strings.Contains(plain, "tunnelToken") {
 		t.Error("without a token endpoint the tunnels go in as they are")
+	}
+}
+
+func TestBuildFilesCarryTheAssetVersion(t *testing.T) {
+	page, dir := render(t, Page{MemoryMB: 256, CPUs: 1, Network: "fetch"})
+	version, err := assetVersion(dir, "test-build")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(page, `const assets = "`+version+`";`) {
+		t.Fatalf("page doesn't carry the asset version %s", version)
+	}
+	for _, url := range []string{`versioned("system/state.bin.zst")`, `versioned("system/filesystem.json")`, `versioned("system/warm.pack")`,
+		`versioned("system/console.bin")`, `versioned("system/tls.json")`, `versioned("armless/armless.wasm")`} {
+		if !strings.Contains(page, url) {
+			t.Errorf("%s isn't versioned", url)
+		}
+	}
+	// `snowglobe pool` repoints the blobs by this exact text; blobs are named by content, unversioned
+	if !strings.Contains(page, `baseurl: "system/filesystem/"`) {
+		t.Error("blob baseurl changed")
+	}
+
+	// The warm pack and the replayed screen change the version, not BuildID (saves are bound to it)
+	for _, name := range []string{"system/warm.pack", "system/console.bin"} {
+		file := filepath.Join(dir, name)
+		os.MkdirAll(filepath.Dir(file), 0o755)
+		os.WriteFile(file, []byte(name), 0o644)
+		changed, err := assetVersion(dir, "test-build")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if changed == version {
+			t.Errorf("%s doesn't change the asset version", name)
+		}
+		version = changed
+	}
+	if other, _ := assetVersion(dir, "other-build"); other == version {
+		t.Error("BuildID doesn't change the asset version")
 	}
 }
