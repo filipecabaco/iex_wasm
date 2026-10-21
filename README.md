@@ -147,7 +147,11 @@ machine while developing. The page is unaffected.
 service worker that caches the page, the machine and every file the run fetched, so it installs
 to a home screen or dock and keeps working offline once it has run. Chromium shows an
 **Install app** button in the status strip; on iOS, use Share → Add to Home Screen. A new build
-gets a new cache. Run it after `snowglobe pool`; every demo on the live site is installable.
+gets a new cache. The page asks for its build's own files (the snapshot, the filesystem tree, the
+warm pack, the machine and its scripts) with that build's version (`?v=`), so a repeat visit gets
+them from the cache instead of downloading them again, and a newer page asks for other URLs and
+never gets an older build's copy. Run it after `snowglobe pool`; every demo on the live site is
+installable.
 
 ## Keep your workspace
 

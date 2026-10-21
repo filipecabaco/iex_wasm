@@ -2,8 +2,10 @@
 //
 // The shell (page, machine, terminal) is cached on install. Everything else (the snapshot, the warm
 // pack, the guest's file blobs) is cached the first time the page fetches it, so installing doesn't
-// download it a second time. Blobs are named by their content and served from the cache first;
-// the rest changes with every build, so it comes from the network first and the cache offline.
+// download it a second time. What can't change under its URL comes from the cache first: blobs,
+// named by their content, and the build's own files, which the page asks for with its build's
+// version (?v=), so a newer page asks for other URLs. The rest (the page itself, anything
+// unversioned) comes from the network first and the cache offline.
 const CACHE = "__CACHE__" + ":" + self.registration.scope;
 const SHELL = __SHELL__;
 // Several CPUs share memory between Web Workers, which needs a cross-origin isolated page: add
@@ -42,7 +44,8 @@ self.addEventListener("message", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
       Promise.all(urls.map(async (url) => {
-        if (!cacheable(url) || (await cache.match(url, { ignoreSearch: true }))) return;
+        const exact = new URL(url, location.href).searchParams.has("v");
+        if (!cacheable(url) || (await cache.match(url, { ignoreSearch: !exact }))) return;
         try {
           const response = await fetch(url);
           if (response.ok && response.status === 200) await cache.put(url, response);
@@ -78,14 +81,19 @@ self.addEventListener("fetch", (event) => {
     return response;
   };
 
-  // The guest's file blobs are named by their content, so they never change: the cache first
+  // The guest's file blobs are named by their content, and a versioned file is one build's copy:
+  // neither changes under its URL, so the cache first (a versioned one matched with its version)
+  if (url.origin === location.origin && url.searchParams.has("v")) {
+    event.respondWith(caches.match(request).then((hit) => hit || fetch(request).then(keep)));
+    return;
+  }
   if (blob(request.url)) {
     event.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then(keep)));
     return;
   }
 
-  // Everything else (the snapshot, the warm pack, the filesystem tree, the runtime) changes with
-  // each build and must match the page: the network first, the cache when offline
+  // Everything else (unversioned files, from pages built before ?v=) may change with each build
+  // and must match the page: the network first, the cache when offline
   event.respondWith(fetch(request).then(keep).catch(() => caches.match(request, { ignoreSearch: true })));
 });
 

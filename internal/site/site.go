@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -30,8 +32,11 @@ var tmpl = template.Must(template.New("index").Parse(page))
 
 // Page holds what varies between sites.
 type Page struct {
-	Title    string
-	BuildID  string // fingerprint of runtime, base filesystem and initial snapshot
+	Title   string
+	BuildID string // fingerprint of runtime, base filesystem and initial snapshot
+	// Version of every build-specific file the page fetches (BuildID's, the warm pack's and the
+	// replayed screen's), added to their URLs so the service worker can serve them cache first
+	Assets   string
 	MemoryMB int    // must match the snapshot
 	Network  string // "none" or "fetch"; must match the snapshot
 	CPUs     int    // must match the snapshot; more than one needs cross-origin isolation
@@ -76,11 +81,44 @@ func Fingerprint(out string, p Page) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// assetVersion covers what BuildID does plus the build's other files the page fetches: the warm
+// pack, the replayed screen, the terminal and the session scripts. It is kept apart from BuildID,
+// which saved workspaces are bound to.
+func assetVersion(out, buildID string) (string, error) {
+	h := sha256.New()
+	fmt.Fprintf(h, "snowglobe-assets-v1:%s\n", buildID)
+	h.Write(sessionsJS)
+	h.Write(sessionUIJS)
+	for _, name := range []string{"system/warm.pack", "system/console.bin", "xterm/xterm.js", "xterm/xterm.css", "xterm/addon-fit.js"} {
+		f, err := os.Open(filepath.Join(out, name))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(h, "%s\n", name)
+		_, err = io.Copy(h, f)
+		f.Close()
+		if err != nil {
+			return "", err
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))[:16], nil
+}
+
 // Render writes the page and session scripts and marks the site for GitHub Pages.
 func Render(out string, p Page) error {
 	if p.BuildID == "" {
 		var err error
 		p.BuildID, err = Fingerprint(out, p)
+		if err != nil {
+			return err
+		}
+	}
+	if p.Assets == "" {
+		var err error
+		p.Assets, err = assetVersion(out, p.BuildID)
 		if err != nil {
 			return err
 		}
